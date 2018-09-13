@@ -102,3 +102,11 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# PyCharm project settings
+.idea
+
+# Eclipse settings
+.settings
+.pydevproject
+.project
