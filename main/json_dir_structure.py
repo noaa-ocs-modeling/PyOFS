@@ -1,3 +1,11 @@
+"""
+Create JSON of directory structure.
+
+Created on Aug 30, 2018
+
+@author: zachary.burnett
+"""
+
 import functools
 import json
 import os
