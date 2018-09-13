@@ -1,5 +1,5 @@
 """
-Daily average PyOFS source data.
+Daily average WCOFS source data.
 
 Created on Aug 21, 2018
 
@@ -71,7 +71,7 @@ def write_daily_average(output_dir, current_model_run_date, day_deltas, log_path
             current_wcofs_time_indices = [current_day_delta + 1]
 
         try:
-            # print(f'Processing PyOFS for {current_date}')
+            # print(f'Processing WCOFS for {current_date}')
             current_wcofs = wcofs.WCOFS_Range(current_date, next_date, source='avg',
                                               time_indices=current_wcofs_time_indices)
             current_wcofs.write_rasters(current_dir, ['temp'], drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
@@ -126,7 +126,7 @@ if __name__ == '__main__':
     model_run_dates = [start_time.replace(hour=0, minute=0, second=0, microsecond=0)]
     # model_run_dates = _utilities.day_range(datetime.datetime(2018, 8, 27), datetime.datetime(2018, 9, 6))
 
-    # define dates over which to collect data (dates after today are for PyOFS forecast)
+    # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = [-1, 0, 1, 2]
 
     for current_model_run_date in model_run_dates:

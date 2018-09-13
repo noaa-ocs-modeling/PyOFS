@@ -1,5 +1,5 @@
 """
-Range comparisons of PyOFS source data.
+Range comparisons of WCOFS source data.
 
 Created on Jun 25, 2018
 
@@ -53,7 +53,7 @@ if __name__ == '__main__':
     viirs_range = viirs.VIIRS_Range(start_datetime, end_datetime)
     viirs_range.write_raster(output_dir)
 
-    print('Processing PyOFS')
+    print('Processing WCOFS')
     wcofs_range = wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg')
     wcofs_range.write_rasters(output_dir, ['temp', 'u', 'v'])
     # wcofs_range.write_vector(os.path.join(output_dir, 'wcofs.gpkg'))

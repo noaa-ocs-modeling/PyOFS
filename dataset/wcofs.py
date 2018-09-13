@@ -110,19 +110,19 @@ class WCOFS_Dataset:
         elif self.source == 'avg':
             for current_day in self.time_indices:
                 current_model_type = 'forecast' if current_day > 0 else 'nowcast'
-                current_url = f'https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/PyOFS/MODELS/{month_string}/nos.wcofs.avg.{current_model_type}.{date_string}.t{WCOFS_MODEL_RUN_HOUR:02}z.nc'
+                current_url = f'https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS/{month_string}/nos.wcofs.avg.{current_model_type}.{date_string}.t{WCOFS_MODEL_RUN_HOUR:02}z.nc'
 
                 try:
                     self.netcdf_datasets[current_day if current_day in [-1, 1] else 1] = netCDF4.Dataset(current_url)
                 except OSError:
-                    print(f'No PyOFS dataset found at {current_url}')
+                    print(f'No WCOFS dataset found at {current_url}')
         else:
             # concurrently populate dictionary with NetCDF datasets for every hour in the given list of hours
             with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
                 netcdf_futures = {}
 
                 for current_hour in self.time_indices:
-                    current_url = f'https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/PyOFS/MODELS/{month_string}/nos.wcofs.{self.location}.{"n" if current_hour <= 0 else "f"}{abs(current_hour):03}.{date_string}.t{self.cycle:02}z.nc'
+                    current_url = f'https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS/{month_string}/nos.wcofs.{self.location}.{"n" if current_hour <= 0 else "f"}{abs(current_hour):03}.{date_string}.t{self.cycle:02}z.nc'
 
                     current_future = concurrency_pool.submit(netCDF4.Dataset, current_url)
                     netcdf_futures[current_future] = current_hour
@@ -135,7 +135,7 @@ class WCOFS_Dataset:
                         if current_result is not None:
                             self.netcdf_datasets[current_hour] = current_result
                     except OSError:
-                        # print(f'No PyOFS dataset found at {current_url}')
+                        # print(f'No WCOFS dataset found at {current_url}')
                         pass
 
                 del netcdf_futures
@@ -189,7 +189,7 @@ class WCOFS_Dataset:
                         WCOFS_Dataset.data_coordinates[current_grid_name]['lon'] = current_lon
                         WCOFS_Dataset.data_coordinates[current_grid_name]['lat'] = current_lat
         else:
-            raise _utilities.NoDataError(f'No PyOFS datasets found for {self.model_datetime} at the given hours.')
+            raise _utilities.NoDataError(f'No WCOFS datasets found for {self.model_datetime} at the given hours.')
 
     def bounds(self, variable: str = 'psi') -> tuple:
         """
@@ -588,7 +588,7 @@ class WCOFS_Dataset:
 
 class WCOFS_Range:
     """
-    Range of PyOFS datasets.
+    Range of WCOFS datasets.
     """
 
     grid_transforms = None
@@ -600,7 +600,7 @@ class WCOFS_Range:
     def __init__(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime, source: str = None,
                  time_indices: list = None):
         """
-        Create range of PyOFS datasets from the given time interval.
+        Create range of WCOFS datasets from the given time interval.
 
         :param start_datetime: Beginning of time interval.
         :param end_datetime: End of time interval.
@@ -619,7 +619,7 @@ class WCOFS_Range:
             self.start_datetime = _utilities.round_to_hour(start_datetime)
             self.end_datetime = _utilities.round_to_hour(end_datetime)
 
-        print(f'Collecting PyOFS stack from {self.start_datetime} to {self.end_datetime}')
+        print(f'Collecting WCOFS stack from {self.start_datetime} to {self.end_datetime}')
 
         # get all possible model dates that could overlap with the given time interval
         overlapping_models_start_datetime = self.start_datetime - datetime.timedelta(hours=WCOFS_MODEL_HOURS['f'])
@@ -629,7 +629,7 @@ class WCOFS_Range:
 
         self.datasets = {}
 
-        # concurrently populate dictionary with PyOFS dataset objects for every time in the given time interval
+        # concurrently populate dictionary with WCOFS dataset objects for every time in the given time interval
         with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
             dataset_futures = {}
 
@@ -722,7 +722,7 @@ class WCOFS_Range:
                 WCOFS_Range.variable_grids = WCOFS_Dataset.variable_grids
         else:
             raise _utilities.NoDataError(
-                    f'No PyOFS datasets found between {self.start_datetime} and {self.end_datetime}.')
+                    f'No WCOFS datasets found between {self.start_datetime} and {self.end_datetime}.')
 
     def data(self, variable: str, model_datetime: datetime.datetime, time_index: int) -> numpy.ma.MaskedArray:
         """
@@ -934,7 +934,7 @@ class WCOFS_Range:
             #     current_east = east + (east_cell_offset * x_size)
             #     current_south = south + (south_cell_offset * y_size)
 
-            # PyOFS grid starts at southwest corner
+            # WCOFS grid starts at southwest corner
             output_grid_coordinates[current_variable]['lon'] = numpy.arange(current_west, current_east, x_size)
             output_grid_coordinates[current_variable]['lat'] = numpy.arange(current_south, current_north, y_size)
 
@@ -1039,7 +1039,7 @@ class WCOFS_Range:
                 current_west = numpy.min(output_grid_coordinates[current_variable]['lon'])
                 current_north = numpy.max(output_grid_coordinates[current_variable]['lat'])
 
-                # PyOFS grid starts from southwest corner, but we'll be flipping the data in a moment so lets use the northwest point
+                # WCOFS grid starts from southwest corner, but we'll be flipping the data in a moment so lets use the northwest point
                 # TODO NOTE: You cannot use a negative (northward) y_size here, otherwise GDALSetGeoTransform will break at line 1253 of rasterio/_io.pyx
                 if x_size is not None and y_size is not None:
                     grid_transform = rasterio.transform.from_origin(current_west, current_north, x_size, y_size)
@@ -1237,9 +1237,9 @@ def interpolate_grid(input_lon: numpy.ndarray, input_lat: numpy.ndarray, input_d
 
 def write_convex_hull(netcdf_dataset: netCDF4.Dataset, output_filename: str, grid_name: str = 'psi'):
     """
-    Extract the convex hull from the coordinate values of the given PyOFS NetCDF dataset, and write it to a file.
+    Extract the convex hull from the coordinate values of the given WCOFS NetCDF dataset, and write it to a file.
 
-    :param netcdf_dataset: PyOFS format NetCDF dataset object.
+    :param netcdf_dataset: WCOFS format NetCDF dataset object.
     :param output_filename: Path to output file.
     :param grid_name: Name of grid. One of ('psi', 'rho', 'u', 'v').
     """
