@@ -137,8 +137,8 @@ if __name__ == '__main__':
     # qgis_application.initQgis()
 
     # get current date
-    # model_run_dates = [start_time.replace(hour=0, minute=0, second=0, microsecond=0)]
-    model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 8, 27), datetime.datetime.now())
+    model_run_dates = [start_time.replace(hour=0, minute=0, second=0, microsecond=0)]
+    # model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 8, 27), datetime.datetime.now())
 
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = [-1, 0, 1, 2]
