@@ -78,7 +78,6 @@ def write_daily_average(output_dir, current_model_run_date, day_deltas, log_path
                     print(error)
 
         # only retrieve forecasts that have not already been written
-        current_wcofs_time_indices = None
         if current_day_delta == -1:
             current_wcofs_time_indices = [-1]
         else:
