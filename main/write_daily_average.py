@@ -130,11 +130,6 @@ if __name__ == '__main__':
                 f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ({(datetime.datetime.now() - start_time).total_seconds():.2f}s): {message}\n')
         print(message)
 
-    # # initialize QGIS application
-    # qgis_application = QgsApplication([], True, None)
-    # qgis_application.setPrefixPath(os.environ['QGIS_PREFIX_PATH'], True)
-    # qgis_application.initQgis()
-
     # get current date
     model_run_dates = [start_time.replace(hour=0, minute=0, second=0, microsecond=0)]
     # model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 8, 27), datetime.datetime.now())
