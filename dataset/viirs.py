@@ -426,6 +426,8 @@ class VIIRS_Range:
 
         interval_datetimes = dataset_datetimes[start_index:end_index]
 
+        output_sst_data = None
+
         # check if user wants to average data
         if average:
             scenes_data = []
@@ -450,12 +452,10 @@ class VIIRS_Range:
 
             if len(scenes_data) > 0:
                 output_sst_data = numpy.nanmean(numpy.stack(scenes_data), axis=2)
+                output_sst_data[numpy.isnan(output_sst_data)] = fill_value
             else:
-                raise _utilities.NoDataError('No VIIRS data found in the given interval.')
-
-            output_sst_data[numpy.isnan(output_sst_data)] = fill_value
+                raise _utilities.NoDataError('No VIIRS data found within the given interval.')
         else:  # otherwise overlap based on datetime
-            output_sst_data = None
             for datetime in interval_datetimes:
                 sst_data = self.datasets[datetime].sst()
                 if not numpy.isnan(sst_data).all():
@@ -463,6 +463,9 @@ class VIIRS_Range:
                         output_sst_data = numpy.ones((sst_data.shape[0], sst_data.shape[1]),
                                                      dtype=rasterio.float32) * fill_value
                     output_sst_data[~numpy.isnan(sst_data)] = sst_data[~numpy.isnan(sst_data)]
+
+            if output_sst_data is None:
+                raise _utilities.NoDataError('No VIIRS data found within the given interval.')
 
         # define arguments to GDAL driver
         gdal_args = {
@@ -705,8 +708,8 @@ def check_masks(start_datetime: datetime.datetime, end_datetime: datetime.dateti
 
 
 if __name__ == '__main__':
-    start_datetime = datetime.datetime(2018, 6, 10)
-    end_datetime = datetime.datetime(2018, 6, 11)
+    start_datetime = datetime.datetime.now() - datetime.timedelta(minutes=5)
+    end_datetime = datetime.datetime.now()
 
     output_dir = r"C:\Data\output\test"
 

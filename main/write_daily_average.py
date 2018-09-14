@@ -12,7 +12,7 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
-from dataset import hfr, viirs, wcofs, _utilities
+import dataset._utilities, dataset.hfr, dataset.viirs, dataset.wcofs
 
 from main import json_dir_structure
 
@@ -47,21 +47,23 @@ def write_daily_average(output_dir, current_model_run_date, day_deltas, log_path
         if current_day_delta <= 0:
             try:
                 # print(f'Processing HFR for {current_date}')
-                current_hfr = hfr.HFR_Range(current_date, next_date)
+                current_hfr = dataset.hfr.HFR_Range(current_date, next_date)
                 current_hfr.write_rasters(current_dir, ['u', 'v'], vector_components=True, drivers=['AAIGrid'],
                                           fill_value=LEAFLET_NODATA_VALUE)
-            except Exception as error:
-                log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
-                print(error)
+            except dataset._utilities.NoDataError as error:
+                with open(log_path, 'a') as log_file:
+                    log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
+                    print(error)
 
             try:
                 # print(f'Processing VIIRS for {current_date}')
-                current_viirs = viirs.VIIRS_Range(current_date, next_date)
+                current_viirs = dataset.viirs.VIIRS_Range(current_date, next_date)
                 current_viirs.write_raster(current_dir, drivers=['GTiff'], average=False,
                                            fill_value=LEAFLET_NODATA_VALUE)
-            except Exception as error:
-                log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
-                print(error)
+            except dataset._utilities.NoDataError as error:
+                with open(log_path, 'a') as log_file:
+                    log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
+                    print(error)
 
         # only retrieve forecasts that have not already been written
         current_wcofs_time_indices = None
@@ -72,12 +74,12 @@ def write_daily_average(output_dir, current_model_run_date, day_deltas, log_path
 
         try:
             # print(f'Processing WCOFS for {current_date}')
-            current_wcofs = wcofs.WCOFS_Range(current_date, next_date, source='avg',
-                                              time_indices=current_wcofs_time_indices)
+            current_wcofs = dataset.wcofs.WCOFS_Range(current_date, next_date, source='avg',
+                                                      time_indices=current_wcofs_time_indices)
             current_wcofs.write_rasters(current_dir, ['temp'], drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
             current_wcofs.write_rasters(current_dir, ['u', 'v'], vector_components=True, drivers=['AAIGrid'],
                                         fill_value=LEAFLET_NODATA_VALUE)
-        except Exception as error:
+        except dataset._utilities.NoDataError as error:
             with open(log_path, 'a') as log_file:
                 log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
                 print(error)
