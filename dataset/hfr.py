@@ -76,7 +76,7 @@ class HFR_Range:
         self.datetimes = self.datetimes[self.start_index:self.end_index]
 
         print(
-            f'Collecting HFR velocity from {self.source} between {numpy.min(self.datetimes)} and {numpy.max(self.datetimes)}...')
+                f'Collecting HFR velocity from {self.source} between {numpy.min(self.datetimes)} and {numpy.max(self.datetimes)}...')
 
         self.data = {'lon': self.netcdf_dataset['lon'].values, 'lat': self.netcdf_dataset['lat'].values}
 
@@ -228,7 +228,7 @@ class HFR_Range:
                     u = hfr_u[datetime_index, lat_index, lon_index]
 
                     # check if record has values
-                    if u is not numpy.ma.masked:
+                    if not numpy.isnan(u):
                         v = hfr_v[datetime_index, lat_index, lon_index]
                         dop_lon = hfr_dop_lon[datetime_index, lat_index, lon_index]
                         dop_lat = hfr_dop_lat[datetime_index, lat_index, lon_index]
@@ -290,8 +290,8 @@ class HFR_Range:
             # variable
             with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
                 variable_futures = {
-                concurrency_pool.submit(numpy.ma.mean, self.data[variable][datetime_indices, :, :], axis=0): variable
-                for variable in measurement_variables}
+                    concurrency_pool.submit(numpy.mean, self.data[variable][datetime_indices, :, :], axis=0): variable
+                    for variable in measurement_variables}
 
                 for completed_future in concurrent.futures.as_completed(variable_futures):
                     variable = variable_futures[completed_future]
@@ -379,8 +379,8 @@ class HFR_Range:
             # concurrently populate dictionary with averaged data for each variable
             with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
                 variable_futures = {
-                concurrency_pool.submit(numpy.ma.mean, self.data[variable][datetime_indices, :, :], axis=0): variable
-                for variable in variables}
+                    concurrency_pool.submit(numpy.mean, self.data[variable][datetime_indices, :, :], axis=0): variable
+                    for variable in variables}
 
                 for completed_future in concurrent.futures.as_completed(variable_futures):
                     variable = variable_futures[completed_future]
@@ -392,12 +392,12 @@ class HFR_Range:
                 if 'u' in variables:
                     u_data = variable_means['u']
                 else:
-                    u_data = numpy.ma.mean(self.data['u'][datetime_indices, :, :], axis=0)
+                    u_data = numpy.mean(self.data['u'][datetime_indices, :, :], axis=0)
 
                 if 'v' in variables:
                     v_data = variable_means['v']
                 else:
-                    v_data = numpy.ma.mean(self.data['v'][datetime_indices, :, :], axis=0)
+                    v_data = numpy.mean(self.data['v'][datetime_indices, :, :], axis=0)
 
                 # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
                 variable_means['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (180 / numpy.pi)

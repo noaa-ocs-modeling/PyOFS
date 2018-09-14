@@ -77,39 +77,40 @@ def write_daily_average(output_dir, current_model_run_date, day_deltas, log_path
                     log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
                     print(error)
 
-        # only retrieve forecasts that have not already been written
-        if current_day_delta == -1:
-            current_wcofs_time_indices = [-1]
-        else:
-            current_wcofs_time_indices = [current_day_delta + 1]
+            # only retrieve forecasts that have not already been written
+            if current_day_delta == -1:
+                current_wcofs_time_indices = [-1]
+            else:
+                current_wcofs_time_indices = [current_day_delta + 1]
 
-        try:
-            # print(f'Processing WCOFS for {current_date}')
-            current_wcofs = dataset.wcofs.WCOFS_Range(current_date, next_date, source='avg',
-                                                      time_indices=current_wcofs_time_indices)
-            current_wcofs.write_rasters(current_dir, ['temp'], drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
-            current_wcofs.write_rasters(current_dir, ['u', 'v'], vector_components=True, drivers=['AAIGrid'],
-                                        fill_value=LEAFLET_NODATA_VALUE)
-        except dataset._utilities.NoDataError as error:
+            try:
+                # print(f'Processing WCOFS for {current_date}')
+                current_wcofs = dataset.wcofs.WCOFS_Range(current_date, next_date, source='avg',
+                                                          time_indices=current_wcofs_time_indices)
+                current_wcofs.write_rasters(current_dir, ['temp'], drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
+                current_wcofs.write_rasters(current_dir, ['u', 'v'], vector_components=True, drivers=['AAIGrid'],
+                                            fill_value=LEAFLET_NODATA_VALUE)
+            except dataset._utilities.NoDataError as error:
+                with open(log_path, 'a') as log_file:
+                    log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
+                    print(error)
+
             with open(log_path, 'a') as log_file:
-                log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
-                print(error)
-
-        with open(log_path, 'a') as log_file:
-            message = f'Wrote files to {current_dir}'
-            log_file.write(
-                    f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s): {message}\n')
-            print(message)
+                message = f'Wrote files to {current_dir}'
+                log_file.write(
+                        f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s): {message}\n')
+                print(message)
 
             current_start_time = datetime.datetime.now()
 
             # populate JSON file with new directory structure so that JavaScript application can see it
             json_dir_structure.populate_json(OUTPUT_DIR, JSON_PATH)
 
-            message = f'Updated directory structure at {JSON_PATH}'
-            log_file.write(
-                    f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s): {message}\n')
-            print(message)
+            with open(log_path, 'a') as log_file:
+                message = f'Updated directory structure at {JSON_PATH}'
+                log_file.write(
+                        f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s): {message}\n')
+                print(message)
 
 
 if __name__ == '__main__':
@@ -132,7 +133,8 @@ if __name__ == '__main__':
 
     # get current date
     model_run_dates = [start_time.replace(hour=0, minute=0, second=0, microsecond=0)]
-    # model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 8, 27), datetime.datetime.now())
+    # model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 8, 27),
+    #                                                datetime.datetime.now() + datetime.timedelta(days=1))
 
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = [-1, 0, 1, 2]
