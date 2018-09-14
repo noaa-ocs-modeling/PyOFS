@@ -8,69 +8,29 @@ Created on Jun 13, 2018
 
 import datetime
 
-import netCDF4
 import numpy
 import rasterio
+import xarray
 
 
-def copy_netcdf(input_dataset: netCDF4.Dataset, output_filename: str, variables_to_copy: list = None,
-                dimensions_to_copy: list = None) -> netCDF4.Dataset:
+def copy_xarray(input_path: str, output_path: str) -> xarray.Dataset:
     """
-    Copy given NetCDF dataset to a local file at the given path.
-    From https://gist.githubusercontent.com/guziy/8543562/raw/056079d50d3dddf3be4f091eda2f82bda8f37539/Converter.py
+    Copy given xarray dataset to a local file at the given path.
 
-    :param input_dataset: Dataset to copy to a local file.
-    :param output_filename: Path to output file.
-    :param variables_to_copy: List of variable names to copy.
-    :param dimensions_to_copy: List of dimension names to copy.
+    :param input_path: Path to dataset to copy.
+    :param output_path: Path to output file.
     :return: Copied dataset, now at local filename.
     """
 
-    print('Copying dataset to {0}'.format(output_filename))
+    print('Copying dataset to {output_filename}')
 
-    # define variables (subset or not)
-    variables_to_copy = variables_to_copy if variables_to_copy else input_dataset.variables
-    dimensions_to_copy = dimensions_to_copy if dimensions_to_copy else input_dataset.dimensions
+    input_dataset = xarray.open_dataset(input_path)
 
-    num_attr = len(input_dataset.ncattrs())
-    num_var = len(variables_to_copy)
-    num_dim = len(dimensions_to_copy)
+    # deep copy of xarray dataset
+    output_dataset = input_dataset.copy(deep=True)
 
-    # output file
-    with netCDF4.Dataset(output_filename, "w", format=input_dataset.file_format) as output_dataset:
-        # Copy attributes
-        counter = 1
-        for current_attribute_name in input_dataset.ncattrs():
-            current_attribute_value = input_dataset.getncattr(current_attribute_name)
-            output_dataset.setncattr(current_attribute_name, current_attribute_value)
-
-            print(f'{counter} out of {num_attr} attributes copied.')
-            counter += 1
-
-        # Copy dimensions
-        counter = 1
-        for current_dim_name in dimensions_to_copy:
-            current_dim = input_dataset.dimensions[current_dim_name]
-
-            output_dataset.createDimension(current_dim_name,
-                                           len(current_dim) if not current_dim.isunlimited() else None)
-            print(f'{counter} out of {num_dim} dimensions copied.')
-            counter += 1
-
-        # Copy variables
-        counter = 1
-        for current_var_name in variables_to_copy:
-            current_var = input_dataset.variables[current_var_name]
-
-            output_var = output_dataset.createVariable(current_var_name, current_var.datatype, current_var.dimensions)
-
-            # Copy variable attributes
-            output_var.setncatts({k: current_var.getncattr(k) for k in current_var.ncattrs()})
-
-            output_var[:] = current_var[:]
-
-            print(f'{counter} out of {num_var} variables copied.')
-            counter += 1
+    # save dataset to file
+    output_dataset.to_netcdf(output_path)
 
     return output_dataset
 
