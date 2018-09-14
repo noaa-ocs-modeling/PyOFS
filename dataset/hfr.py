@@ -57,8 +57,6 @@ class HFR_Range:
         else:
             self.source = 'UCSD'
 
-        # print(f'Using {self.source} data...')
-
         # get URL
         if self.source == 'UCSD':
             self.url = f'http://hfrnet-tds.ucsd.edu/thredds/dodsC/HFR/USWC/{self.resolution}km/hourly/RTV/HFRADAR_US_West_Coast_{self.resolution}km_Resolution_Hourly_RTV_best.ncd'
@@ -77,7 +75,8 @@ class HFR_Range:
 
         self.datetimes = self.datetimes[self.start_index:self.end_index]
 
-        print(f'Collecting HFR velocity from {numpy.min(self.datetimes)} to {numpy.max(self.datetimes)}')
+        print(
+            f'Collecting HFR velocity from {self.source} between {numpy.min(self.datetimes)} and {numpy.max(self.datetimes)}...')
 
         self.data = {'lon': self.netcdf_dataset['lon'].values, 'lat': self.netcdf_dataset['lat'].values}
 
@@ -110,7 +109,9 @@ class HFR_Range:
                                              _utilities.round_to_hour(end_datetime))
 
         try:
-            datetime_indices = numpy.where(numpy.in1d(self.datetimes, hourly_range, assume_unique=True))[0]
+            datetime_indices = numpy.where(
+                    numpy.in1d(self.datetimes, numpy.array(hourly_range).astype(numpy.datetime64), assume_unique=True))[
+                0]
         except:
             datetime_indices = None
 
@@ -343,14 +344,16 @@ class HFR_Range:
             layer.dataProvider().addFeatures(layer_features)
             layer.commitChanges()
 
-    def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', variables: list = None,
-                      start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
-                      vector_components: bool = False, fill_value: float = -9999, drivers: list = ['GTiff']):
+    def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = None,
+                      variables: list = None, start_datetime: datetime.datetime = None,
+                      end_datetime: datetime.datetime = None, vector_components: bool = False,
+                      fill_value: float = -9999, drivers: list = ['GTiff']):
         """
         Write average of HFR data for all hours in the given time interval to rasters.
 
         :param output_dir: Path to output directory.
         :param filename_prefix: Prefix for output filenames.
+        :param filename_suffix: Suffix for output filenames.
         :param variables: List of variable names to use.
         :param start_datetime: Beginning of time interval.
         :param end_datetime: End of time interval.
@@ -364,6 +367,9 @@ class HFR_Range:
 
         # get indices of selected datetimes
         datetime_indices = self.get_datetime_indices(start_datetime, end_datetime)
+
+        if filename_suffix is not None:
+            filename_suffix = f'_{filename_suffix}'
 
         if datetime_indices is not None:
             variables = variables if variables is not None else ['u', 'v', 'DOPx', 'DOPy']
@@ -434,7 +440,8 @@ class HFR_Range:
                     elif driver == 'GPKG':
                         file_extension = 'gpkg'
 
-                    output_filename = os.path.join(output_dir, f'hfr_{variable}.{file_extension}')
+                    output_filename = os.path.join(output_dir,
+                                                   f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
 
                     print(f'Writing {output_filename}')
                     with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:

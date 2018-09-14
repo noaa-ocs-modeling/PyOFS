@@ -48,7 +48,8 @@ def write_daily_average(output_dir, current_model_run_date, day_deltas, log_path
             try:
                 # print(f'Processing HFR for {current_date}')
                 current_hfr = dataset.hfr.HFR_Range(current_date, next_date)
-                current_hfr.write_rasters(current_dir, ['u', 'v'], vector_components=True, drivers=['AAIGrid'],
+                current_hfr.write_rasters(current_dir, filename_suffix=f'{current_date.strftime("%Y%m%d")}',
+                                          variables=['u', 'v'], vector_components=True, drivers=['AAIGrid'],
                                           fill_value=LEAFLET_NODATA_VALUE)
             except dataset._utilities.NoDataError as error:
                 with open(log_path, 'a') as log_file:
@@ -58,8 +59,19 @@ def write_daily_average(output_dir, current_model_run_date, day_deltas, log_path
             try:
                 # print(f'Processing VIIRS for {current_date}')
                 current_viirs = dataset.viirs.VIIRS_Range(current_date, next_date)
-                current_viirs.write_raster(current_dir, drivers=['GTiff'], average=False,
+                current_viirs.write_raster(current_dir,
+                                           filename_prefix=f'viirs_sst_morning_{current_date.strftime("%Y%m%d")}',
+                                           start_datetime=current_date, end_datetime=current_date.replace(hour=6),
+                                           drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
+                current_viirs.write_raster(current_dir,
+                                           filename_prefix=f'viirs_sst_daytime_{current_date.strftime("%Y%m%d")}',
+                                           start_datetime=current_date.replace(hour=6),
+                                           end_datetime=current_date.replace(hour=18), drivers=['GTiff'],
                                            fill_value=LEAFLET_NODATA_VALUE)
+                current_viirs.write_raster(current_dir,
+                                           filename_prefix=f'viirs_sst_evening_{current_date.strftime("%Y%m%d")}',
+                                           start_datetime=current_date.replace(hour=18), end_datetime=next_date,
+                                           drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
             except dataset._utilities.NoDataError as error:
                 with open(log_path, 'a') as log_file:
                     log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
@@ -125,8 +137,8 @@ if __name__ == '__main__':
     # qgis_application.initQgis()
 
     # get current date
-    model_run_dates = [start_time.replace(hour=0, minute=0, second=0, microsecond=0)]
-    # model_run_dates = _utilities.day_range(datetime.datetime(2018, 8, 27), datetime.datetime(2018, 9, 6))
+    # model_run_dates = [start_time.replace(hour=0, minute=0, second=0, microsecond=0)]
+    model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 8, 27), datetime.datetime.now())
 
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = [-1, 0, 1, 2]

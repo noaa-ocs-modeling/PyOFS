@@ -453,8 +453,6 @@ class VIIRS_Range:
             if len(scenes_data) > 0:
                 output_sst_data = numpy.nanmean(numpy.stack(scenes_data), axis=2)
                 output_sst_data[numpy.isnan(output_sst_data)] = fill_value
-            else:
-                raise _utilities.NoDataError('No VIIRS data found within the given interval.')
         else:  # otherwise overlap based on datetime
             for datetime in interval_datetimes:
                 sst_data = self.datasets[datetime].sst()
@@ -464,49 +462,49 @@ class VIIRS_Range:
                                                      dtype=rasterio.float32) * fill_value
                     output_sst_data[~numpy.isnan(sst_data)] = sst_data[~numpy.isnan(sst_data)]
 
-            if output_sst_data is None:
-                raise _utilities.NoDataError('No VIIRS data found within the given interval.')
+        if output_sst_data is not None:
+            # define arguments to GDAL driver
+            gdal_args = {
+                'height': output_sst_data.shape[0], 'width': output_sst_data.shape[1], 'count': 1,
+                'crs':    RASTERIO_WGS84, 'transform': VIIRS_Range.study_area_transform
+            }
 
-        # define arguments to GDAL driver
-        gdal_args = {
-            'height':    output_sst_data.shape[0], 'width': output_sst_data.shape[1], 'count': 1, 'crs': RASTERIO_WGS84,
-            'transform': VIIRS_Range.study_area_transform
-        }
+            for driver in drivers:
+                if driver == 'AAIGrid':
+                    file_extension = 'asc'
+                    raster_data = output_sst_data.astype(rasterio.float32)
+                    gdal_args.update({
+                        'dtype':  raster_data.dtype,
+                        'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item(), 'FORCE_CELLSIZE': 'YES'
+                    })
+                elif driver == 'GTiff':
+                    file_extension = 'tiff'
+                    raster_data = output_sst_data.astype(rasterio.float32)
+                    gdal_args.update({
+                        'dtype': raster_data.dtype, 'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
+                    })
+                elif driver == 'GPKG':
+                    file_extension = 'gpkg'
+                    gpkg_dtype = rasterio.uint8
+                    gpkg_fill_value = numpy.iinfo(gpkg_dtype).max
+                    output_sst_data[output_sst_data == fill_value] = gpkg_fill_value
+                    # scale data to within range of uint8
+                    raster_data = ((gpkg_fill_value - 1) * (output_sst_data - numpy.min(output_sst_data)) / numpy.ptp(
+                            output_sst_data)).astype(gpkg_dtype)
+                    gdal_args.update({
+                        'dtype': gpkg_dtype, 'nodata': gpkg_fill_value
+                    })  # , 'TILE_FORMAT': 'PNG8'})
 
-        for driver in drivers:
-            if driver == 'AAIGrid':
-                file_extension = 'asc'
-                raster_data = output_sst_data.astype(rasterio.float32)
-                gdal_args.update({
-                    'dtype':          raster_data.dtype, 'nodata': output_sst_data.fill_value.astype(raster_data.dtype),
-                    'FORCE_CELLSIZE': 'YES'
-                })
-            elif driver == 'GTiff':
-                file_extension = 'tiff'
-                raster_data = output_sst_data.astype(rasterio.float32)
-                gdal_args.update({
-                    'dtype': raster_data.dtype, 'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
-                })
-            elif driver == 'GPKG':
-                file_extension = 'gpkg'
-                gpkg_dtype = rasterio.uint8
-                gpkg_fill_value = numpy.iinfo(gpkg_dtype).max
-                output_sst_data[output_sst_data == fill_value] = gpkg_fill_value
-                # scale data to within range of uint8
-                raster_data = ((gpkg_fill_value - 1) * (output_sst_data - numpy.min(output_sst_data)) / numpy.ptp(
-                        output_sst_data)).astype(gpkg_dtype)
-                gdal_args.update({
-                    'dtype': gpkg_dtype, 'nodata': gpkg_fill_value
-                })  # , 'TILE_FORMAT': 'PNG8'})
+                if filename_prefix is None:
+                    filename_prefix = f'viirs_sst_{start_datetime.strftime("%Y%m%d%H%M%S")}_{end_datetime.strftime("%Y%m%d%H%M%S")}'
 
-            if filename_prefix is None:
-                filename_prefix = f'viirs_sst_{start_datetime.strftime("%Y%m%d%H%M%S")}_{end_datetime.strftime("%Y%m%d%H%M%S")}'
+                output_filename = os.path.join(output_dir, f'{filename_prefix}.{file_extension}')
 
-            output_filename = os.path.join(output_dir, f'{filename_prefix}.{file_extension}')
-
-            print(f'Writing {output_filename}')
-            with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
-                output_raster.write(raster_data, 1)
+                print(f'Writing {output_filename}')
+                with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
+                    output_raster.write(raster_data, 1)
+        else:
+            print('No VIIRS data found within the given time interval.')
 
     def __repr__(self):
         used_params = [self.start_datetime.__repr__(), self.end_datetime.__repr__()]
