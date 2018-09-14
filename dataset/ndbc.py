@@ -13,12 +13,12 @@ import re
 
 import fiona
 import fiona.crs
-import netCDF4
 import numpy
 import rasterio
 import requests
 import shapely
 import shapely.geometry
+import xarray
 
 from dataset import _utilities
 
@@ -50,15 +50,13 @@ class NDBC_Station:
         """
 
         self.valid = False
-
         self.station_name = station
-
         self.url = f'https://dods.ndbc.noaa.gov/thredds/dodsC/data/ocean/{self.station_name}/{self.station_name}o9999.nc'
 
         try:
-            self.netcdf_dataset = netCDF4.Dataset(self.url)
-            self.longitude = self.netcdf_dataset['longitude'][:].filled()[0]
-            self.latitude = self.netcdf_dataset['latitude'][:].filled()[0]
+            self.netcdf_dataset = xarray.open_dataset(self.url)
+            self.longitude = self.netcdf_dataset['longitude'].values.item()
+            self.latitude = self.netcdf_dataset['latitude'].values.item()
             self.valid = True
         except:
             raise _utilities.NoDataError(f'No NDBC dataset found at {self.url}')
@@ -78,22 +76,17 @@ class NDBC_Station:
 
         print(f'Collecting NDBC data of station {self.station_name} from {start_datetime} to {end_datetime}...')
 
-        output_data = {current_variable: None for current_variable in MEASUREMENT_VARIABLES}
+        output_data = {variable: None for variable in MEASUREMENT_VARIABLES}
 
-        time_var = self.netcdf_dataset['time']
+        time_data = self.netcdf_dataset['time'].values
 
-        # parse datetime objects from "seconds since 1970-01-01 00:00:00 UTC" using netCDF4 date parser
-        start_hour, end_hour = netCDF4.date2num([start_datetime, end_datetime], time_var.units)
-
-        time_data = time_var[:]
-
-        start_index = numpy.searchsorted(time_data, start_hour)
-        end_index = numpy.searchsorted(time_data, end_hour)
+        start_index = numpy.searchsorted(time_data, numpy.datetime64(start_datetime))
+        end_index = numpy.searchsorted(time_data, numpy.datetime64(end_datetime))
 
         if end_index - start_index > 0:
             # concurrently populate dictionary with data for each variable
-            for current_variable in MEASUREMENT_VARIABLES:
-                output_data[current_variable] = self.netcdf_dataset[current_variable][start_index:end_index, :, :]
+            for variable in MEASUREMENT_VARIABLES:
+                output_data[variable] = self.netcdf_dataset[variable][start_index:end_index, :, :].values
 
         return output_data
 
@@ -128,16 +121,16 @@ class NDBC_Range:
 
         # concurrently populate dictionary with datasets for each station within given time interval
         with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
-            station_futures = {concurrency_pool.submit(NDBC_Station, current_station_name): current_station_name for
-                               current_station_name in self.station_names}
+            station_futures = {concurrency_pool.submit(NDBC_Station, station_name): station_name for station_name in
+                               self.station_names}
 
-            for current_future in concurrent.futures.as_completed(station_futures):
-                current_station_name = station_futures[current_future]
+            for completed_future in concurrent.futures.as_completed(station_futures):
+                station_name = station_futures[completed_future]
 
-                if type(current_future.exception()) is not _utilities.NoDataError:
-                    current_result = current_future.result()
-                    print(f'Collecting NDBC data from station {current_station_name}...')
-                    self.stations[current_station_name] = current_result
+                if type(completed_future.exception()) is not _utilities.NoDataError:
+                    result = completed_future.result()
+                    print(f'Collecting NDBC data from station {station_name}...')
+                    self.stations[station_name] = result
 
         if len(self.stations) == 0:
             raise _utilities.NoDataError(
@@ -161,16 +154,15 @@ class NDBC_Range:
 
         # concurrently populate dictionary with data for each station within given time interval
         with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
-            data_futures = {
-                concurrency_pool.submit(current_station.data, start_datetime, end_datetime): current_station_name for
-                current_station_name, current_station in self.stations.items()}
+            data_futures = {concurrency_pool.submit(station.data, start_datetime, end_datetime): station_name for
+                            station_name, station in self.stations.items()}
 
-            for current_future in concurrent.futures.as_completed(data_futures):
-                current_result = current_future.result()
+            for completed_future in concurrent.futures.as_completed(data_futures):
+                result = completed_future.result()
 
-                if current_result is not None:
-                    current_station_name = data_futures[current_future]
-                    station_data[current_station_name] = current_result
+                if result is not None:
+                    station_name = data_futures[completed_future]
+                    station_data[station_name] = result
 
         schema = {
             'geometry': 'Point', 'properties': {
@@ -181,64 +173,59 @@ class NDBC_Range:
             }
         }
 
-        with fiona.open(output_filename, 'w', 'GPKG', schema, FIONA_WGS84, layer=layer_name) as current_layer:
+        with fiona.open(output_filename, 'w', 'GPKG', schema, FIONA_WGS84, layer=layer_name) as layer:
             print('Creating features...')
 
-            current_layer_records = []
+            layer_records = []
 
-            for current_station_name, current_station_data in station_data.items():
-                current_station = self.stations[current_station_name]
-                current_lon = float(current_station.longitude)
-                current_lat = float(current_station.latitude)
+            for station_name, station_data in station_data.items():
+                station = self.stations[station_name]
+                longitude = float(station.longitude)
+                latitude = float(station.latitude)
 
-                water_temperature = numpy.ma.mean(current_station_data['water_temperature'])
-                conductivity = numpy.ma.mean(current_station_data['conductivity'])
-                salinity = numpy.ma.mean(current_station_data['salinity'])
-                o2_saturation = numpy.ma.mean(current_station_data['o2_saturation'])
-                dissolved_oxygen = numpy.ma.mean(current_station_data['dissolved_oxygen'])
-                chlorophyll_concentration = numpy.ma.mean(current_station_data['chlorophyll_concentration'])
-                turbidity = numpy.ma.mean(current_station_data['turbidity'])
-                water_ph = numpy.ma.mean(current_station_data['water_ph'])
-                water_eh = numpy.ma.mean(current_station_data['water_eh'])
+                water_temperature = float(numpy.ma.mean(station_data['water_temperature']))
+                conductivity = float(numpy.ma.mean(station_data['conductivity']))
+                salinity = float(numpy.ma.mean(station_data['salinity']))
+                o2_saturation = float(numpy.ma.mean(station_data['o2_saturation']))
+                dissolved_oxygen = float(numpy.ma.mean(station_data['dissolved_oxygen']))
+                chlorophyll_concentration = float(numpy.ma.mean(station_data['chlorophyll_concentration']))
+                turbidity = float(numpy.ma.mean(station_data['turbidity']))
+                water_ph = float(numpy.ma.mean(station_data['water_ph']))
+                water_eh = float(numpy.ma.mean(station_data['water_eh']))
 
-                current_record = {
-                    'geometry': {'type': 'Point', 'coordinates': (current_lon, current_lat)}, 'properties': {
-                        'name':                      current_station_name, 'longitude': current_lon,
-                        'latitude':                  current_lat,
-                        'water_temperature':         water_temperature if water_temperature is not numpy.ma.masked else 0,
-                        'conductivity':              conductivity if conductivity is not numpy.ma.masked else 0,
-                        'salinity':                  salinity if salinity is not numpy.ma.masked else 0,
-                        'o2_saturation':             o2_saturation if o2_saturation is not numpy.ma.masked else 0,
-                        'dissolved_oxygen':          dissolved_oxygen if dissolved_oxygen is not numpy.ma.masked else 0,
-                        'chlorophyll_concentration': chlorophyll_concentration if chlorophyll_concentration is not numpy.ma.masked else 0,
-                        'turbidity':                 turbidity if turbidity is not numpy.ma.masked else 0,
-                        'water_ph':                  water_ph if water_ph is not numpy.ma.masked else 0,
-                        'water_eh':                  water_eh if water_eh is not numpy.ma.masked else 0
+                record = {
+                    'geometry': {'type': 'Point', 'coordinates': (longitude, latitude)}, 'properties': {
+                        'name':                      station_name, 'longitude': longitude, 'latitude': latitude,
+                        'water_temperature':         water_temperature, 'conductivity': conductivity,
+                        'salinity':                  salinity, 'o2_saturation': o2_saturation,
+                        'dissolved_oxygen':          dissolved_oxygen,
+                        'chlorophyll_concentration': chlorophyll_concentration, 'turbidity': turbidity,
+                        'water_ph':                  water_ph, 'water_eh': water_eh
                     }
                 }
 
-                current_layer_records.append(current_record)
+                layer_records.append(record)
 
             print(f'Writing {output_filename}:{layer_name}')
-            current_layer.writerecords(current_layer_records)
+            layer.writerecords(layer_records)
 
     def __repr__(self):
         used_params = [self.start_datetime.__repr__(), self.end_datetime.__repr__()]
         optional_params = [self.station_names]
 
-        for current_param in optional_params:
-            if current_param is not None:
-                if 'str' in str(type(current_param)):
-                    current_param = f'"{current_param}"'
+        for param in optional_params:
+            if param is not None:
+                if 'str' in str(type(param)):
+                    param = f'"{param}"'
                 else:
-                    current_param = str(current_param)
+                    param = str(param)
 
-                used_params.append(current_param)
+                used_params.append(param)
 
         return f'{self.__class__.__name__}({", ".join(used_params)})'
 
 
-def check_station(dataset: netCDF4.Dataset, study_area_polygon_filename: str) -> bool:
+def check_station(dataset: xarray.Dataset, study_area_polygon_filename: str) -> bool:
     """
     Check whether station exists within the given study area.
 
@@ -256,19 +243,19 @@ def check_station(dataset: netCDF4.Dataset, study_area_polygon_filename: str) ->
     with fiona.open(study_area_polygon_filename, layer=layer_name) as vector_layer:
         study_area_polygon = shapely.geometry.Polygon(vector_layer.next()['geometry']['coordinates'][0])
 
-    current_lon = dataset['longitude'][:]
-    current_lat = dataset['latitude'][:]
+    lon = dataset['longitude'][:]
+    lat = dataset['latitude'][:]
 
-    current_point = shapely.geometry.point.Point(current_lon, current_lat)
+    point = shapely.geometry.point.Point(lon, lat)
 
-    return current_point.intersects(study_area_polygon)
+    return point.intersects(study_area_polygon)
 
 
 if __name__ == '__main__':
     start_datetime = datetime.datetime(2018, 7, 14)
     end_datetime = datetime.datetime.now()
 
-    output_dir = r'C:\Data\ndbc'
+    output_dir = r'C:\Data\output\test'
 
     wcofs_stations = list(numpy.genfromtxt(WCOFS_NDBC_STATIONS_FILENAME, dtype='str'))
 

@@ -12,10 +12,10 @@ import os
 
 import fiona
 import fiona.crs
-import netCDF4
 import numpy
 import rasterio
 import scipy.interpolate
+import xarray
 from qgis.core import QgsFeature, QgsGeometry, QgsPoint, QgsVectorLayer
 
 from dataset import _utilities
@@ -63,59 +63,26 @@ class HFR_Range:
         if self.source == 'UCSD':
             self.url = f'http://hfrnet-tds.ucsd.edu/thredds/dodsC/HFR/USWC/{self.resolution}km/hourly/RTV/HFRADAR_US_West_Coast_{self.resolution}km_Resolution_Hourly_RTV_best.ncd'
         elif self.source == 'NDBC':
-            # url = r"C:\Data\hfr\hfradar_uswc_6km.nc"
             self.url = f'https://dods.ndbc.noaa.gov/thredds/dodsC/hfradar_uswc_{self.resolution}km'
 
         try:
-            self.netcdf_dataset = netCDF4.Dataset(self.url)
+            self.netcdf_dataset = xarray.open_dataset(self.url)
         except OSError:
             raise _utilities.NoDataError(f'No HFR dataset found at {self.url}')
 
-        time_var = self.netcdf_dataset['time']
+        self.datetimes = self.netcdf_dataset['time'].values.astype(numpy.datetime64)
 
-        # get datetimes
-        if self.source == 'UCSD':
-            # parse datetime objects from "hours since 2011-10-01 00:00:00.000
-            # UTC" using netCDF4 date parser
-            start_hour, end_hour = netCDF4.date2num([self.start_datetime, self.end_datetime], time_var.units,
-                                                    time_var.calendar)
+        self.start_index = numpy.searchsorted(self.datetimes, numpy.datetime64(self.start_datetime))
+        self.end_index = numpy.searchsorted(self.datetimes, numpy.datetime64(self.end_datetime))
 
-            self.start_index = numpy.searchsorted(time_var[:], start_hour)
-            self.end_index = numpy.searchsorted(time_var[:], end_hour)
-
-            self.datetimes = netCDF4.num2date(time_var[self.start_index:self.end_index], units=time_var.units,
-                                              calendar=time_var.calendar)
-        elif self.source == 'NDBC':
-            # decode strings from datetime character byte arrays
-            datetime_strings = time_var[:].tobytes().decode().split('\x00' * 44)[:-1]
-
-            self.start_index = numpy.searchsorted(datetime_strings, self.start_datetime.strftime('%Y-%m-%dT%H:%M:%SZ'))
-            self.end_index = numpy.searchsorted(datetime_strings, self.end_datetime.strftime('%Y-%m-%dT%H:%M:%SZ'))
-
-            datetime_strings_subset = datetime_strings[self.start_index:self.end_index]
-
-            if len(datetime_strings_subset) > 0:
-                # parse datetime objects from strings using vectorized version of datetime.strptime()
-                vector_strptime = numpy.vectorize(datetime.datetime.strptime)
-                self.datetimes = vector_strptime(datetime_strings_subset, '%Y-%m-%dT%H:%M:%SZ')
-            else:
-                self.datetimes = [datetime_strings[self.start_index]]
+        self.datetimes = self.datetimes[self.start_index:self.end_index]
 
         print(f'Collecting HFR velocity from {numpy.min(self.datetimes)} to {numpy.max(self.datetimes)}')
 
-        self.data = {'lon': self.netcdf_dataset['lon'][:], 'lat': self.netcdf_dataset['lat'][:]}
+        self.data = {'lon': self.netcdf_dataset['lon'].values, 'lat': self.netcdf_dataset['lat'].values}
 
-        # concurrently populate dictionary with data for each variable
-        with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
-            variable_futures = {concurrency_pool.submit(self._threaded_collect, current_variable): current_variable for
-                                current_variable in MEASUREMENT_VARIABLES}
-
-            for current_future in concurrent.futures.as_completed(variable_futures):
-                if current_future._exception is None:
-                    current_variable = variable_futures[current_future]
-                    self.data[current_variable] = current_future.result()
-
-            del variable_futures
+        for variable in MEASUREMENT_VARIABLES:
+            self.data[variable] = self.netcdf_dataset[variable][self.start_index:self.end_index, :, :].values
 
         if HFR_Range.grid_transform is None:
             # define image properties
@@ -127,17 +94,6 @@ class HFR_Range:
 
             # get rasterio geotransform of HFR dataset (flipped latitude)
             self.grid_transform = rasterio.transform.from_origin(west, north, self.x_size, self.y_size)
-
-    def _threaded_collect(self, variable_name: str) -> numpy.ma.MaskedArray:
-        """
-        Hacky method that creates a new NetCDF dataset to retrieve data.
-        This function is necessary to perform multithreaded reading on the same dataset.
-
-        :param variable_name: Name of variable.
-        :return: Array of data for variable.
-        """
-
-        return netCDF4.Dataset(self.url)[variable_name][self.start_index:self.end_index, :, :]
 
     def get_datetime_indices(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime) -> numpy.ndarray:
         """
@@ -191,12 +147,12 @@ class HFR_Range:
         :param layer_name: Name of layer to write.
         """
 
-        radar_sites_code = self.netcdf_dataset['site_code'][:]
-        radar_sites_network_code = self.netcdf_dataset['site_netCode'][:]
-        radar_sites_lon = self.netcdf_dataset['site_lon'][:]
-        radar_sites_lat = self.netcdf_dataset['site_lat'][:]
+        radar_sites_code = self.netcdf_dataset['site_code'].values
+        radar_sites_network_code = self.netcdf_dataset['site_netCode'].values
+        radar_sites_lon = self.netcdf_dataset['site_lon'].values
+        radar_sites_lat = self.netcdf_dataset['site_lat'].values
 
-        current_layer_records = []
+        layer_records = []
 
         schema = {
             'geometry': 'Point', 'properties': {
@@ -204,26 +160,22 @@ class HFR_Range:
             }
         }
 
-        with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema,
-                        crs=FIONA_WGS84) as current_layer:
+        with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_WGS84) as layer:
             for site_index in range(len(radar_sites_code)):
-                current_site_code = radar_sites_code[site_index, :].tobytes().decode().strip('\x00').strip()
-                current_site_network_code = radar_sites_network_code[site_index, :].tobytes().decode().strip(
-                        '\x00').strip()
-                current_lon = float(radar_sites_lon[site_index])
-                current_lat = float(radar_sites_lat[site_index])
+                site_code = radar_sites_code[site_index, :].tobytes().decode().strip('\x00').strip()
+                site_network_code = radar_sites_network_code[site_index, :].tobytes().decode().strip('\x00').strip()
+                lon = float(radar_sites_lon[site_index])
+                lat = float(radar_sites_lat[site_index])
 
-                current_record = {
-                    'id':         site_index + 1,
-                    'geometry':   {'type': 'Point', 'coordinates': (current_lon, current_lat)}, 'properties': {
-                        'code': current_site_code, 'net_code': current_site_network_code, 'lon': float(current_lon),
-                        'lat':  float(current_lat)
+                record = {
+                    'id': site_index + 1, 'geometry': {'type': 'Point', 'coordinates': (lon, lat)}, 'properties': {
+                        'code': site_code, 'net_code': site_network_code, 'lon': float(lon), 'lat': float(lat)
                     }
                 }
 
-                current_layer_records.append(current_record)
+                layer_records.append(record)
 
-            current_layer.writerecords(current_layer_records)
+            layer.writerecords(layer_records)
 
     def write_vectors(self, output_filename: str, start_datetime: datetime.datetime = None,
                       end_datetime: datetime.datetime = None):
@@ -242,12 +194,12 @@ class HFR_Range:
         datetime_indices = self.get_datetime_indices(start_datetime, end_datetime)
 
         # dataset data
-        hfr_u = self.data['u'][datetime_indices, :, :]
-        hfr_v = self.data['v'][datetime_indices, :, :]
-        hfr_lon = self.data['lon'][:]
-        hfr_lat = self.data['lat'][:]
-        hfr_dop_lon = self.data['dop_lon'][datetime_indices, :, :]
-        hfr_dop_lat = self.data['dop_lat'][datetime_indices, :, :]
+        hfr_u = self.data['u'][datetime_indices, :, :].values
+        hfr_v = self.data['v'][datetime_indices, :, :].values
+        hfr_lon = self.data['lon'][:].values
+        hfr_lat = self.data['lat'][:].values
+        hfr_dop_lon = self.data['dop_lon'][datetime_indices, :, :].values
+        hfr_dop_lat = self.data['dop_lat'][datetime_indices, :, :].values
 
         # define layer schema
         schema = {
@@ -261,56 +213,55 @@ class HFR_Range:
 
         # create layer using OGR, then add features using QGIS
         for datetime_index in range(len(datetime_indices)):
-            current_datetime = self.datetimes[datetime_indices[datetime_index]]
+            datetime = self.datetimes[datetime_indices[datetime_index]]
 
-            current_layer_name = f'{current_datetime.strftime("%Y%m%dT%H%M%S")}'
+            layer_name = f'{datetime.strftime("%Y%m%dT%H%M%S")}'
 
             # create QGIS features
-            current_layer_features = []
+            layer_features = []
 
             feature_index = 1
 
             for lon_index in range(len(hfr_lon)):
                 for lat_index in range(len(hfr_lat)):
-                    current_u = hfr_u[datetime_index, lat_index, lon_index]
+                    u = hfr_u[datetime_index, lat_index, lon_index]
 
                     # check if record has values
-                    if current_u is not numpy.ma.masked:
-                        current_v = hfr_v[datetime_index, lat_index, lon_index]
-                        current_dop_lon = hfr_dop_lon[datetime_index, lat_index, lon_index]
-                        current_dop_lat = hfr_dop_lat[datetime_index, lat_index, lon_index]
-                        current_lon = hfr_lon[lon_index]
-                        current_lat = hfr_lat[lat_index]
+                    if u is not numpy.ma.masked:
+                        v = hfr_v[datetime_index, lat_index, lon_index]
+                        dop_lon = hfr_dop_lon[datetime_index, lat_index, lon_index]
+                        dop_lat = hfr_dop_lat[datetime_index, lat_index, lon_index]
+                        lon = hfr_lon[lon_index]
+                        lat = hfr_lat[lat_index]
 
-                        current_point = QgsGeometry(QgsPoint(current_lon, current_lat))
+                        point = QgsGeometry(QgsPoint(lon, lat))
 
-                        current_feature = QgsFeature()
+                        feature = QgsFeature()
 
-                        current_feature.setAttributes(
-                                [feature_index, float(current_u), float(current_v), float(current_lon),
-                                 float(current_lat), float(current_dop_lon), float(current_dop_lat)])
+                        feature.setAttributes(
+                                [feature_index, float(u), float(v), float(lon), float(lat), float(dop_lon),
+                                 float(dop_lat)])
 
-                        current_feature.setGeometry(current_point)
+                        feature.setGeometry(point)
 
-                        current_layer_features.append(current_feature)
+                        layer_features.append(feature)
 
                         feature_index += 1
 
-            layer_features[current_layer_name] = current_layer_features
+            layer_features[layer_name] = layer_features
 
         # write queued features to their respective layers
-        for current_layer_name, current_layer_features in layer_features.items():
-            current_layer = QgsVectorLayer(f'{output_filename}|layername={current_layer_name}', current_layer_name,
-                                           'ogr')
+        for layer_name, layer_features in layer_features.items():
+            layer = QgsVectorLayer(f'{output_filename}|layername={layer_name}', layer_name, 'ogr')
 
             # open layer for editing
-            current_layer.startEditing()
+            layer.startEditing()
 
             # add features to layer
-            current_layer.dataProvider().addFeatures(current_layer_features)
+            layer.dataProvider().addFeatures(layer_features)
 
             # write changes to layer
-            current_layer.commitChanges()
+            layer.commitChanges()
 
     def write_vector(self, output_filename: str, layer_name: str = 'uv', start_datetime: datetime.datetime = None,
                      end_datetime: datetime.datetime = None):
@@ -338,12 +289,12 @@ class HFR_Range:
             # variable
             with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
                 variable_futures = {
-                    concurrency_pool.submit(numpy.ma.mean, self.data[current_variable][datetime_indices, :, :],
-                                            axis=0): current_variable for current_variable in measurement_variables}
+                concurrency_pool.submit(numpy.ma.mean, self.data[variable][datetime_indices, :, :], axis=0): variable
+                for variable in measurement_variables}
 
-                for current_future in concurrent.futures.as_completed(variable_futures):
-                    current_variable = variable_futures[current_future]
-                    variable_means[current_variable] = current_future.result()
+                for completed_future in concurrent.futures.as_completed(variable_futures):
+                    variable = variable_futures[completed_future]
+                    variable_means[variable] = completed_future.result()
 
                 del variable_futures
 
@@ -354,14 +305,14 @@ class HFR_Range:
                 }
             }
 
-            schema['properties'].update({current_variable: 'float' for current_variable in measurement_variables})
+            schema['properties'].update({variable: 'float' for variable in measurement_variables})
 
             # create layer
             fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_WGS84, layer=layer_name).close()
 
             # dataset data
-            hfr_lon = self.data['lon']
-            hfr_lat = self.data['lat']
+            hfr_lon = self.data['lon'].values
+            hfr_lat = self.data['lat'].values
 
             # create features
             layer_features = []
@@ -370,37 +321,36 @@ class HFR_Range:
 
             for lon_index in range(len(hfr_lon)):
                 for lat_index in range(len(hfr_lat)):
-                    current_data = [variable_means[current_variable][lat_index, lon_index] for current_variable in
-                                    measurement_variables]
+                    data = [variable_means[variable][lat_index, lon_index] for variable in measurement_variables]
 
                     # stop if record has masked values
-                    if numpy.all(~numpy.isnan(current_data)):
-                        current_lon = hfr_lon[lon_index]
-                        current_lat = hfr_lat[lat_index]
+                    if numpy.all(~numpy.isnan(data)):
+                        lon = hfr_lon[lon_index]
+                        lat = hfr_lat[lat_index]
 
-                        current_feature = QgsFeature()
-                        current_feature.setGeometry(QgsGeometry(QgsPoint(current_lon, current_lat)))
-                        current_feature.setAttributes(
-                                [feature_index, float(current_lon), float(current_lat)] + [float(entry) for entry in
-                                                                                           current_data])
+                        feature = QgsFeature()
+                        feature.setGeometry(QgsGeometry(QgsPoint(lon, lat)))
+                        feature.setAttributes(
+                                [feature_index, float(lon), float(lat)] + [float(entry) for entry in data])
 
-                        layer_features.append(current_feature)
+                        layer_features.append(feature)
                         feature_index += 1
 
             # write queued features to layer
             print(f'Writing {output_filename}')
-            current_layer = QgsVectorLayer('{0}|layername={1}'.format(output_filename, layer_name), layer_name, 'ogr')
-            current_layer.startEditing()
-            current_layer.dataProvider().addFeatures(layer_features)
-            current_layer.commitChanges()
+            layer = QgsVectorLayer(f'{output_filename}|layername={layer_name}', layer_name, 'ogr')
+            layer.startEditing()
+            layer.dataProvider().addFeatures(layer_features)
+            layer.commitChanges()
 
-    def write_rasters(self, output_dir: str, variables: list = None, start_datetime: datetime.datetime = None,
-                      end_datetime: datetime.datetime = None, vector_components: bool = False, fill_value: float = None,
-                      drivers: list = ['GTiff']):
+    def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', variables: list = None,
+                      start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
+                      vector_components: bool = False, fill_value: float = -9999, drivers: list = ['GTiff']):
         """
         Write average of HFR data for all hours in the given time interval to rasters.
 
         :param output_dir: Path to output directory.
+        :param filename_prefix: Prefix for output filenames.
         :param variables: List of variable names to use.
         :param start_datetime: Beginning of time interval.
         :param end_datetime: End of time interval.
@@ -423,12 +373,12 @@ class HFR_Range:
             # concurrently populate dictionary with averaged data for each variable
             with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
                 variable_futures = {
-                    concurrency_pool.submit(numpy.ma.mean, self.data[current_variable][datetime_indices, :, :],
-                                            axis=0): current_variable for current_variable in variables}
+                concurrency_pool.submit(numpy.ma.mean, self.data[variable][datetime_indices, :, :], axis=0): variable
+                for variable in variables}
 
-                for current_future in concurrent.futures.as_completed(variable_futures):
-                    current_variable = variable_futures[current_future]
-                    variable_means[current_variable] = current_future.result()
+                for completed_future in concurrent.futures.as_completed(variable_futures):
+                    variable = variable_futures[completed_future]
+                    variable_means[variable] = completed_future.result()
 
                 del variable_futures
 
@@ -447,20 +397,17 @@ class HFR_Range:
                 variable_means['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (180 / numpy.pi)
                 variable_means['mag'] = numpy.sqrt(numpy.square(u_data) + numpy.square(v_data))
 
-            for current_variable, current_data in variable_means.items():
-                if fill_value is not None:
-                    current_data.set_fill_value(fill_value)
-
-                raster_data = current_data.filled().astype(rasterio.float32)
+            for variable, variable_data in variable_means.items():
+                raster_data = variable_data.astype(rasterio.float32)
 
                 gdal_args = {
                     'height': raster_data.shape[0], 'width': raster_data.shape[1], 'count': 1,
                     'dtype':  raster_data.dtype, 'crs': RASTERIO_WGS84, 'transform': self.grid_transform,
-                    'nodata': current_data.fill_value.astype(raster_data.dtype)
+                    'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
                 }
 
-                for current_driver in drivers:
-                    if current_driver == 'AAIGrid':
+                for driver in drivers:
+                    if driver == 'AAIGrid':
                         file_extension = 'asc'
 
                         mean_cell_length = numpy.min(self.cell_size())
@@ -482,51 +429,45 @@ class HFR_Range:
                                                                         numpy.max(numpy.diff(output_lon)),
                                                                         numpy.max(numpy.diff(output_lon)))
                         })
-                    elif current_driver == 'GTiff':
+                    elif driver == 'GTiff':
                         file_extension = 'tiff'
-                    elif current_driver == 'GPKG':
+                    elif driver == 'GPKG':
                         file_extension = 'gpkg'
 
-                    current_output_filename = os.path.join(output_dir, f'hfr_{current_variable}.{file_extension}')
+                    output_filename = os.path.join(output_dir, f'hfr_{variable}.{file_extension}')
 
-                    print(f'Writing {current_output_filename}')
-                    with rasterio.open(current_output_filename, 'w', current_driver, **gdal_args) as output_raster:
+                    print(f'Writing {output_filename}')
+                    with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                         output_raster.write(numpy.flipud(raster_data), 1)
 
     def __repr__(self):
         used_params = [self.start_datetime.__repr__(), self.end_datetime.__repr__()]
         optional_params = [self.resolution]
 
-        for current_param in optional_params:
-            if current_param is not None:
-                if 'str' in str(type(current_param)):
-                    current_param = f'"{current_param}"'
+        for param in optional_params:
+            if param is not None:
+                if 'str' in str(type(param)):
+                    param = f'"{param}"'
                 else:
-                    current_param = str(current_param)
+                    param = str(param)
 
-                used_params.append(current_param)
+                used_params.append(param)
 
         return f'{self.__class__.__name__}({str(", ".join(used_params))})'
 
 
 if __name__ == '__main__':
-    start_datetime = datetime.datetime(2018, 7, 14)
+    start_datetime = datetime.datetime.now() - datetime.timedelta(days=1)
     end_datetime = datetime.datetime.now()
 
-    output_dir = r'C:\Data\hfr\compare'
-    resolution = 6
+    output_dir = r'C:\Data\output\test'
 
     # get dataset from source
-    print('UCSD')
-    hfr_dataset_UCSD = HFR_Range(start_datetime, end_datetime, resolution, source='UCSD')
-
-    print('NDBC')
-    hfr_dataset_NDBC = HFR_Range(start_datetime, end_datetime, resolution, source='NDBC')
+    hfr_dataset = HFR_Range(start_datetime, end_datetime)
 
     date_interval_string = f'{start_datetime.strftime("%m%d%H")}_{end_datetime.strftime("%m%d%H")}'
 
-    # write HFR rasters
-    hfr_dataset_UCSD.write_rasters(output_dir, f'UCSD_{date_interval_string}')
-    hfr_dataset_NDBC.write_rasters(output_dir, f'NDBC_{date_interval_string}')
+    # write HFR raster
+    hfr_dataset.write_rasters(output_dir, f'hfr_{date_interval_string}')
 
     print('done')

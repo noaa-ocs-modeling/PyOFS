@@ -13,13 +13,13 @@ import os
 import threading
 
 import fiona
-import netCDF4
 import numpy
 import rasterio
 import rasterio.features
 import shapely
 import shapely.geometry
 import shapely.wkt
+import xarray
 
 from dataset import _utilities
 
@@ -76,7 +76,7 @@ class VIIRS_Dataset:
                    f'SST{"sub" if self.subskin else ""}skin-VIIRS_NPP-ACSPO_V{self.acspo_version}-v02.0-fv01.0.nc'
 
         try:
-            self.netcdf_dataset = netCDF4.Dataset(self.url)
+            self.netcdf_dataset = xarray.open_dataset(self.url)
         except OSError:
             # try flipped NRT setting
             try:
@@ -86,12 +86,12 @@ class VIIRS_Dataset:
                            f'{self.granule_datetime.year}/{self.granule_datetime.timetuple().tm_yday:03}/' \
                            f'{self.granule_datetime.strftime("%Y%m%d%H%M%S")}-{self.data_source}-L3U_GHRSST-' \
                            f'SST{"sub" if self.subskin else ""}skin-VIIRS_NPP-ACSPO_V{self.acspo_version}-v02.0-fv01.0.nc'
-                self.netcdf_dataset = netCDF4.Dataset(self.url)
+                self.netcdf_dataset = xarray.open_dataset(self.url)
             except OSError:
                 raise _utilities.NoDataError(f'{self.granule_datetime}: No VIIRS dataset found at {self.url}')
 
         # construct rectangular polygon of granule extent
-        if 'geospatial_bounds' in self.netcdf_dataset.ncattrs():
+        if 'geospatial_bounds' in self.netcdf_dataset.attrs:
             self.data_extent = shapely.wkt.loads(self.netcdf_dataset.geospatial_bounds)
         else:
             lon_min = float(self.netcdf_dataset.geospatial_lon_min)
@@ -115,17 +115,6 @@ class VIIRS_Dataset:
                         [(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)]))
 
                 self.data_extent = shapely.geometry.MultiPolygon(polygons)
-
-        # dataset data
-        self.lon_var = self.netcdf_dataset['lon']
-        self.lat_var = self.netcdf_dataset['lat']
-        self.sst_var = self.netcdf_dataset['sea_surface_temperature']
-        self.sses_bias_var = self.netcdf_dataset['sses_bias']
-
-        # if self.sses_bias_var[:].mask.all():
-        #     print(f'{self.datetime} has no bias')
-        # else:
-        #     print(f'{self.datetime} has bias')
 
         lon_pixel_size = self.netcdf_dataset.geospatial_lon_resolution
         lat_pixel_size = self.netcdf_dataset.geospatial_lat_resolution
@@ -189,7 +178,7 @@ class VIIRS_Dataset:
 
         return (self.netcdf_dataset.geospatial_lon_resolution, self.netcdf_dataset.geospatial_lat_resolution)
 
-    def get_variable_data(self, variable: str = 'sst', correct_bias: bool = True) -> numpy.ma.MaskedArray:
+    def get_data(self, variable: str = 'sst', correct_bias: bool = True) -> numpy.ndarray:
         """
         Get data of specified variable within study area.
 
@@ -199,11 +188,11 @@ class VIIRS_Dataset:
         """
 
         if variable == 'sst':
-            return self.get_sst(correct_bias)
+            return self.sst(correct_bias)
         elif variable == 'sses_bias':
-            return self.get_sses_bias()
+            return self.sses_bias()
 
-    def get_sst(self, correct_bias: bool = True) -> numpy.ma.MaskedArray:
+    def sst(self, correct_bias: bool = True) -> numpy.ndarray:
         """
         Get SST data, if it exists within the study area.
 
@@ -215,33 +204,27 @@ class VIIRS_Dataset:
         east_index = VIIRS_Dataset.study_area_index_bounds[2]
         south_index = VIIRS_Dataset.study_area_index_bounds[3]
 
-        # try:
         # dataset SST data (masked array) using vertically reflected VIIRS grid
-        output_sst_data = self.sst_var[0, north_index:south_index, west_index:east_index]
+        output_sst_data = self.netcdf_dataset['sea_surface_temperature'][0, north_index:south_index,
+                          west_index:east_index].values
 
         # check for unmasked data
-        if not output_sst_data.mask.all():
-            # mask negative values
-            output_sst_data.mask[output_sst_data <= 0] = True
-            # output_sst_data[output_sst_data.mask] = numpy.ma.masked
+        if not numpy.isnan(output_sst_data).all():
+            if numpy.nanmax(output_sst_data) > 0:
+                if numpy.nanmin(output_sst_data) <= 0:
+                    output_sst_data[output_sst_data <= 0] = numpy.nan
 
-            # check mask again after modifying it on the previous line
-            if not output_sst_data.mask.all():
                 if correct_bias:
-                    output_sst_data = output_sst_data - self.get_sses_bias()
+                    output_sst_data = output_sst_data - self.sses_bias()
 
                 # convert from Kelvin to Celsius (subtract 273.15)
-                output_sst_data = output_sst_data - self.sst_var.add_offset
+                output_sst_data = output_sst_data - 273.15
+            else:
+                output_sst_data[:] = numpy.nan
 
-                return output_sst_data
+        return output_sst_data
 
-        # except Exception as error:
-        #     print(self.netcdf_dataset['sea_surface_temperature'])
-        #     print(f'Error collecting SST: {error}')
-
-        return None
-
-    def get_sses_bias(self) -> numpy.ndarray:
+    def sses_bias(self) -> numpy.ndarray:
         """
         Return SSES bias.
 
@@ -254,11 +237,11 @@ class VIIRS_Dataset:
         south_index = VIIRS_Dataset.study_area_index_bounds[3]
 
         # dataset bias values using vertically reflected VIIRS grid
-        sses_bias_masked_data = self.sses_bias_var[0, north_index:south_index, west_index:east_index]
+        sses_bias_data = self.netcdf_dataset['sses_bias'][0, north_index:south_index, west_index:east_index].values
 
         # replace masked values with 0
-        sses_bias_masked_data.set_fill_value(0)
-        return sses_bias_masked_data.filled()
+        sses_bias_data[numpy.isnan(sses_bias_data)] = 0
+        return sses_bias_data
 
     def write_rasters(self, output_dir: str, variables: list = ['sst'], fill_value: float = None,
                       drivers: list = ['GTiff']):
@@ -271,8 +254,8 @@ class VIIRS_Dataset:
         :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
         """
 
-        for current_variable in variables:
-            input_data = self.get_variable_data(current_variable)
+        for variable in variables:
+            input_data = self.get_data(variable)
 
             if input_data is not None and not input_data.mask.all():
                 if fill_value is not None:
@@ -284,20 +267,20 @@ class VIIRS_Dataset:
                     'nodata': input_data.fill_value.astype(rasterio.float32)
                 }
 
-                for current_driver in drivers:
-                    if current_driver == 'AAIGrid':
+                for driver in drivers:
+                    if driver == 'AAIGrid':
                         file_extension = 'asc'
                         gdal_args.update({'FORCE_CELLSIZE': 'YES'})
-                    elif current_driver == 'GTiff':
+                    elif driver == 'GTiff':
                         file_extension = 'tiff'
-                    elif current_driver == 'GPKG':
+                    elif driver == 'GPKG':
                         file_extension = 'gpkg'
 
-                    current_output_filename = os.path.join(output_dir, f'viirs_{current_variable}.{file_extension}')
+                    output_filename = os.path.join(output_dir, f'viirs_{variable}.{file_extension}')
 
                     # use rasterio to write to raster with GDAL args
-                    print(f'Writing to {current_output_filename}')
-                    with rasterio.open(current_output_filename, 'w', current_driver, **gdal_args) as output_raster:
+                    print(f'Writing to {output_filename}')
+                    with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                         output_raster.write(input_data, 1)
 
     def __repr__(self):
@@ -305,14 +288,14 @@ class VIIRS_Dataset:
         optional_params = [self.study_area_polygon_filename, self.near_real_time, self.data_source, self.subskin,
                            self.acspo_version]
 
-        for current_param in optional_params:
-            if current_param is not None:
-                if 'str' in str(type(current_param)):
-                    current_param = f'"{current_param}"'
+        for param in optional_params:
+            if param is not None:
+                if 'str' in str(type(param)):
+                    param = f'"{param}"'
                 else:
-                    current_param = str(current_param)
+                    param = str(param)
 
-                used_params.append(current_param)
+                used_params.append(param)
 
         return f'{self.__class__.__name__}({str(", ".join(used_params))})'
 
@@ -363,17 +346,17 @@ class VIIRS_Range:
 
         # concurrently populate dictionary with VIIRS dataset object for each pass time in the given time interval
         with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
-            scene_futures = {concurrency_pool.submit(VIIRS_Dataset, current_datetime, self.study_area_polygon_filename,
-                                                     self.near_real_time, self.data_source, self.subskin,
-                                                     self.acspo_version, threading_lock): current_datetime for
-                             current_datetime in self.pass_times}
+            scene_futures = {
+                concurrency_pool.submit(VIIRS_Dataset, datetime, self.study_area_polygon_filename, self.near_real_time,
+                                        self.data_source, self.subskin, self.acspo_version, threading_lock): datetime
+                for datetime in self.pass_times}
 
             # yield results as threads complete
-            for current_future in concurrent.futures.as_completed(scene_futures):
-                if type(current_future.exception()) is not _utilities.NoDataError:
-                    current_result = current_future.result()
-                    current_datetime = scene_futures[current_future]
-                    self.datasets[current_datetime] = current_result
+            for completed_future in concurrent.futures.as_completed(scene_futures):
+                if type(completed_future.exception()) is not _utilities.NoDataError:
+                    result = completed_future.result()
+                    datetime = scene_futures[completed_future]
+                    self.datasets[datetime] = result
 
         if len(self.datasets) > 0:
             VIIRS_Range.study_area_transform = VIIRS_Dataset.study_area_transform
@@ -394,32 +377,34 @@ class VIIRS_Range:
         return (self.sample_dataset.netcdf_dataset.geospatial_lon_resolution,
                 self.sample_dataset.netcdf_dataset.geospatial_lat_resolution)
 
-    def write_rasters(self, output_dir: str, fill_value: float = None, drivers: list = ['GTiff']):
+    def write_rasters(self, output_dir: str, filename_prefix: str = 'viirs_sst', fill_value: float = None,
+                      drivers: list = ['GTiff']):
         """
         Write individual VIIRS rasters to directory.
 
         :param output_dir: Path to output directory.
+        :param filename_prefix: Prefix for output filenames.
         :param fill_value: Desired fill value of output.
         :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
         """
 
         # write a raster for each pass retrieved scene
         with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
-            for current_datetime, current_dataset in self.datasets.items():
-                current_output_filename = os.path.join(output_dir,
-                                                       f'viirs_sst_{current_datetime.strftime("%Y%m%d%H%M%S")}.tiff')
+            for dataset_datetime, dataset in self.datasets.items():
+                output_filename = os.path.join(output_dir,
+                                               f'{filename_prefix}_{dataset_datetime.strftime("%Y%m%d%H%M%S")}.tiff')
 
                 # write to raster file
-                concurrency_pool.submit(current_dataset.write_rasters, current_output_filename, fill_value=fill_value,
-                                        drivers=drivers)
+                concurrency_pool.submit(dataset.write_rasters, output_filename, fill_value=fill_value, drivers=drivers)
 
-    def write_raster(self, output_dir: str, start_datetime: datetime.datetime = None,
-                     end_datetime: datetime.datetime = None, correct_bias: bool = True, average: bool = True,
-                     fill_value: float = None, drivers: list = ['GTiff']):
+    def write_raster(self, output_dir: str, filename_prefix: str = None, start_datetime: datetime.datetime = None,
+                     end_datetime: datetime.datetime = None, correct_bias: bool = True, average: bool = False,
+                     fill_value: float = -9999, drivers: list = ['GTiff']):
         """
         Write VIIRS raster of stacked SST data (averaged or overlapped).
 
         :param output_dir: Path to output directory.
+        :param filename_prefix: Prefix for output filenames.
         :param start_datetime: Beginning of time interval.
         :param end_datetime: End of time interval.
         :param correct_bias: Whether to subtract SSES bias from SST.
@@ -449,60 +434,35 @@ class VIIRS_Range:
             with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
                 scenes_futures = []
 
-                for current_datetime in interval_datetimes:
-                    current_dataset = self.datasets[current_datetime]
-                    # scenes_data.append(current_dataset.get_sst(correct_bias))
-                    scenes_futures.append(concurrency_pool.submit(current_dataset.get_sst, correct_bias))
+                for datetime in interval_datetimes:
+                    dataset = self.datasets[datetime]
+                    # scenes_data.append(dataset.get_sst(correct_bias))
+                    scenes_futures.append(concurrency_pool.submit(dataset.sst, correct_bias))
 
-                for current_future in concurrent.futures.as_completed(scenes_futures):
-                    if current_future._exception is None:
-                        current_result = current_future.result()
+                for completed_future in concurrent.futures.as_completed(scenes_futures):
+                    if completed_future._exception is None:
+                        result = completed_future.result()
 
-                        if current_result is not None:
-                            scenes_data.append(current_result)
+                        if result is not None:
+                            scenes_data.append(result)
 
                 del scenes_futures
 
             if len(scenes_data) > 0:
-                output_sst_data = numpy.ma.mean(numpy.ma.dstack(scenes_data), axis=2)
+                output_sst_data = numpy.nanmean(numpy.stack(scenes_data), axis=2)
             else:
-                print(interval_datetimes)
                 raise _utilities.NoDataError('No VIIRS data found in the given interval.')
 
-            if fill_value is not None:
-                output_sst_data.set_fill_value(fill_value)
+            output_sst_data[numpy.isnan(output_sst_data)] = fill_value
         else:  # otherwise overlap based on datetime
             output_sst_data = None
-            for current_datetime in interval_datetimes:
-                current_sst_data = self.datasets[current_datetime].get_sst()
-
-                if current_sst_data is not None:
+            for datetime in interval_datetimes:
+                sst_data = self.datasets[datetime].sst()
+                if not numpy.isnan(sst_data).all():
                     if output_sst_data is None:
-                        if fill_value is None:
-                            fill_value = current_sst_data.fill_value
-
-                        output_sst_data = numpy.ma.MaskedArray(
-                                numpy.ones((current_sst_data.shape[0], current_sst_data.shape[1]),
-                                           dtype=rasterio.float32) * fill_value, mask=True, fill_value=fill_value)
-                    output_sst_data[~current_sst_data.mask] = current_sst_data[~current_sst_data.mask]
-
-        # remove negative values
-        output_sst_data.mask[output_sst_data <= 0] = True
-
-
-
-        # mercator_pixel_x, mercator_pixel_y = pyproj.transform(pyproj.Proj({"init": "epsg:4326"}),
-        #                                                       pyproj.Proj({"init": "epsg:3857"}),
-        #                                                       VIIRS_Range.study_area_transform.a,
-        #                                                       -VIIRS_Range.study_area_transform.e)
-        #
-        # mercator_origin_x, mercator_origin_y = pyproj.transform(pyproj.Proj({"init": "epsg:4326"}),
-        #                                                         pyproj.Proj({"init": "epsg:3857"}),
-        #                                                         VIIRS_Range.study_area_transform.c,
-        #                                                         VIIRS_Range.study_area_transform.f)
-        #
-        # mercator_transform = rasterio.transform.from_origin(mercator_origin_x, mercator_origin_y, mercator_pixel_x,
-        #                                                     mercator_pixel_y)
+                        output_sst_data = numpy.ones((sst_data.shape[0], sst_data.shape[1]),
+                                                     dtype=rasterio.float32) * fill_value
+                    output_sst_data[~numpy.isnan(sst_data)] = sst_data[~numpy.isnan(sst_data)]
 
         # define arguments to GDAL driver
         gdal_args = {
@@ -510,57 +470,56 @@ class VIIRS_Range:
             'transform': VIIRS_Range.study_area_transform
         }
 
-        # if os.path.exists(output_filename):
-        #     os.remove(output_filename)
-
-        for current_driver in drivers:
-            if current_driver == 'AAIGrid':
+        for driver in drivers:
+            if driver == 'AAIGrid':
                 file_extension = 'asc'
-                raster_data = output_sst_data.filled().astype(numpy.float32)
+                raster_data = output_sst_data.astype(rasterio.float32)
                 gdal_args.update({
                     'dtype':          raster_data.dtype, 'nodata': output_sst_data.fill_value.astype(raster_data.dtype),
                     'FORCE_CELLSIZE': 'YES'
                 })
-            elif current_driver == 'GTiff':
+            elif driver == 'GTiff':
                 file_extension = 'tiff'
-                raster_data = output_sst_data.filled().astype(numpy.float32)
+                raster_data = output_sst_data.astype(rasterio.float32)
                 gdal_args.update({
-                    'dtype': raster_data.dtype, 'nodata': output_sst_data.fill_value.astype(raster_data.dtype)
+                    'dtype': raster_data.dtype, 'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
                 })
-            elif current_driver == 'GPKG':
+            elif driver == 'GPKG':
                 file_extension = 'gpkg'
                 gpkg_dtype = rasterio.uint8
-                fill_value = numpy.iinfo(gpkg_dtype).max
-                output_sst_data.set_fill_value(fill_value)
+                gpkg_fill_value = numpy.iinfo(gpkg_dtype).max
+                output_sst_data[output_sst_data == fill_value] = gpkg_fill_value
                 # scale data to within range of uint8
-                raster_data = ((fill_value - 1) * (output_sst_data - numpy.ma.min(output_sst_data)) / numpy.ma.ptp(
-                        output_sst_data)).filled().astype(gpkg_dtype)
+                raster_data = ((gpkg_fill_value - 1) * (output_sst_data - numpy.min(output_sst_data)) / numpy.ptp(
+                        output_sst_data)).astype(gpkg_dtype)
                 gdal_args.update({
-                    'dtype': raster_data.dtype, 'nodata': fill_value
+                    'dtype': gpkg_dtype, 'nodata': gpkg_fill_value
                 })  # , 'TILE_FORMAT': 'PNG8'})
 
-            current_output_filename = os.path.join(output_dir, f'viirs_sst.{file_extension}')
+            if filename_prefix is None:
+                filename_prefix = f'viirs_sst_{start_datetime.strftime("%Y%m%d%H%M%S")}_{end_datetime.strftime("%Y%m%d%H%M%S")}'
 
-            print(f'Writing {current_output_filename}')
-            with rasterio.open(current_output_filename, 'w', current_driver, **gdal_args) as output_raster:
+            output_filename = os.path.join(output_dir, f'{filename_prefix}.{file_extension}')
+
+            print(f'Writing {output_filename}')
+            with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(raster_data, 1)
 
+    def __repr__(self):
+        used_params = [self.start_datetime.__repr__(), self.end_datetime.__repr__()]
+        optional_params = [self.study_area_polygon_filename, self.viirs_pass_times_filename, self.near_real_time,
+                           self.data_source, self.subskin, self.acspo_version]
 
-def __repr__(self):
-    used_params = [self.start_datetime.__repr__(), self.end_datetime.__repr__()]
-    optional_params = [self.study_area_polygon_filename, self.viirs_pass_times_filename, self.near_real_time,
-                       self.data_source, self.subskin, self.acspo_version]
+        for param in optional_params:
+            if param is not None:
+                if 'str' in str(type(param)):
+                    param = f'"{param}"'
+                else:
+                    param = str(param)
 
-    for current_param in optional_params:
-        if current_param is not None:
-            if 'str' in str(type(current_param)):
-                current_param = f'"{current_param}"'
-            else:
-                current_param = str(current_param)
+                used_params.append(param)
 
-            used_params.append(current_param)
-
-    return f'{self.__class__.__name__}({", ".join(used_params)})'
+        return f'{self.__class__.__name__}({", ".join(used_params)})'
 
 
 def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
@@ -604,7 +563,7 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
     lines = []
 
     for datetime_index in range(len(datetime_range)):
-        current_datetime = datetime_range[datetime_index]
+        datetime = datetime_range[datetime_index]
 
         # find number of cycles from the first orbit to the present day
         num_cycles = int((datetime.datetime.now() - start_datetime).days / 16)
@@ -613,33 +572,32 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
         for cycle_index in range(0, num_cycles):
             # get current datetime of interest
             cycle_offset = VIIRS_PERIOD * cycle_index
-            cycle_datetime = current_datetime + cycle_offset
+            cycle_datetime = datetime + cycle_offset
 
             # get dataset of new datetime
-            current_dataset = VIIRS_Dataset(cycle_datetime, study_area_polygon_filename, near_real_time, data_source,
-                                            subskin, acspo_version)
+            dataset = VIIRS_Dataset(cycle_datetime, study_area_polygon_filename, near_real_time, data_source, subskin,
+                                    acspo_version)
 
             # if dataset is missing, try again at next cycle
-            if current_dataset.netcdf_dataset is not None:
+            if dataset.netcdf_dataset is not None:
                 # compute index bounds if not yet computed
                 # if index_bounds is None:
-                #     viirs_grid_transform = current_dataset.get_viirs_grid_transform()
-                #     index_bounds = current_dataset.get_extent_indices()
+                #     viirs_grid_transform = dataset.get_viirs_grid_transform()
+                #     index_bounds = dataset.get_extent_indices()
 
                 # check if dataset falls within polygon extent
-                if current_dataset.data_extent.is_valid and study_area_polygon.intersects(current_dataset.data_extent):
+                if dataset.data_extent.is_valid and study_area_polygon.intersects(dataset.data_extent):
                     # get duration from current cycle start
-                    current_cycle_duration = cycle_datetime - (start_datetime + cycle_offset)
+                    cycle_duration = cycle_datetime - (start_datetime + cycle_offset)
 
                     print(
-                            f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")} {current_cycle_duration.total_seconds()}: valid scene (checked {cycle_index + 1} cycle(s))')
-                    lines.append('{0},{1}'.format(cycle_datetime.strftime('%Y%m%dT%H%M%S'),
-                                                  current_cycle_duration.total_seconds()))
+                            f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")} {cycle_duration.total_seconds()}: valid scene (checked {cycle_index + 1} cycle(s))')
+                    lines.append(f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")},{cycle_duration.total_seconds()}')
 
                 # if we get to here, break and continue to the next datetime
                 break
         else:
-            print(f'{current_datetime.strftime("%Y%m%dT%H%M%S")}: missing dataset across all cycles')
+            print(f'{datetime.strftime("%Y%m%dT%H%M%S")}: missing dataset across all cycles')
 
     # write lines to file
     with open(output_filename, 'w') as output_file:
@@ -665,23 +623,22 @@ def get_pass_times(start_datetime: datetime.datetime, end_datetime: datetime.dat
             seconds=float(first_pass_row[1]))
 
     # get starting datetime of the current VIIRS period
-    current_period_start_datetime = viirs_start_datetime + datetime.timedelta(
+    period_start_datetime = viirs_start_datetime + datetime.timedelta(
             days=numpy.floor((start_datetime - viirs_start_datetime).days / 16) * 16)
 
     # get array of seconds since the start of the first 16-day VIIRS period
     pass_durations = numpy.genfromtxt(viirs_pass_times_filename, dtype=str, delimiter=',')[:, 1].T.astype(numpy.float32)
-    pass_durations = numpy.asarray(
-            [datetime.timedelta(seconds=float(current_duration)) for current_duration in pass_durations])
+    pass_durations = numpy.asarray([datetime.timedelta(seconds=float(duration)) for duration in pass_durations])
 
     # add extra VIIRS periods to end of pass durations
-    if end_datetime > (current_period_start_datetime + VIIRS_PERIOD):
-        extra_periods = math.ceil((end_datetime - current_period_start_datetime) / VIIRS_PERIOD) - 1
+    if end_datetime > (period_start_datetime + VIIRS_PERIOD):
+        extra_periods = math.ceil((end_datetime - period_start_datetime) / VIIRS_PERIOD) - 1
         # print(f'Using {extra_periods} extra VIIRS periods.')
         for period in range(extra_periods):
             pass_durations = numpy.append(pass_durations, pass_durations[-360:] + pass_durations[-1])
 
     # get datetimes of VIIRS passes within the given time interval
-    pass_times = current_period_start_datetime + pass_durations
+    pass_times = period_start_datetime + pass_durations
 
     # find starting and ending times within the given time interval
     start_index = numpy.searchsorted(pass_times, start_datetime, side='left')
@@ -710,7 +667,7 @@ def check_mask(granule_datetime: datetime.datetime, study_area_polygon_filename:
 
     try:
         viirs_dataset = VIIRS_Dataset(granule_datetime, study_area_polygon_filename, threading_lock=threading_lock)
-        masked = (viirs_dataset.get_sses_bias() == 0).all()
+        masked = (viirs_dataset.sses_bias() == 0).all()
         if masked:
             return f'{granule_datetime}: masked'
         else:
@@ -740,26 +697,21 @@ def check_masks(start_datetime: datetime.datetime, end_datetime: datetime.dateti
     print(f'Starting {len(pass_times)} threads...')
 
     with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
-        check_futures = [
-            concurrency_pool.submit(check_mask, current_datetime, study_area_polygon_filename, threading_lock) for
-            current_datetime in pass_times]
+        check_futures = [concurrency_pool.submit(check_mask, datetime, study_area_polygon_filename, threading_lock) for
+                         datetime in pass_times]
 
-        for current_future in concurrent.futures.as_completed(check_futures):
-            print(current_future.result())
+        for completed_future in concurrent.futures.as_completed(check_futures):
+            print(completed_future.result())
 
 
 if __name__ == '__main__':
     start_datetime = datetime.datetime(2018, 6, 10)
     end_datetime = datetime.datetime(2018, 6, 11)
 
-    output_filename = r"C:\Data\viirs\avg_10_11.tiff"
+    output_dir = r"C:\Data\output\test"
 
-    datasets = {}
-    threading_lock = threading.Lock()
-    pass_times = _utilities.ten_minute_range(start_datetime, end_datetime)
-
-    # # write average of all scenes in specified time interval
-    # viirs_range = VIIRS_Range(start_datetime, end_datetime)
-    # viirs_range.write_raster(output_filename)
+    # write average of all scenes in specified time interval
+    viirs_range = VIIRS_Range(start_datetime, end_datetime)
+    viirs_range.write_raster(output_dir)
 
     print('done')
