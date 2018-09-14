@@ -13,7 +13,6 @@ import threading
 
 import fiona
 import fiona.crs
-import netCDF4
 import numpy
 import pyproj
 import rasterio.control
@@ -22,6 +21,7 @@ import rasterio.warp
 import scipy.interpolate
 import scipy.ndimage
 import shapely.geometry
+import xarray
 from qgis.core import QgsFeature, QgsGeometry, QgsPoint, QgsVectorLayer
 from rasterio.io import MemoryFile
 
@@ -74,8 +74,6 @@ class WCOFS_Dataset:
         :raises NoDataError: if no datasets exist for the given model run.
         """
 
-        # netCDF4.num2date(time_var[:], time_var.units, '_'.join(list(reversed(time_var.calendar.split('_')))))
-
         valid_source_strings = ['stations', 'fields', 'avg', '2ds']
 
         if source is None:
@@ -106,14 +104,15 @@ class WCOFS_Dataset:
         self.netcdf_datasets = {}
 
         if self.uri is not None:
-            self.netcdf_datasets[0] = netCDF4.Dataset(self.uri)
+            self.netcdf_datasets[0] = xarray.open_dataset(self.uri, decode_times=False)
         elif self.source == 'avg':
             for current_day in self.time_indices:
                 current_model_type = 'forecast' if current_day > 0 else 'nowcast'
                 current_url = f'https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS/{month_string}/nos.wcofs.avg.{current_model_type}.{date_string}.t{WCOFS_MODEL_RUN_HOUR:02}z.nc'
 
                 try:
-                    self.netcdf_datasets[current_day if current_day in [-1, 1] else 1] = netCDF4.Dataset(current_url)
+                    self.netcdf_datasets[current_day if current_day in [-1, 1] else 1] = xarray.open_dataset(
+                            current_url, decode_times=False)
                 except OSError:
                     print(f'No WCOFS dataset found at {current_url}')
         else:
@@ -124,7 +123,7 @@ class WCOFS_Dataset:
                 for current_hour in self.time_indices:
                     current_url = f'https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS/{month_string}/nos.wcofs.{self.location}.{"n" if current_hour <= 0 else "f"}{abs(current_hour):03}.{date_string}.t{self.cycle:02}z.nc'
 
-                    current_future = concurrency_pool.submit(netCDF4.Dataset, current_url)
+                    current_future = concurrency_pool.submit(xarray.open_dataset, current_url, decode_times=False)
                     netcdf_futures[current_future] = current_hour
 
                 for current_future in concurrent.futures.as_completed(netcdf_futures):
@@ -147,9 +146,9 @@ class WCOFS_Dataset:
 
             # get maximum pixel resolution that preserves data
             if self.x_size is None:
-                self.x_size = numpy.max(numpy.diff(self.sample_netcdf_dataset[f'lon_psi'][:]))
+                self.x_size = numpy.max(numpy.diff(self.sample_netcdf_dataset[f'lon_psi']))
             if self.y_size is None:
-                self.y_size = numpy.max(numpy.diff(self.sample_netcdf_dataset[f'lat_psi'][:]))
+                self.y_size = numpy.max(numpy.diff(self.sample_netcdf_dataset[f'lat_psi']))
 
             with GLOBAL_LOCK:
                 if WCOFS_Dataset.grid_transforms is None:
@@ -159,16 +158,20 @@ class WCOFS_Dataset:
                     WCOFS_Dataset.data_coordinates = {}
                     WCOFS_Dataset.variable_grids = {}
 
-                    for current_variable_name, current_variable in self.sample_netcdf_dataset.variables.items():
-                        if 'location' in current_variable.ncattrs():
+                    for current_variable_name, current_variable in self.sample_netcdf_dataset.data_vars.items():
+                        if 'location' in current_variable.attrs:
                             current_grid_name = GRID_LOCATIONS[current_variable.location]
                             WCOFS_Dataset.variable_grids[current_variable_name] = current_grid_name
 
                             # if current_grid_name not in WCOFS_Dataset.grid_names.keys():  #     WCOFS_Dataset.grid_names[current_grid_name] = []  #  # WCOFS_Dataset.grid_names[current_grid_name].append(current_variable_name)
 
                     for current_grid_name in GRID_LOCATIONS.values():
-                        current_lon = self.sample_netcdf_dataset[f'lon_{current_grid_name}'][:]
-                        current_lat = self.sample_netcdf_dataset[f'lat_{current_grid_name}'][:]
+                        current_lon = self.sample_netcdf_dataset[f'lon_{current_grid_name}'].values
+                        current_lat = self.sample_netcdf_dataset[f'lat_{current_grid_name}'].values
+
+                        WCOFS_Dataset.data_coordinates[current_grid_name] = {}
+                        WCOFS_Dataset.data_coordinates[current_grid_name]['lon'] = current_lon
+                        WCOFS_Dataset.data_coordinates[current_grid_name]['lat'] = current_lat
 
                         west = numpy.min(current_lon)
                         north = numpy.max(current_lat)
@@ -182,12 +185,8 @@ class WCOFS_Dataset:
 
                         WCOFS_Dataset.grid_bounds[current_grid_name] = (west, north, east, south)
 
-                        WCOFS_Dataset.masks[current_grid_name] = self.sample_netcdf_dataset[
-                                                                     f'mask_{current_grid_name}'][:]
-
-                        WCOFS_Dataset.data_coordinates[current_grid_name] = {}
-                        WCOFS_Dataset.data_coordinates[current_grid_name]['lon'] = current_lon
-                        WCOFS_Dataset.data_coordinates[current_grid_name]['lat'] = current_lat
+                        WCOFS_Dataset.masks[current_grid_name] = ~(
+                            self.sample_netcdf_dataset[f'mask_{current_grid_name}'].values).astype(bool)
         else:
             raise _utilities.NoDataError(f'No WCOFS datasets found for {self.model_datetime} at the given hours.')
 
@@ -211,6 +210,8 @@ class WCOFS_Dataset:
         :return: Array of data.
         """
 
+        grid_mask = WCOFS_Dataset.masks[WCOFS_Dataset.variable_grids[variable]]
+
         if self.source == 'avg' and time_index in self.time_indices:
             if time_index > 0:
                 day_index = time_index - 1
@@ -221,14 +222,16 @@ class WCOFS_Dataset:
 
             with self.dataset_locks[dataset_index]:
                 # get surface layer; the last layer (of 40) at dimension 1
-                output_data = self.netcdf_datasets[dataset_index][variable][day_index, -1, :, :]
+                output_data = self.netcdf_datasets[dataset_index][variable][day_index, -1, :, :].values
         elif time_index in self.netcdf_datasets.keys():
             with self.dataset_locks[time_index]:
-                output_data = self.netcdf_datasets[time_index][variable][0, :, :]
+                output_data = self.netcdf_datasets[time_index][variable][0, :, :].values
         else:
-            output_data = numpy.ma.MaskedArray([])
+            output_data = numpy.zeros(grid_mask.shape)
 
-        return output_data
+        output_masked_data = numpy.ma.MaskedArray(output_data, mask=grid_mask)
+
+        return output_masked_data
 
     def data_average(self, variable: str, time_indices: list = None) -> numpy.ma.MaskedArray:
         """
@@ -986,8 +989,8 @@ class WCOFS_Range:
 
                 grid_name = WCOFS_Range.variable_grids[current_variable]
 
-                current_lon = WCOFS_Range.data_coordinates[grid_name]['lon'].filled()
-                current_lat = WCOFS_Range.data_coordinates[grid_name]['lat'].filled()
+                current_lon = WCOFS_Range.data_coordinates[grid_name]['lon']
+                current_lat = WCOFS_Range.data_coordinates[grid_name]['lat']
 
                 if len(current_grid_lon) > 0:
                     variable_interpolation_futures[current_variable] = {}
@@ -1203,7 +1206,7 @@ def interpolate_grid(input_lon: numpy.ndarray, input_lat: numpy.ndarray, input_d
     :return: Interpolated values within WGS84 coordinate grid.
     """
 
-    fill_value = 1e+20
+    fill_value = numpy.nan
 
     # get unmasked values only
     input_lon = input_lon[~input_data.mask]
@@ -1235,7 +1238,7 @@ def interpolate_grid(input_lon: numpy.ndarray, input_lat: numpy.ndarray, input_d
     return interpolated_grid
 
 
-def write_convex_hull(netcdf_dataset: netCDF4.Dataset, output_filename: str, grid_name: str = 'psi'):
+def write_convex_hull(netcdf_dataset: xarray.Dataset, output_filename: str, grid_name: str = 'psi'):
     """
     Extract the convex hull from the coordinate values of the given WCOFS NetCDF dataset, and write it to a file.
 
@@ -1281,15 +1284,15 @@ def write_convex_hull(netcdf_dataset: netCDF4.Dataset, output_filename: str, gri
 
 
 if __name__ == '__main__':
-    # start_datetime = datetime.datetime(2018, 8, 10)
-    # end_datetime = datetime.datetime(2018, 8, 11)
-    #
-    # output_dir = r'C:\Data\output\test'
-    #
-    # wcofs_range = WCOFS_Range(start_datetime, end_datetime, source='avg')
-    # wcofs_range.write_rasters(output_dir, ['temp'])
+    start_datetime = datetime.datetime(2018, 8, 10)
+    end_datetime = datetime.datetime(2018, 8, 11)
 
-    wcofs_dataset = WCOFS_Dataset(datetime.datetime(2018, 8, 31), time_indices=[1])
+    output_dir = r'C:\Data\output\test'
+
+    wcofs_range = WCOFS_Range(start_datetime, end_datetime, source='avg')
+    wcofs_range.write_rasters(output_dir, ['temp'], fill_value=-9999)
+
+    # wcofs_dataset = WCOFS_Dataset(datetime.datetime(2018, 8, 31), time_indices=[1])
     # mask_rho = wcofs_dataset.netcdf_datasets[1]['mask_rho'][:].filled().astype(rasterio.int16)
     #
     # # rasterio_wcofs_crs = rasterio.crs.CRS.from_wkt('+proj=ob_tran +o_proj=longlat +o_lat_p=37.4 +o_lon_p=-57.6')
