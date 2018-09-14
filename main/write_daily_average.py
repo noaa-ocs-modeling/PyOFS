@@ -60,16 +60,16 @@ def write_daily_average(output_dir, current_model_run_date, day_deltas, log_path
                 # print(f'Processing VIIRS for {current_date}')
                 current_viirs = dataset.viirs.VIIRS_Range(current_date, next_date)
                 current_viirs.write_raster(current_dir,
-                                           filename_prefix=f'viirs_sst_morning_{current_date.strftime("%Y%m%d")}',
+                                           filename_prefix=f'viirs_sst_{current_date.strftime("%Y%m%d")}_morning',
                                            start_datetime=current_date, end_datetime=current_date.replace(hour=6),
                                            drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
                 current_viirs.write_raster(current_dir,
-                                           filename_prefix=f'viirs_sst_daytime_{current_date.strftime("%Y%m%d")}',
+                                           filename_prefix=f'viirs_sst_{current_date.strftime("%Y%m%d")}_daytime',
                                            start_datetime=current_date.replace(hour=6),
                                            end_datetime=current_date.replace(hour=18), drivers=['GTiff'],
                                            fill_value=LEAFLET_NODATA_VALUE)
                 current_viirs.write_raster(current_dir,
-                                           filename_prefix=f'viirs_sst_evening_{current_date.strftime("%Y%m%d")}',
+                                           filename_prefix=f'viirs_sst_{current_date.strftime("%Y%m%d")}_evening',
                                            start_datetime=current_date.replace(hour=18), end_datetime=next_date,
                                            drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
             except dataset._utilities.NoDataError as error:
