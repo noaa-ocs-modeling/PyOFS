@@ -123,7 +123,7 @@ class VIIRS_Dataset:
             threading_lock.acquire()
 
         if VIIRS_Dataset.study_area_index_bounds is None:
-            print(f'Calculating indices and transform from {self.granule_datetime}')
+            print(f'Calculating indices and transform from granule at {self.granule_datetime}...')
 
             # get first record in layer
             with fiona.open(self.study_area_polygon_filename, layer=self.layer_name) as vector_layer:
@@ -337,35 +337,40 @@ class VIIRS_Range:
 
         self.pass_times = get_pass_times(self.start_datetime, self.end_datetime, self.viirs_pass_times_filename)
 
-        print(f'Collecting VIIRS SST from {numpy.min(self.pass_times)} to {numpy.max(self.pass_times)}')
+        if len(self.pass_times) > 0:
+            print(
+                    f'Collecting {len(self.pass_times)} VIIRS datasets between {numpy.min(self.pass_times)} and {numpy.max(self.pass_times)}...')
 
-        # create dictionary to store scenes
-        self.datasets = {}
+            # create dictionary to store scenes
+            self.datasets = {}
 
-        threading_lock = threading.Lock()
+            threading_lock = threading.Lock()
 
-        # concurrently populate dictionary with VIIRS dataset object for each pass time in the given time interval
-        with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
-            scene_futures = {
+            # concurrently populate dictionary with VIIRS dataset object for each pass time in the given time interval
+            with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+                scene_futures = {
                 concurrency_pool.submit(VIIRS_Dataset, datetime, self.study_area_polygon_filename, self.near_real_time,
                                         self.data_source, self.subskin, self.acspo_version, threading_lock): datetime
                 for datetime in self.pass_times}
 
-            # yield results as threads complete
-            for completed_future in concurrent.futures.as_completed(scene_futures):
-                if type(completed_future.exception()) is not _utilities.NoDataError:
-                    result = completed_future.result()
-                    datetime = scene_futures[completed_future]
-                    self.datasets[datetime] = result
+                # yield results as threads complete
+                for completed_future in concurrent.futures.as_completed(scene_futures):
+                    if type(completed_future.exception()) is not _utilities.NoDataError:
+                        result = completed_future.result()
+                        datetime = scene_futures[completed_future]
+                        self.datasets[datetime] = result
 
-        if len(self.datasets) > 0:
-            VIIRS_Range.study_area_transform = VIIRS_Dataset.study_area_transform
-            VIIRS_Range.study_area_index_bounds = VIIRS_Dataset.study_area_index_bounds
+            if len(self.datasets) > 0:
+                VIIRS_Range.study_area_transform = VIIRS_Dataset.study_area_transform
+                VIIRS_Range.study_area_index_bounds = VIIRS_Dataset.study_area_index_bounds
 
-            self.sample_dataset = next(iter(self.datasets.values()))
+                self.sample_dataset = next(iter(self.datasets.values()))
+            else:
+                raise _utilities.NoDataError(
+                        f'No VIIRS datasets found between {self.start_datetime} and {self.end_datetime}.')
         else:
             raise _utilities.NoDataError(
-                    f'No VIIRS datasets found between {self.start_datetime} and {self.end_datetime}.')
+                    f'There are no VIIRS pass times between {self.start_datetime} and {self.end_datetime}.')
 
     def cell_size(self) -> tuple:
         """
@@ -422,7 +427,7 @@ class VIIRS_Range:
         start_index = numpy.searchsorted(dataset_datetimes, start_datetime, side='left')
 
         # find last time within specified time interval
-        end_index = numpy.searchsorted(dataset_datetimes, end_datetime, side='right')
+        end_index = numpy.searchsorted(dataset_datetimes, end_datetime, side='left')
 
         interval_datetimes = dataset_datetimes[start_index:end_index]
 
@@ -496,7 +501,14 @@ class VIIRS_Range:
                     })  # , 'TILE_FORMAT': 'PNG8'})
 
                 if filename_prefix is None:
-                    filename_prefix = f'viirs_sst_{start_datetime.strftime("%Y%m%d%H%M%S")}_{end_datetime.strftime("%Y%m%d%H%M%S")}'
+                    start_datetime_string = start_datetime.strftime("%Y%m%d%H%M")
+                    end_datetime_string = end_datetime.strftime("%Y%m%d%H%M")
+
+                    if '0000' in start_datetime_string and '0000' in end_datetime_string:
+                        start_datetime_string = start_datetime_string.replace("0000", "")
+                        end_datetime_string = end_datetime_string.replace("0000", "")
+
+                    filename_prefix = f'viirs_sst_{start_datetime_string}_{end_datetime_string}'
 
                 output_filename = os.path.join(output_dir, f'{filename_prefix}.{file_extension}')
 
@@ -504,7 +516,7 @@ class VIIRS_Range:
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(raster_data, 1)
         else:
-            print('No VIIRS data found within the given time interval.')
+            print(f'No VIIRS data found between {start_datetime} and {end_datetime}.')
 
     def __repr__(self):
         used_params = [self.start_datetime.__repr__(), self.end_datetime.__repr__()]
@@ -706,13 +718,19 @@ def check_masks(start_datetime: datetime.datetime, end_datetime: datetime.dateti
 
 
 if __name__ == '__main__':
-    start_datetime = datetime.datetime.now() - datetime.timedelta(minutes=5)
-    end_datetime = datetime.datetime.now()
+    start_datetime = datetime.datetime.combine(datetime.date.today(),
+                                               datetime.datetime.min.time()) - datetime.timedelta(days=1)
+    morning_datetime = start_datetime + datetime.timedelta(hours=6)
+    evening_datetime = start_datetime + datetime.timedelta(hours=18)
+    end_datetime = start_datetime + datetime.timedelta(days=1)
 
     output_dir = r"C:\Data\output\test"
 
     # write average of all scenes in specified time interval
     viirs_range = VIIRS_Range(start_datetime, end_datetime)
+    viirs_range.write_raster(output_dir, start_datetime=start_datetime, end_datetime=morning_datetime)
+    viirs_range.write_raster(output_dir, start_datetime=morning_datetime, end_datetime=evening_datetime)
+    viirs_range.write_raster(output_dir, start_datetime=evening_datetime, end_datetime=end_datetime)
     viirs_range.write_raster(output_dir)
 
     print('done')

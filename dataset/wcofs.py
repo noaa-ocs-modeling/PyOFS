@@ -615,7 +615,7 @@ class WCOFS_Range:
             self.start_datetime = _utilities.round_to_hour(start_datetime)
             self.end_datetime = _utilities.round_to_hour(end_datetime)
 
-        print(f'Collecting WCOFS stack from {self.start_datetime} to {self.end_datetime}')
+        print(f'Collecting WCOFS stack between {self.start_datetime} and {self.end_datetime}...')
 
         # get all possible model dates that could overlap with the given time interval
         overlapping_models_start_datetime = self.start_datetime - datetime.timedelta(hours=WCOFS_MODEL_HOURS['f'])
