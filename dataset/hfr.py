@@ -1,3 +1,4 @@
+# coding=utf-8
 """
 High Frequency Radar stations measuring water surface speed on the West Coast.
 
@@ -24,6 +25,8 @@ MEASUREMENT_VARIABLES = ['u', 'v', 'DOPx', 'DOPy']
 
 FIONA_WGS84 = fiona.crs.from_epsg(4326)
 RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
+
+DATA_DIR = os.environ['OFS_DATA']
 
 
 class HFR_Range:
@@ -138,7 +141,7 @@ class HFR_Range:
         :return: Tuple of cell sizes (x, y)
         """
 
-        return (abs(self.x_size), abs(self.y_size))
+        return abs(self.x_size), abs(self.y_size)
 
     def write_sites(self, output_filename: str, layer_name: str):
         """
@@ -464,10 +467,10 @@ class HFR_Range:
 
 
 if __name__ == '__main__':
+    output_dir = os.path.join(DATA_DIR, r'output\test')
+
     start_datetime = datetime.datetime.now() - datetime.timedelta(days=1)
     end_datetime = datetime.datetime.now()
-
-    output_dir = r'C:\Data\output\test'
 
     # get dataset from source
     hfr_dataset = HFR_Range(start_datetime, end_datetime)

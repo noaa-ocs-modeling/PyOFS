@@ -1,3 +1,4 @@
+# coding=utf-8
 """
 Sea surface temperature rasters from VIIRS (aboard Suomi NPP).
 
@@ -27,7 +28,6 @@ VIIRS_START_DATETIME = datetime.datetime(2012, 3, 1, 0, 10)
 VIIRS_PERIOD = datetime.timedelta(days=16)
 
 DATA_DIR = os.environ['OFS_DATA']
-
 VIIRS_PASS_TIMES_FILENAME = os.path.join(DATA_DIR, r"reference\viirs_pass_times.txt")
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 
@@ -104,17 +104,10 @@ class VIIRS_Dataset:
                         [(lon_min, lat_max), (lon_max, lat_max), (lon_max, lat_min), (lon_min, lat_min)])
             else:
                 # geospatial bounds cross the antimeridian, so we create a multipolygon
-                polygons = []
-
-                # portion in eastern hemisphere
-                polygons.append(shapely.geometry.Polygon(
-                        [(lon_min, lat_max), (180, lat_max), (180, lat_min), (lon_min, lat_min)]))
-
-                # portion in western hemisphere
-                polygons.append(shapely.geometry.Polygon(
-                        [(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)]))
-
-                self.data_extent = shapely.geometry.MultiPolygon(polygons)
+                self.data_extent = shapely.geometry.MultiPolygon([
+                    shapely.geometry.Polygon([(lon_min, lat_max), (180, lat_max), (180, lat_min), (lon_min, lat_min)]),
+                    shapely.geometry.Polygon(
+                            [(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
 
         lon_pixel_size = self.netcdf_dataset.geospatial_lon_resolution
         lat_pixel_size = self.netcdf_dataset.geospatial_lat_resolution
@@ -176,7 +169,7 @@ class VIIRS_Dataset:
         :return: Tuple of cell sizes (x_size, y_size)
         """
 
-        return (self.netcdf_dataset.geospatial_lon_resolution, self.netcdf_dataset.geospatial_lat_resolution)
+        return self.netcdf_dataset.geospatial_lon_resolution, self.netcdf_dataset.geospatial_lat_resolution
 
     def get_data(self, variable: str = 'sst', correct_bias: bool = True) -> numpy.ndarray:
         """
@@ -215,7 +208,7 @@ class VIIRS_Dataset:
                     output_sst_data[output_sst_data <= 0] = numpy.nan
 
                 if correct_bias:
-                    output_sst_data = output_sst_data - self.sses_bias()
+                    output_sst_data -= self.sses_bias()
 
                 # convert from Kelvin to Celsius (subtract 273.15)
                 output_sst_data = output_sst_data - 273.15
@@ -457,17 +450,19 @@ class VIIRS_Range:
 
             if len(scenes_data) > 0:
                 output_sst_data = numpy.nanmean(numpy.stack(scenes_data), axis=2)
-                output_sst_data[numpy.isnan(output_sst_data)] = fill_value
+
         else:  # otherwise overlap based on datetime
             for datetime in interval_datetimes:
                 sst_data = self.datasets[datetime].sst()
                 if not numpy.isnan(sst_data).all():
                     if output_sst_data is None:
-                        output_sst_data = numpy.ones((sst_data.shape[0], sst_data.shape[1]),
-                                                     dtype=rasterio.float32) * fill_value
+                        output_sst_data = numpy.empty_like(sst_data)
+                        output_sst_data[:] = numpy.nan
                     output_sst_data[~numpy.isnan(sst_data)] = sst_data[~numpy.isnan(sst_data)]
 
         if output_sst_data is not None:
+            output_sst_data[numpy.isnan(output_sst_data)] = fill_value
+
             # define arguments to GDAL driver
             gdal_args = {
                 'height': output_sst_data.shape[0], 'width': output_sst_data.shape[1], 'count': 1,
@@ -499,6 +494,8 @@ class VIIRS_Range:
                     gdal_args.update({
                         'dtype': gpkg_dtype, 'nodata': gpkg_fill_value
                     })  # , 'TILE_FORMAT': 'PNG8'})
+                else:
+                    raster_data = numpy.empty_like(output_sst_data)
 
                 if filename_prefix is None:
                     start_datetime_string = start_datetime.strftime("%Y%m%d%H%M")
@@ -710,21 +707,21 @@ def check_masks(start_datetime: datetime.datetime, end_datetime: datetime.dateti
     print(f'Starting {len(pass_times)} threads...')
 
     with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
-        check_futures = [concurrency_pool.submit(check_mask, datetime, study_area_polygon_filename, threading_lock) for
-                         datetime in pass_times]
+        check_futures = [
+            concurrency_pool.submit(check_mask, check_datetime, study_area_polygon_filename, threading_lock) for
+            check_datetime in pass_times]
 
         for completed_future in concurrent.futures.as_completed(check_futures):
             print(completed_future.result())
 
 
 if __name__ == '__main__':
-    start_datetime = datetime.datetime.combine(datetime.date.today(),
-                                               datetime.datetime.min.time()) - datetime.timedelta(days=1)
+    output_dir = os.path.join(DATA_DIR, r'output\test')
+
+    start_datetime = datetime.datetime.combine(datetime.date(2018, 9, 23), datetime.datetime.min.time())
     morning_datetime = start_datetime + datetime.timedelta(hours=6)
     evening_datetime = start_datetime + datetime.timedelta(hours=18)
     end_datetime = start_datetime + datetime.timedelta(days=1)
-
-    output_dir = r"C:\Data\output\test"
 
     # write average of all scenes in specified time interval
     viirs_range = VIIRS_Range(start_datetime, end_datetime)

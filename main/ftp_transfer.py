@@ -1,3 +1,4 @@
+# coding=utf-8
 """
 FTP pulldown of custom PyOFS data slices (2 and 4 kilometer non-DA).
 

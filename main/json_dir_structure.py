@@ -1,3 +1,4 @@
+# coding=utf-8
 """
 Create JSON of directory structure.
 
@@ -15,15 +16,15 @@ def get_directory_structure(rootdir):
     """
     Creates a nested dictionary that represents the folder structure of rootdir
     """
-    dir = {}
+    output_dict = {}
     rootdir = rootdir.rstrip(os.sep)
     start = rootdir.rfind(os.sep) + 1
     for path, dirs, files in os.walk(rootdir):
         folders = path[start:].split(os.sep)
         subdir = dict.fromkeys(files)
-        parent = functools.reduce(dict.get, folders[:-1], dir)
+        parent = functools.reduce(dict.get, folders[:-1], output_dict)
         parent[folders[-1]] = subdir
-    return dir
+    return output_dict
 
 
 def populate_json(input_dir, json_path):

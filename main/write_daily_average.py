@@ -1,3 +1,4 @@
+# coding=utf-8
 """
 Daily average WCOFS source data.
 
@@ -17,9 +18,7 @@ import dataset._utilities, dataset.hfr, dataset.viirs, dataset.wcofs
 from main import json_dir_structure
 
 DATA_DIR = os.environ['OFS_DATA']
-
 LOG_DIR = os.path.join(DATA_DIR, 'log')
-
 JSON_PATH = os.path.join(DATA_DIR, r'reference\model_dates.json')
 OUTPUT_DIR = os.path.join(DATA_DIR, 'output')
 DAILY_AVERAGES_DIR = os.path.join(OUTPUT_DIR, 'daily_averages')
@@ -28,7 +27,7 @@ DAILY_AVERAGES_DIR = os.path.join(OUTPUT_DIR, 'daily_averages')
 LEAFLET_NODATA_VALUE = -9999
 
 
-def write_daily_average(output_dir, model_run_date: datetime.date, day_deltas, log_path):
+def write_daily_average(output_dir, model_run_date: datetime.datetime, day_deltas, log_path):
     if type(model_run_date) == 'datetime.Date':
         model_run_date = datetime.datetime.combine(model_run_date, datetime.datetime.min.time())
 
@@ -123,15 +122,15 @@ def write_daily_average(output_dir, model_run_date: datetime.date, day_deltas, l
 
 
 if __name__ == '__main__':
-    start_time = datetime.datetime.now()
-
     # create folders if they do not exist
     for daily_average_dir in [OUTPUT_DIR, DAILY_AVERAGES_DIR, LOG_DIR]:
         if not os.path.isdir(daily_average_dir):
             os.mkdir(daily_average_dir)
 
+    start_time = datetime.datetime.now()
+
     # define log filename
-    log_path = os.path.join(LOG_DIR, f'{datetime.datetime.now().strftime("%Y%m%d")}_daily_average.log')
+    log_path = os.path.join(LOG_DIR, f'{start_time.strftime("%Y%m%d")}_daily_average.log')
 
     # write initial message
     with open(log_path, 'a') as log_file:

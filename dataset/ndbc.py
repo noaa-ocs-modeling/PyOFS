@@ -1,3 +1,4 @@
+# coding=utf-8
 """
 National Data Buoy Center moorings.
 
@@ -29,7 +30,6 @@ FIONA_WGS84 = fiona.crs.from_epsg(4326)
 RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
 
 DATA_DIR = os.environ['OFS_DATA']
-
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 WCOFS_NDBC_STATIONS_FILENAME = os.path.join(DATA_DIR, r"reference\ndbc_stations.txt")
 
@@ -252,10 +252,10 @@ def check_station(dataset: xarray.Dataset, study_area_polygon_filename: str) -> 
 
 
 if __name__ == '__main__':
+    output_dir = os.path.join(DATA_DIR, r'output\test')
+
     start_datetime = datetime.datetime(2018, 7, 14)
     end_datetime = datetime.datetime.now()
-
-    output_dir = r'C:\Data\output\test'
 
     wcofs_stations = list(numpy.genfromtxt(WCOFS_NDBC_STATIONS_FILENAME, dtype='str'))
 

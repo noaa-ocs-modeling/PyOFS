@@ -1,3 +1,4 @@
+# coding=utf-8
 """
 PyOFS model output data collection and transformation by interpolation onto Cartesian grid.
 
@@ -41,7 +42,6 @@ WCOFS_MODEL_HOURS = {'n': -24, 'f': 72}
 WCOFS_MODEL_RUN_HOUR = 3
 
 DATA_DIR = os.environ['OFS_DATA']
-
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 
 GLOBAL_LOCK = threading.Lock()
@@ -289,8 +289,8 @@ class WCOFS_Dataset:
 
     def write_raster(self, output_filename: str, variable: str,
                      study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, hours: int = None,
-                     input_data: numpy.ndarray = None, x_size: float = 0.04, y_size: float = 0.04,
-                     fill_value = -9999, drivers: list = ['GTiff']):
+                     input_data: numpy.ndarray = None, x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999,
+                     drivers: list = ['GTiff']):
         """
         Writes interpolated raster of given variable to output path.
 
@@ -831,7 +831,7 @@ class WCOFS_Range:
         input_data = self.data_stacks(variable, start_datetime, end_datetime)
         stacked_arrays = {}
 
-        for model_datetime, data_stack in input_data.items():
+        for _, data_stack in input_data.items():
             for model_datetime, model_data in data_stack.items():
                 if model_datetime in stacked_arrays.keys():
                     stacked_arrays[model_datetime] = numpy.dstack([stacked_arrays[model_datetime], model_data])
@@ -861,8 +861,8 @@ class WCOFS_Range:
     def write_rasters(self, output_dir: str, variables: list = None,
                       study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
                       start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
-                      vector_components: bool = False, x_size: float = 0.04, y_size: float = 0.04,
-                      fill_value = -9999, drivers: list = ['GTiff']):
+                      vector_components: bool = False, x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999,
+                      drivers: list = ['GTiff']):
         """
         Write raster data of given variables to given output directory, averaged over given time interval.
 
@@ -947,20 +947,6 @@ class WCOFS_Range:
 
         print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).seconds} seconds')
 
-        if vector_components:
-            if self.source == '2ds':
-                u_name = 'u_sur'
-                v_name = 'v_sur'
-            else:
-                u_name = 'u'
-                v_name = 'v'
-
-            if u_name not in variables:
-                variable_data_stack_averages[u_name] = self.data_averages(u_name, start_datetime, end_datetime)
-
-            if v_name not in variables:
-                variable_data_stack_averages[v_name] = self.data_averages(v_name, start_datetime, end_datetime)
-
         start_time = datetime.datetime.now()
 
         interpolated_data = {}
@@ -1000,6 +986,19 @@ class WCOFS_Range:
         print(f'parallel grid interpolation took {(datetime.datetime.now() - start_time).seconds} seconds')
 
         if vector_components:
+            if self.source == '2ds':
+                u_name = 'u_sur'
+                v_name = 'v_sur'
+            else:
+                u_name = 'u'
+                v_name = 'v'
+
+            if u_name not in variables:
+                variable_data_stack_averages[u_name] = self.data_averages(u_name, start_datetime, end_datetime)
+
+            if v_name not in variables:
+                variable_data_stack_averages[v_name] = self.data_averages(v_name, start_datetime, end_datetime)
+
             interpolated_data['dir'] = {}
             interpolated_data['mag'] = {}
 
@@ -1192,7 +1191,7 @@ def interpolate_grid(input_lon: numpy.ndarray, input_lat: numpy.ndarray, input_d
 
     # get grid interpolation
     interpolated_grid = scipy.interpolate.griddata((input_lon, input_lat), input_data, (output_lon, output_lat),
-                                                   method='nearest', fill_value=numpy.nan)
+                                                   method='nearest')
 
     return interpolated_grid
 
@@ -1243,10 +1242,10 @@ def write_convex_hull(netcdf_dataset: xarray.Dataset, output_filename: str, grid
 
 
 if __name__ == '__main__':
+    output_dir = os.path.join(DATA_DIR, r'output\test')
+
     start_datetime = datetime.datetime(2018, 8, 10)
     end_datetime = datetime.datetime(2018, 8, 11)
-
-    output_dir = r'C:\Data\output\test'
 
     wcofs_range = WCOFS_Range(start_datetime, end_datetime, source='avg')
     wcofs_range.write_rasters(output_dir, ['temp'])
