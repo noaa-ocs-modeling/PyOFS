@@ -27,7 +27,7 @@ DAILY_AVERAGES_DIR = os.path.join(OUTPUT_DIR, 'daily_averages')
 LEAFLET_NODATA_VALUE = -9999
 
 
-def write_daily_average(output_dir, model_run_date: datetime.datetime, day_deltas, log_path):
+def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_deltas: list, log_path: str):
     if type(model_run_date) == 'datetime.Date':
         model_run_date = datetime.datetime.combine(model_run_date, datetime.datetime.min.time())
 
@@ -47,6 +47,9 @@ def write_daily_average(output_dir, model_run_date: datetime.datetime, day_delta
         end_datetime = start_datetime + datetime.timedelta(days=1)
 
         if day_delta <= 0:
+            if day_delta < 0 and os.path.exists(log_path):
+                continue
+
             try:
                 # print(f'Processing HFR for {start_datetime}')
                 hfr_range = dataset.hfr.HFR_Range(start_datetime, end_datetime)
@@ -84,24 +87,26 @@ def write_daily_average(output_dir, model_run_date: datetime.datetime, day_delta
                     log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
                     print(error)
 
-        # only retrieve forecasts that have not already been written
-        if day_delta == -1:
-            wcofs_time_indices = [-1]
-        else:
-            wcofs_time_indices = [day_delta + 1]
+        if not os.path.exists(log_path):
+            # only retrieve forecasts that have not already been written
+            if day_delta == -1:
+                wcofs_time_indices = [-1]
+            else:
+                wcofs_time_indices = [day_delta + 1]
 
-        try:
-            # print(f'Processing WCOFS for {date}')
-            wcofs_range = dataset.wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg',
-                                                    time_indices=wcofs_time_indices)
-            wcofs_range.write_rasters(daily_average_dir, ['temp'], drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
-            wcofs_range.write_rasters(daily_average_dir, ['u', 'v'], vector_components=True, drivers=['AAIGrid'],
-                                      fill_value=LEAFLET_NODATA_VALUE)
-            del wcofs_range
-        except dataset._utilities.NoDataError as error:
-            with open(log_path, 'a') as log_file:
-                log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
-                print(error)
+            try:
+                # print(f'Processing WCOFS for {date}')
+                wcofs_range = dataset.wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg',
+                                                        time_indices=wcofs_time_indices)
+                wcofs_range.write_rasters(daily_average_dir, ['temp'], drivers=['GTiff'],
+                                          fill_value=LEAFLET_NODATA_VALUE)
+                wcofs_range.write_rasters(daily_average_dir, ['u', 'v'], vector_components=True, drivers=['AAIGrid'],
+                                          fill_value=LEAFLET_NODATA_VALUE)
+                del wcofs_range
+            except dataset._utilities.NoDataError as error:
+                with open(log_path, 'a') as log_file:
+                    log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
+                    print(error)
 
         with open(log_path, 'a') as log_file:
             message = f'Wrote files to {daily_average_dir}'
@@ -141,7 +146,7 @@ if __name__ == '__main__':
 
     # get current date
     model_run_dates = [start_time.replace(hour=0, minute=0, second=0, microsecond=0)]
-    # model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 9, 16),
+    # model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 8, 31),
     #                                                datetime.datetime.now() + datetime.timedelta(days=1))
 
     # define dates over which to collect data (dates after today are for WCOFS forecast)

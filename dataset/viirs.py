@@ -457,13 +457,14 @@ class VIIRS_Range:
             if len(scenes_data) > 0:
                 output_sst_data = numpy.nanmean(numpy.stack(scenes_data), axis=2)
         else:  # otherwise overlap based on datetime
-            output_sst_data = numpy.empty_like(self.sample_dataset.sst())
-            output_sst_data[:] = numpy.nan
-
             for interval_datetime in interval_datetimes:
                 sst_data = self.datasets[interval_datetime].sst(correct_bias=correct_bias)
+
+                if output_sst_data is None:
+                    output_sst_data = numpy.empty_like(sst_data)
+                    output_sst_data[:] = numpy.nan
+
                 output_sst_data[~numpy.isnan(sst_data)] = sst_data[~numpy.isnan(sst_data)]
-                break
 
         if output_sst_data is not None:
             output_sst_data[numpy.isnan(output_sst_data)] = fill_value
@@ -729,9 +730,9 @@ if __name__ == '__main__':
     # write average of all scenes in specified time interval
     viirs_range = VIIRS_Range(start_datetime, end_datetime)
     # viirs_range.write_rasters(output_dir)
-    # viirs_range.write_raster(output_dir, start_datetime=start_datetime, end_datetime=morning_datetime)
-    # viirs_range.write_raster(output_dir, start_datetime=morning_datetime, end_datetime=evening_datetime)
-    # viirs_range.write_raster(output_dir, start_datetime=evening_datetime, end_datetime=end_datetime)
+    viirs_range.write_raster(output_dir, start_datetime=start_datetime, end_datetime=morning_datetime)
+    viirs_range.write_raster(output_dir, start_datetime=morning_datetime, end_datetime=evening_datetime)
+    viirs_range.write_raster(output_dir, start_datetime=evening_datetime, end_datetime=end_datetime)
     viirs_range.write_raster(output_dir)
 
     print('done')
