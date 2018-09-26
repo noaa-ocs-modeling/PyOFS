@@ -217,9 +217,9 @@ class HFR_Range:
 
         # create layer using OGR, then add features using QGIS
         for datetime_index in range(len(datetime_indices)):
-            datetime = self.datetimes[datetime_indices[datetime_index]]
+            vector_datetime = self.datetimes[datetime_indices[datetime_index]]
 
-            layer_name = f'{datetime.strftime("%Y%m%dT%H%M%S")}'
+            layer_name = f'{vector_datetime.strftime("%Y%m%dT%H%M%S")}'
 
             # create QGIS features
             layer_features = []

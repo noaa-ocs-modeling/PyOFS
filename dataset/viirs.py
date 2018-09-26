@@ -116,7 +116,7 @@ class VIIRS_Dataset:
             threading_lock.acquire()
 
         if VIIRS_Dataset.study_area_index_bounds is None:
-            print(f'Calculating indices and transform from granule at {self.granule_datetime}...')
+            # print(f'Calculating indices and transform from granule at {self.granule_datetime}...')
 
             # get first record in layer
             with fiona.open(self.study_area_polygon_filename, layer=self.layer_name) as vector_layer:
@@ -171,7 +171,7 @@ class VIIRS_Dataset:
 
         return self.netcdf_dataset.geospatial_lon_resolution, self.netcdf_dataset.geospatial_lat_resolution
 
-    def get_data(self, variable: str = 'sst', correct_bias: bool = True) -> numpy.ndarray:
+    def get_data(self, variable: str = 'sst', correct_bias: bool = False) -> numpy.ndarray:
         """
         Get data of specified variable within study area.
 
@@ -185,7 +185,7 @@ class VIIRS_Dataset:
         elif variable == 'sses_bias':
             return self.sses_bias()
 
-    def sst(self, correct_bias: bool = True) -> numpy.ndarray:
+    def sst(self, correct_bias: bool = False) -> numpy.ndarray:
         """
         Get SST data, if it exists within the study area.
 
@@ -332,7 +332,7 @@ class VIIRS_Range:
 
         if len(self.pass_times) > 0:
             print(
-                    f'Collecting {len(self.pass_times)} VIIRS datasets between {numpy.min(self.pass_times)} and {numpy.max(self.pass_times)}...')
+                    f'Collecting VIIRS data from {len(self.pass_times)} passes between {numpy.min(self.pass_times)} and {numpy.max(self.pass_times)}...')
 
             # create dictionary to store scenes
             self.datasets = {}
@@ -342,28 +342,34 @@ class VIIRS_Range:
             # concurrently populate dictionary with VIIRS dataset object for each pass time in the given time interval
             with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
                 scene_futures = {
-                concurrency_pool.submit(VIIRS_Dataset, datetime, self.study_area_polygon_filename, self.near_real_time,
-                                        self.data_source, self.subskin, self.acspo_version, threading_lock): datetime
-                for datetime in self.pass_times}
+                    concurrency_pool.submit(VIIRS_Dataset, scene_datetime, self.study_area_polygon_filename,
+                                            self.near_real_time, self.data_source, self.subskin, self.acspo_version,
+                                            threading_lock): scene_datetime for scene_datetime in self.pass_times}
 
                 # yield results as threads complete
                 for completed_future in concurrent.futures.as_completed(scene_futures):
                     if type(completed_future.exception()) is not _utilities.NoDataError:
-                        result = completed_future.result()
-                        datetime = scene_futures[completed_future]
-                        self.datasets[datetime] = result
+                        viirs_dataset = completed_future.result()
+                        scene_datetime = scene_futures[completed_future]
+
+                        if not numpy.isnan(viirs_dataset.sst()).all():
+                            self.datasets[scene_datetime] = viirs_dataset
+                    else:
+                        print(completed_future.exception())
 
             if len(self.datasets) > 0:
                 VIIRS_Range.study_area_transform = VIIRS_Dataset.study_area_transform
                 VIIRS_Range.study_area_index_bounds = VIIRS_Dataset.study_area_index_bounds
 
                 self.sample_dataset = next(iter(self.datasets.values()))
+
+                print(f'Collected VIIRS data from {len(self.datasets)} passes.')
             else:
                 raise _utilities.NoDataError(
                         f'No VIIRS datasets found between {self.start_datetime} and {self.end_datetime}.')
         else:
             raise _utilities.NoDataError(
-                    f'There are no VIIRS pass times between {self.start_datetime} and {self.end_datetime}.')
+                    f'There are no VIIRS passes between {self.start_datetime} and {self.end_datetime}.')
 
     def cell_size(self) -> tuple:
         """
@@ -396,7 +402,7 @@ class VIIRS_Range:
                 concurrency_pool.submit(dataset.write_rasters, output_filename, fill_value=fill_value, drivers=drivers)
 
     def write_raster(self, output_dir: str, filename_prefix: str = None, start_datetime: datetime.datetime = None,
-                     end_datetime: datetime.datetime = None, correct_bias: bool = True, average: bool = False,
+                     end_datetime: datetime.datetime = None, correct_bias: bool = False, average: bool = False,
                      fill_value: float = -9999, drivers: list = ['GTiff']):
         """
         Write VIIRS raster of stacked SST data (averaged or overlapped).
@@ -405,7 +411,7 @@ class VIIRS_Range:
         :param filename_prefix: Prefix for output filenames.
         :param start_datetime: Beginning of time interval.
         :param end_datetime: End of time interval.
-        :param correct_bias: Whether to subtract SSES bias from SST.
+        :param correct_bias: Whether to subtract SSES bias from L3 sea surface temperature data.
         :param average: Whether to average rasters, otherwise overlap them.
         :param fill_value: Desired fill value of output.
         :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
@@ -434,8 +440,8 @@ class VIIRS_Range:
             with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
                 scenes_futures = []
 
-                for datetime in interval_datetimes:
-                    dataset = self.datasets[datetime]
+                for interval_datetime in interval_datetimes:
+                    dataset = self.datasets[interval_datetime]
                     # scenes_data.append(dataset.get_sst(correct_bias))
                     scenes_futures.append(concurrency_pool.submit(dataset.sst, correct_bias))
 
@@ -450,15 +456,14 @@ class VIIRS_Range:
 
             if len(scenes_data) > 0:
                 output_sst_data = numpy.nanmean(numpy.stack(scenes_data), axis=2)
-
         else:  # otherwise overlap based on datetime
-            for datetime in interval_datetimes:
-                sst_data = self.datasets[datetime].sst()
-                if not numpy.isnan(sst_data).all():
-                    if output_sst_data is None:
-                        output_sst_data = numpy.empty_like(sst_data)
-                        output_sst_data[:] = numpy.nan
-                    output_sst_data[~numpy.isnan(sst_data)] = sst_data[~numpy.isnan(sst_data)]
+            output_sst_data = numpy.empty_like(self.sample_dataset.sst())
+            output_sst_data[:] = numpy.nan
+
+            for interval_datetime in interval_datetimes:
+                sst_data = self.datasets[interval_datetime].sst(correct_bias=correct_bias)
+                output_sst_data[~numpy.isnan(sst_data)] = sst_data[~numpy.isnan(sst_data)]
+                break
 
         if output_sst_data is not None:
             output_sst_data[numpy.isnan(output_sst_data)] = fill_value
@@ -558,14 +563,14 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
 
     datetime_range = _utilities.ten_minute_range(start_datetime, end_datetime)
 
-    study_area_polygon_filename, layer_name = study_area_polygon_filename.rsplit(':', 1)
+    study_area_polygon_geopackage, layer_name = study_area_polygon_filename.rsplit(':', 1)
 
     if layer_name == '':
         layer_name = None
 
     # construct polygon from the first record in layer
-    with fiona.open(study_area_polygon_filename, layer=layer_name) as vector_layer:
-        study_area_polygon = shapely.geometry.Polygon(vector_layer.next()['geometry'])
+    with fiona.open(study_area_polygon_geopackage, layer=layer_name) as vector_layer:
+        study_area_polygon = shapely.geometry.Polygon(vector_layer.next()['geometry']['coordinates'][0])
 
     # create variable for the index bounds of the mask within the greater VIIRS global grid
     # index_bounds = None
@@ -573,7 +578,7 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
     lines = []
 
     for datetime_index in range(len(datetime_range)):
-        datetime = datetime_range[datetime_index]
+        current_datetime = datetime_range[datetime_index]
 
         # find number of cycles from the first orbit to the present day
         num_cycles = int((datetime.datetime.now() - start_datetime).days / 16)
@@ -582,18 +587,12 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
         for cycle_index in range(0, num_cycles):
             # get current datetime of interest
             cycle_offset = VIIRS_PERIOD * cycle_index
-            cycle_datetime = datetime + cycle_offset
+            cycle_datetime = current_datetime + cycle_offset
 
-            # get dataset of new datetime
-            dataset = VIIRS_Dataset(cycle_datetime, study_area_polygon_filename, near_real_time, data_source, subskin,
-                                    acspo_version)
-
-            # if dataset is missing, try again at next cycle
-            if dataset.netcdf_dataset is not None:
-                # compute index bounds if not yet computed
-                # if index_bounds is None:
-                #     viirs_grid_transform = dataset.get_viirs_grid_transform()
-                #     index_bounds = dataset.get_extent_indices()
+            try:
+                # get dataset of new datetime
+                dataset = VIIRS_Dataset(cycle_datetime, study_area_polygon_filename, near_real_time, data_source,
+                                        subskin, acspo_version)
 
                 # check if dataset falls within polygon extent
                 if dataset.data_extent.is_valid and study_area_polygon.intersects(dataset.data_extent):
@@ -606,6 +605,8 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
 
                 # if we get to here, break and continue to the next datetime
                 break
+            except _utilities.NoDataError as error:
+                print(error)
         else:
             print(f'{datetime.strftime("%Y%m%dT%H%M%S")}: missing dataset across all cycles')
 
@@ -716,6 +717,8 @@ def check_masks(start_datetime: datetime.datetime, end_datetime: datetime.dateti
 
 
 if __name__ == '__main__':
+    # store_viirs_pass_times()
+
     output_dir = os.path.join(DATA_DIR, r'output\test')
 
     start_datetime = datetime.datetime.combine(datetime.date(2018, 9, 23), datetime.datetime.min.time())
@@ -725,9 +728,10 @@ if __name__ == '__main__':
 
     # write average of all scenes in specified time interval
     viirs_range = VIIRS_Range(start_datetime, end_datetime)
-    viirs_range.write_raster(output_dir, start_datetime=start_datetime, end_datetime=morning_datetime)
-    viirs_range.write_raster(output_dir, start_datetime=morning_datetime, end_datetime=evening_datetime)
-    viirs_range.write_raster(output_dir, start_datetime=evening_datetime, end_datetime=end_datetime)
+    # viirs_range.write_rasters(output_dir)
+    # viirs_range.write_raster(output_dir, start_datetime=start_datetime, end_datetime=morning_datetime)
+    # viirs_range.write_raster(output_dir, start_datetime=morning_datetime, end_datetime=evening_datetime)
+    # viirs_range.write_raster(output_dir, start_datetime=evening_datetime, end_datetime=end_datetime)
     viirs_range.write_raster(output_dir)
 
     print('done')

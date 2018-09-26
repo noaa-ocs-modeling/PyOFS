@@ -218,6 +218,9 @@ class WCOFS_Dataset:
                 dataset_index = -1
 
             with self.dataset_locks[dataset_index]:
+                if variable in ['u', 'v']:
+                    pass
+
                 # get surface layer; the last layer (of 40) at dimension 1
                 output_data = self.netcdf_datasets[dataset_index][variable][day_index, -1, :, :].values
         elif time_index in self.netcdf_datasets.keys():
@@ -800,15 +803,15 @@ class WCOFS_Range:
 
         # concurrently populate dictionary with data stack for each time in given time interval
         with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
-            data_futures = {concurrency_pool.submit(self.data_stack, variable, datetime): datetime for datetime in
-                            time_range}
+            data_futures = {concurrency_pool.submit(self.data_stack, variable, data_datetime): data_datetime for
+                            data_datetime in time_range}
 
             for completed_future in concurrent.futures.as_completed(data_futures):
-                datetime = data_futures[completed_future]
+                data_datetime = data_futures[completed_future]
                 result = completed_future.result()
 
                 if len(result) > 0:
-                    output_data[datetime] = result
+                    output_data[data_datetime] = result
 
             del data_futures
 
