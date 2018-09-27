@@ -23,9 +23,9 @@ def copy_xarray(input_path: str, output_path: str) -> xarray.Dataset:
     :return: Copied dataset, now at local filename.
     """
 
-    print('Copying dataset to {output_filename}')
+    print(f'Copying dataset to {output_path}')
 
-    input_dataset = xarray.open_dataset(input_path)
+    input_dataset = xarray.open_dataset(input_path, decode_times=False)
 
     # deep copy of xarray dataset
     output_dataset = input_dataset.copy(deep=True)

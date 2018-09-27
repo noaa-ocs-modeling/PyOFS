@@ -172,6 +172,8 @@ class WCOFS_Dataset:
                         WCOFS_Dataset.data_coordinates[grid_name]['lon'] = lon
                         WCOFS_Dataset.data_coordinates[grid_name]['lat'] = lat
 
+                        WCOFS_Dataset.grid_shapes[grid_name] = self.sample_netcdf_dataset[f'lon_{grid_name}'].shape
+
                         west = numpy.min(lon)
                         north = numpy.max(lat)
                         east = numpy.max(lon)
@@ -218,11 +220,25 @@ class WCOFS_Dataset:
                 dataset_index = -1
 
             with self.dataset_locks[dataset_index]:
-                if variable in ['u', 'v']:
-                    pass
-
                 # get surface layer; the last layer (of 40) at dimension 1
+                # if variable in ['u', 'v']:
+                #     raw_u = self.netcdf_datasets[dataset_index]['u'][day_index, -1, :-1, :].values
+                #     raw_v = self.netcdf_datasets[dataset_index]['v'][day_index, -1, :, :-1].values
+                #     theta = self.netcdf_datasets[dataset_index]['angle'][:-1, :-1].values
+                #
+                #     if variable == 'u':
+                #         output_data = raw_u * numpy.cos(theta) - raw_v * numpy.sin(theta)
+                #         extra_row = numpy.empty((1, output_data.shape[1]), dtype=output_data.dtype)
+                #         extra_row[:] = numpy.nan
+                #         output_data = numpy.concatenate((output_data, extra_row), axis=0)
+                #     elif variable == 'v':
+                #         output_data = raw_u * numpy.sin(theta) + raw_v * numpy.cos(theta)
+                #         extra_column = numpy.empty((output_data.shape[0], 1), dtype=output_data.dtype)
+                #         extra_column[:] = numpy.nan
+                #         output_data = numpy.concatenate((output_data, extra_column), axis=1)
+                # else:
                 output_data = self.netcdf_datasets[dataset_index][variable][day_index, -1, :, :].values
+
         elif time_index in self.netcdf_datasets.keys():
             with self.dataset_locks[time_index]:
                 output_data = self.netcdf_datasets[time_index][variable][0, :, :].values
@@ -650,7 +666,11 @@ class WCOFS_Range:
                     elif end_day >= WCOFS_MODEL_HOURS['f'] / 24:
                         end_day = WCOFS_MODEL_HOURS['f'] / 24
 
-                    overlapping_days = range(round(start_day), round(end_day))
+                    overlapping_days = list(range(round(start_day) + 1, round(end_day) + 1))
+
+                    for index in range(len(overlapping_days)):
+                        if overlapping_days[index] <= 0:
+                            overlapping_days[index] -= 1
 
                     if self.time_indices is not None:
                         time_indices = []
@@ -683,7 +703,7 @@ class WCOFS_Range:
                     elif end_hour >= WCOFS_MODEL_HOURS['f']:
                         end_hour = WCOFS_MODEL_HOURS['f']
 
-                    overlapping_hours = range(start_hour, end_hour)
+                    overlapping_hours = list(range(start_hour, end_hour))
 
                     if self.time_indices is not None:
                         time_indices = []
@@ -884,12 +904,12 @@ class WCOFS_Range:
         if variables is None:
             variables = MEASUREMENT_VARIABLES_2DS if self.source == '2ds' else MEASUREMENT_VARIABLES
 
-        study_area_polygon_filename, layer_name = study_area_polygon_filename.rsplit(':', 1)
+        study_area_polygon_geopackage, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
 
-        if layer_name == '':
-            layer_name = None
+        if study_area_polygon_layer_name == '':
+            study_area_polygon_layer_name = None
 
-        with fiona.open(study_area_polygon_filename, layer=layer_name) as vector_layer:
+        with fiona.open(study_area_polygon_geopackage, layer=study_area_polygon_layer_name) as vector_layer:
             study_area_geojson = vector_layer.next()['geometry']
 
         # if cell sizes are not specified, get maximum coordinate differences between cell points on psi grid
@@ -950,6 +970,20 @@ class WCOFS_Range:
 
         print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).seconds} seconds')
 
+        if vector_components:
+            if self.source == '2ds':
+                u_name = 'u_sur'
+                v_name = 'v_sur'
+            else:
+                u_name = 'u'
+                v_name = 'v'
+
+            if u_name not in variable_data_stack_averages:
+                variable_data_stack_averages[u_name] = self.data_averages(u_name, start_datetime, end_datetime)
+
+            if v_name not in variable_data_stack_averages:
+                variable_data_stack_averages[v_name] = self.data_averages(v_name, start_datetime, end_datetime)
+
         start_time = datetime.datetime.now()
 
         interpolated_data = {}
@@ -989,26 +1023,13 @@ class WCOFS_Range:
         print(f'parallel grid interpolation took {(datetime.datetime.now() - start_time).seconds} seconds')
 
         if vector_components:
-            if self.source == '2ds':
-                u_name = 'u_sur'
-                v_name = 'v_sur'
-            else:
-                u_name = 'u'
-                v_name = 'v'
-
-            if u_name not in variables:
-                variable_data_stack_averages[u_name] = self.data_averages(u_name, start_datetime, end_datetime)
-
-            if v_name not in variables:
-                variable_data_stack_averages[v_name] = self.data_averages(v_name, start_datetime, end_datetime)
-
             interpolated_data['dir'] = {}
             interpolated_data['mag'] = {}
 
             u_data_stack = interpolated_data[u_name]
             v_data_stack = interpolated_data[v_name]
 
-            for model_string in u_data_stack.keys():
+            for model_string in u_data_stack:
                 u_data = u_data_stack[model_string]
                 v_data = v_data_stack[model_string]
 
@@ -1102,7 +1123,7 @@ class WCOFS_Range:
 
         print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).seconds} seconds')
 
-        model_datetimes = [model_datetime for model_datetime in
+        model_datetime_strings = [model_datetime for model_datetime in
                            next(iter(variable_data_stack_averages.values())).keys()]
 
         # define layer schema
@@ -1114,14 +1135,14 @@ class WCOFS_Range:
             schema['properties'][variable] = 'float'
 
         # create layers
-        for model_datetime in model_datetimes:
+        for model_datetime_string in model_datetime_strings:
             fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_WGS84,
-                       layer=model_datetime.strftime('%Y%m%d')).close()
+                       layer=model_datetime_string).close()
 
         print('Creating features...')
 
         # create features
-        layer_features = {model_datetime.strftime('%Y%m%d'): [] for model_datetime in model_datetimes}
+        layer_features = {model_datetime: [] for model_datetime in model_datetime_strings}
 
         layer_feature_indices = {layer_name: 1 for layer_name in layer_features.keys()}
 
@@ -1133,19 +1154,17 @@ class WCOFS_Range:
                 rho_lon = WCOFS_Range.data_coordinates['rho']['lon'][row, col]
                 rho_lat = WCOFS_Range.data_coordinates['rho']['lat'][row, col]
 
-                for model_datetime in model_datetimes:
-                    data = [variable_data_stack_averages[variable][model_datetime][row, col] for variable in variables]
+                for model_datetime_string in model_datetime_strings:
+                    data = [variable_data_stack_averages[variable][model_datetime_string][row, col] for variable in variables]
 
                     if not numpy.isnan(data).all():
                         feature = QgsFeature()
                         feature.setGeometry(QgsGeometry(QgsPoint(rho_lon, rho_lat)))
                         feature.setAttributes(
-                                [layer_feature_indices[model_datetime.strftime('%Y%m%d')]] + [float(entry) for entry in
-                                                                                              data])
+                                [layer_feature_indices[model_datetime_string]] + [float(entry) for entry in data])
 
-                        layer_features[model_datetime.strftime('%Y%m%d')].append(feature)
-                        layer_feature_indices[model_datetime.strftime('%Y%m%d')] += 1
-            print(f'processed column {col} of {grid_width}')
+                        layer_features[model_datetime_string].append(feature)
+                        layer_feature_indices[model_datetime_string] += 1
 
         # write queued features to layer
         for layer_name, layer_features in layer_features.items():
@@ -1245,36 +1264,21 @@ def write_convex_hull(netcdf_dataset: xarray.Dataset, output_filename: str, grid
 
 
 if __name__ == '__main__':
-    output_dir = os.path.join(DATA_DIR, r'output\test')
+    output_dir = os.path.join(DATA_DIR, r'output\test\unrotated')
 
     start_datetime = datetime.datetime(2018, 8, 10)
     end_datetime = datetime.datetime(2018, 8, 11)
 
-    wcofs_range = WCOFS_Range(start_datetime, end_datetime, source='avg')
-    wcofs_range.write_rasters(output_dir, ['temp'])
+    wcofs_dataset = WCOFS_Dataset(uri=r'C:\Data\output\test\test2.nc')
 
-    # wcofs_dataset = WCOFS_Dataset(datetime.datetime(2018, 8, 31), time_indices=[1])
-    # mask_rho = wcofs_dataset.netcdf_datasets[1]['mask_rho'][:].values.astype(rasterio.int16)
-    #
-    # # rasterio_wcofs_crs = rasterio.crs.CRS.from_wkt('+proj=ob_tran +o_proj=longlat +o_lat_p=37.4 +o_lon_p=-57.6')
-    #
-    # wcofs_origin = pyproj.transform(pyproj.Proj('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs'),
-    #                  pyproj.Proj('+proj=ob_tran +o_proj=longlat +o_lat_p=37.4 +o_lon_p=-57.6'), -123.00442595126076,
-    #                  18.441782684328818, 0)
-    #
-    # rasterio_wcofs_transform = rasterio.transform.from_origin(wcofs_origin[0], wcofs_origin[1], 0.039, -0.039)
-    #
-    # with rasterio.open(os.path.join(DATA_DIR, r'output\test\mask_rho.tiff'), 'w', 'GTiff', height=mask_rho.shape[0],
-    #                    width=mask_rho.shape[1], count=1, crs=RASTERIO_WGS84, transform=rasterio_wcofs_transform,
-    #                    dtype=mask_rho.dtype) as output_raster:
-    #     output_raster.write(mask_rho, 1)
+    wcofs_range = WCOFS_Range(start_datetime, end_datetime, source='avg')
+    # wcofs_range.write_rasters(output_dir, ['temp'])
+    # wcofs_range.write_rasters(output_dir, ['u', 'v'], vector_components=True, drivers=['AAIGrid'])
 
     # from qgis.core import QgsApplication
     # qgis_application = QgsApplication([], True, None)
     # qgis_application.setPrefixPath(os.environ['QGIS_PREFIX_PATH'], True)
     # qgis_application.initQgis()
-    #
-    # wcofs_dataset.write_vector(os.path.join(DATA_DIR, r'output\test\wcofs_rho.gpkg'), layer_name='mask_qgis')
-    # wcofs_dataset.write_vector_fiona(os.path.join(DATA_DIR, r'output\test\wcofs_rho.gpkg'), layer_name='mask_fiona')
+    # wcofs_range.write_vector(os.path.join(output_dir, r'wcofs.gpkg'))
 
     print('done')
