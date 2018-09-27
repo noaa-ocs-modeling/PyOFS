@@ -145,9 +145,9 @@ if __name__ == '__main__':
         print(message)
 
     # get current date
-    model_run_dates = [start_time.replace(hour=0, minute=0, second=0, microsecond=0)]
-    # model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 8, 31),
+    # model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 8, 26),
     #                                                datetime.datetime.now() + datetime.timedelta(days=1))
+    model_run_dates = [start_time.replace(hour=0, minute=0, second=0, microsecond=0)]
 
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = [-1, 0, 1, 2]

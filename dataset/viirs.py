@@ -34,8 +34,8 @@ STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:stud
 RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
 
 SOURCE_URLS = {
-    'JPL':    'https://podaac-opendap.jpl.nasa.gov:443/opendap/allData/ghrsst/data/GDS2/L3U/VIIRS_NPP',
     'NESDIS': 'https://www.star.nesdis.noaa.gov/thredds/dodsC',
+    'JPL': 'https://podaac-opendap.jpl.nasa.gov:443/opendap/allData/ghrsst/data/GDS2/L3U/VIIRS_NPP',
     'NODC':   'https://data.nodc.noaa.gov/thredds/catalog/ghrsst/L3U/VIIRS_NPP'
 }
 
