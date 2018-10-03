@@ -60,12 +60,12 @@ if __name__ == '__main__':
                     if not (os.path.exists(output_path) and os.stat(output_path).st_size > 232000):
                         with open(output_path, 'wb') as output_file:
                             ftp_connection.retrbinary(f'RETR {input_path}', output_file.write)
-                            message = f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s): Copied "{input_path}" to "{output_path}"'
+                            message = f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s): Copied "{input_path}" to "{output_path}", {os.stat(output_path).st_size / 1000} KB'
                             log_file.write(message + '\n')
                             print(message)
                             num_downloads += 1
                     else:
-                        message = f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s): Destination file already exists: "{output_path}"'
+                        message = f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s): Destination file already exists: "{output_path}", {os.stat(output_path).st_size / 1000} KB'
 
                         # only write 'file exists' message on the first run of the day
                         if not log_exists:
