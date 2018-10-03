@@ -7,7 +7,7 @@ Created on Jun 13, 2018
 @author: zachary.burnett
 """
 
-import concurrent.futures
+from concurrent import futures
 import datetime
 import os
 
@@ -291,12 +291,12 @@ class HFR_Range:
 
             # concurrently populate dictionary with averaged data for each
             # variable
-            with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+            with futures.ThreadPoolExecutor() as concurrency_pool:
                 variable_futures = {
                     concurrency_pool.submit(numpy.mean, self.data[variable][datetime_indices, :, :], axis=0): variable
                     for variable in measurement_variables}
 
-                for completed_future in concurrent.futures.as_completed(variable_futures):
+                for completed_future in futures.as_completed(variable_futures):
                     variable = variable_futures[completed_future]
                     variable_means[variable] = completed_future.result()
 
@@ -380,12 +380,12 @@ class HFR_Range:
             variable_means = {}
 
             # concurrently populate dictionary with averaged data for each variable
-            with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+            with futures.ThreadPoolExecutor() as concurrency_pool:
                 variable_futures = {
                     concurrency_pool.submit(numpy.mean, self.data[variable][datetime_indices, :, :], axis=0): variable
                     for variable in variables}
 
-                for completed_future in concurrent.futures.as_completed(variable_futures):
+                for completed_future in futures.as_completed(variable_futures):
                     variable = variable_futures[completed_future]
                     variable_means[variable] = completed_future.result()
 

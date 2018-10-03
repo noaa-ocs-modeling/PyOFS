@@ -7,7 +7,7 @@ Created on Aug 1, 2018
 @author: zachary.burnett
 """
 
-import concurrent.futures
+from concurrent import futures
 import datetime
 import os
 import re
@@ -120,11 +120,11 @@ class NDBC_Range:
         self.stations = {}
 
         # concurrently populate dictionary with datasets for each station within given time interval
-        with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+        with futures.ThreadPoolExecutor() as concurrency_pool:
             station_futures = {concurrency_pool.submit(NDBC_Station, station_name): station_name for station_name in
                                self.station_names}
 
-            for completed_future in concurrent.futures.as_completed(station_futures):
+            for completed_future in futures.as_completed(station_futures):
                 station_name = station_futures[completed_future]
 
                 if type(completed_future.exception()) is not _utilities.NoDataError:
@@ -153,11 +153,11 @@ class NDBC_Range:
         station_data = {}
 
         # concurrently populate dictionary with data for each station within given time interval
-        with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+        with futures.ThreadPoolExecutor() as concurrency_pool:
             data_futures = {concurrency_pool.submit(station.data, start_datetime, end_datetime): station_name for
                             station_name, station in self.stations.items()}
 
-            for completed_future in concurrent.futures.as_completed(data_futures):
+            for completed_future in futures.as_completed(data_futures):
                 result = completed_future.result()
 
                 if result is not None:

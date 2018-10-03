@@ -7,7 +7,7 @@ Created on Jun 25, 2018
 @author: zachary.burnett
 """
 
-import concurrent.futures
+from concurrent import futures
 import datetime
 import os
 import threading
@@ -20,7 +20,6 @@ import rasterio.control
 import rasterio.mask
 import rasterio.warp
 import scipy.interpolate
-import scipy.ndimage
 import shapely.geometry
 import xarray
 from qgis.core import QgsFeature, QgsGeometry, QgsPoint, QgsVectorLayer
@@ -119,7 +118,7 @@ class WCOFS_Dataset:
                     print(f'No WCOFS dataset found at {url}')
         else:
             # concurrently populate dictionary with NetCDF datasets for every hour in the given list of hours
-            with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+            with futures.ThreadPoolExecutor() as concurrency_pool:
                 netcdf_futures = {}
 
                 for hour in self.time_deltas:
@@ -128,7 +127,7 @@ class WCOFS_Dataset:
                     future = concurrency_pool.submit(xarray.open_dataset, url, decode_times=False)
                     netcdf_futures[future] = hour
 
-                for completed_future in concurrent.futures.as_completed(netcdf_futures):
+                for completed_future in futures.as_completed(netcdf_futures):
                     try:
                         hour = netcdf_futures[completed_future]
                         result = completed_future.result()
@@ -267,10 +266,10 @@ class WCOFS_Dataset:
         variable_data = []
 
         # concurrently populate array with data for every hour
-        with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
-            variable_futures = {concurrency_pool.submit(self.data, variable, hour): hour for hour in time_deltas}
+        with futures.ThreadPoolExecutor() as concurrency_pool:
+            variable_futures = {concurrency_pool.submit(self.data, variable, time_delta): time_delta for time_delta in time_deltas}
 
-            for completed_future in concurrent.futures.as_completed(variable_futures):
+            for completed_future in futures.as_completed(variable_futures):
                 variable_data.append(completed_future.result())
 
             del variable_futures
@@ -296,12 +295,12 @@ class WCOFS_Dataset:
             variables = MEASUREMENT_VARIABLES_2DS if self.source == '2ds' else MEASUREMENT_VARIABLES
 
         # concurrently write rasters with data from each variable
-        with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+        with futures.ThreadPoolExecutor() as concurrency_pool:
             # get data average for each variable
             variable_mean_futures = {concurrency_pool.submit(self.data_average, variable_name, hours): variable_name for
                                      variable_name in variables}
 
-            for completed_future in concurrent.futures.as_completed(variable_mean_futures):
+            for completed_future in futures.as_completed(variable_mean_futures):
                 variable_name = variable_mean_futures[completed_future]
 
                 data = completed_future.result()
@@ -408,17 +407,17 @@ class WCOFS_Dataset:
         variable_means = {}
 
         # concurrently populate dictionary with averaged data within given time interval for each variable
-        with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+        with futures.ThreadPoolExecutor() as concurrency_pool:
             variable_futures = {concurrency_pool.submit(self.data_average, variable, time_deltas): variable for variable
                                 in variables}
 
-            for completed_future in concurrent.futures.as_completed(variable_futures):
+            for completed_future in futures.as_completed(variable_futures):
                 variable = variable_futures[completed_future]
                 variable_means[variable] = completed_future.result()
 
             del variable_futures
 
-        print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).seconds} seconds')
+        print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
         schema = {
             'geometry': 'Point', 'properties': {
@@ -440,7 +439,7 @@ class WCOFS_Dataset:
 
         grid_height, grid_width = WCOFS_Dataset.data_coordinates['psi']['lon'].shape
 
-        with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+        with futures.ThreadPoolExecutor() as concurrency_pool:
             feature_futures = []
 
             for col in range(grid_width):
@@ -451,13 +450,13 @@ class WCOFS_Dataset:
                                                         feature_index))
                         feature_index += 1
 
-            for completed_future in concurrent.futures.as_completed(feature_futures):
+            for completed_future in futures.as_completed(feature_futures):
                 result = completed_future.result()
 
                 if result is not None:
                     layer_features.append(result)
 
-        print(f'creating features took {(datetime.datetime.now() - start_time).seconds} seconds')
+        print(f'creating features took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
         start_time = datetime.datetime.now()
 
@@ -475,7 +474,7 @@ class WCOFS_Dataset:
         # save changes to layer
         layer.commitChanges()
 
-        print(f'writing features took {(datetime.datetime.now() - start_time).seconds} seconds')
+        print(f'writing features took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
     def write_vector_fiona(self, output_filename: str, layer_name: str = None, time_deltas: list = None):
         """
@@ -493,17 +492,17 @@ class WCOFS_Dataset:
         variable_means = {}
 
         # concurrently populate dictionary with averaged data within given time interval for each variable
-        with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+        with futures.ThreadPoolExecutor() as concurrency_pool:
             variable_futures = {concurrency_pool.submit(self.data_average, variable, time_deltas): variable for variable
                                 in variables}
 
-            for completed_future in concurrent.futures.as_completed(variable_futures):
+            for completed_future in futures.as_completed(variable_futures):
                 variable = variable_futures[completed_future]
                 variable_means[variable] = completed_future.result()
 
             del variable_futures
 
-        print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).seconds} seconds')
+        print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
         schema = {
             'geometry': 'Point', 'properties': {
@@ -523,7 +522,7 @@ class WCOFS_Dataset:
 
         grid_height, grid_width = WCOFS_Dataset.data_coordinates['psi']['lon'].shape
 
-        with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+        with futures.ThreadPoolExecutor() as concurrency_pool:
             feature_index = 1
             record_futures = []
 
@@ -536,13 +535,13 @@ class WCOFS_Dataset:
                                                         feature_index))
                         feature_index += 1
 
-            for completed_future in concurrent.futures.as_completed(record_futures):
+            for completed_future in futures.as_completed(record_futures):
                 result = completed_future.result()
 
                 if result is not None:
                     layer_records.append(result)
 
-        print(f'creating records took {(datetime.datetime.now() - start_time).seconds} seconds')
+        print(f'creating records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
         start_time = datetime.datetime.now()
 
@@ -553,7 +552,7 @@ class WCOFS_Dataset:
                         layer=layer_name) as output_vector_file:
             output_vector_file.writerecords(layer_records)
 
-        print(f'writing records took {(datetime.datetime.now() - start_time).seconds} seconds')
+        print(f'writing records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
     def _create_qgis_feature(self, variable_means, row, col, feature_index):
         # get coordinates of cell center
@@ -650,7 +649,7 @@ class WCOFS_Range:
         self.datasets = {}
 
         # concurrently populate dictionary with WCOFS dataset objects for every time in the given time interval
-        with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+        with futures.ThreadPoolExecutor() as concurrency_pool:
             dataset_futures = {}
 
             for model_date in model_dates:
@@ -717,7 +716,7 @@ class WCOFS_Range:
 
                     dataset_futures[future] = model_date
 
-            for completed_future in concurrent.futures.as_completed(dataset_futures):
+            for completed_future in futures.as_completed(dataset_futures):
                 model_date = dataset_futures[completed_future]
 
                 if type(completed_future.exception()) is not _utilities.NoDataError:
@@ -764,7 +763,7 @@ class WCOFS_Range:
         output_data = {}
 
         # concurrently populate dictionary with dictionaries for each model intersection with the given datetime
-        with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+        with futures.ThreadPoolExecutor() as concurrency_pool:
             data_futures = {}
 
             for day, dataset in self.datasets.items():
@@ -779,10 +778,14 @@ class WCOFS_Range:
 
                 if time_delta in dataset.time_deltas:
                     future = concurrency_pool.submit(dataset.data, variable, time_delta)
-                    time_delta_string = f'{"f" if time_delta > 0 else "n"}{abs(time_delta):03}'
+                    if time_delta < 0:
+                        time_delta_string = f'n{abs(time_delta):03}'
+                    else:
+                        time_delta_string = f'f{abs(time_delta) + 1:03}'
+
                     data_futures[future] = f'{day.strftime("%Y%m%d")}_{time_delta_string}'
 
-            for completed_future in concurrent.futures.as_completed(data_futures):
+            for completed_future in futures.as_completed(data_futures):
                 model_string = data_futures[completed_future]
                 result = completed_future.result()
 
@@ -818,11 +821,11 @@ class WCOFS_Range:
         output_data = {}
 
         # concurrently populate dictionary with data stack for each time in given time interval
-        with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+        with futures.ThreadPoolExecutor() as concurrency_pool:
             data_futures = {concurrency_pool.submit(self.data_stack, variable, data_datetime): data_datetime for
                             data_datetime in time_range}
 
-            for completed_future in concurrent.futures.as_completed(data_futures):
+            for completed_future in futures.as_completed(data_futures):
                 data_datetime = data_futures[completed_future]
                 result = completed_future.result()
 
@@ -860,7 +863,7 @@ class WCOFS_Range:
         output_data = {}
 
         # concurrently populate dictionary with average of data stack for each time in given time interval
-        with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+        with futures.ThreadPoolExecutor() as concurrency_pool:
             data_futures = {}
 
             for model_datetime, stacked_array in stacked_arrays.items():
@@ -870,7 +873,7 @@ class WCOFS_Range:
                 else:
                     output_data[model_datetime] = stacked_array
 
-            for completed_future in concurrent.futures.as_completed(data_futures):
+            for completed_future in futures.as_completed(data_futures):
                 model_datetime = data_futures[completed_future]
                 output_data[model_datetime] = completed_future.result()
 
@@ -953,12 +956,12 @@ class WCOFS_Range:
         variable_data_stack_averages = {}
 
         # concurrently populate dictionary with averaged data within given time interval for each variable
-        with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+        with futures.ThreadPoolExecutor() as concurrency_pool:
             variable_futures = {
                 concurrency_pool.submit(self.data_averages, variable, start_datetime, end_datetime): variable for
                 variable in variables}
 
-            for completed_future in concurrent.futures.as_completed(variable_futures):
+            for completed_future in futures.as_completed(variable_futures):
                 variable = variable_futures[completed_future]
                 variable_data_stack_averages[variable] = completed_future.result()
 
@@ -978,14 +981,14 @@ class WCOFS_Range:
             if v_name not in variable_data_stack_averages:
                 variable_data_stack_averages[v_name] = self.data_averages(v_name, start_datetime, end_datetime)
 
-        print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds()} seconds')
+        print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
         start_time = datetime.datetime.now()
 
         interpolated_data = {}
 
         # concurrently populate dictionary with interpolated data in given grid for each variable
-        with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+        with futures.ThreadPoolExecutor() as concurrency_pool:
             variable_interpolation_futures = {}
 
             for variable, variable_data_stack in variable_data_stack_averages.items():
@@ -1010,7 +1013,7 @@ class WCOFS_Range:
             for variable, interpolation_futures in variable_interpolation_futures.items():
                 interpolated_data[variable] = {}
 
-                for completed_future in concurrent.futures.as_completed(interpolation_futures):
+                for completed_future in futures.as_completed(interpolation_futures):
                     model_string = interpolation_futures[completed_future]
                     interpolated_data[variable][model_string] = completed_future.result()
 
@@ -1037,7 +1040,7 @@ class WCOFS_Range:
             if v_name not in variables:
                 del interpolated_data[v_name]
 
-        print(f'parallel grid interpolation took {(datetime.datetime.now() - start_time).total_seconds()} seconds')
+        print(f'parallel grid interpolation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
         # write interpolated grids to raster files
         for variable, variable_data_stack in interpolated_data.items():
@@ -1106,18 +1109,18 @@ class WCOFS_Range:
         variable_data_stack_averages = {}
 
         # concurrently populate dictionary with averaged data within given time interval for each variable
-        with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+        with futures.ThreadPoolExecutor() as concurrency_pool:
             variable_futures = {
                 concurrency_pool.submit(self.data_averages, variable, start_datetime, end_datetime): variable for
                 variable in variables}
 
-            for completed_future in concurrent.futures.as_completed(variable_futures):
+            for completed_future in futures.as_completed(variable_futures):
                 variable = variable_futures[completed_future]
                 variable_data_stack_averages[variable] = completed_future.result()
 
             del variable_futures
 
-        print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).seconds} seconds')
+        print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
         model_datetime_strings = [model_datetime for model_datetime in
                                   next(iter(variable_data_stack_averages.values())).keys()]

@@ -7,11 +7,11 @@ Created on Jun 13, 2018
 @author: zachary.burnett
 """
 
-import concurrent.futures
 import datetime
 import math
 import os
 import threading
+from concurrent import futures
 
 import fiona
 import numpy
@@ -90,9 +90,8 @@ class VIIRS_Dataset:
                     self.url = url
                     break
                 except OSError:
-                    print(f'Error collecting dataset at {source} {url}')
-            # else:
-            #     print(f'Dataset not found at {source} {url}')
+                    print(
+                        f'Error collecting dataset at {source} {url}')  # else:  #     print(f'Dataset not found at {source} {url}')
         else:
             raise _utilities.NoDataError(f'{self.granule_datetime}: No VIIRS dataset found.')
 
@@ -332,14 +331,14 @@ class VIIRS_Range:
             threading_lock = threading.Lock()
 
             # concurrently populate dictionary with VIIRS dataset object for each pass time in the given time interval
-            with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+            with futures.ThreadPoolExecutor() as concurrency_pool:
                 scene_futures = {
                     concurrency_pool.submit(VIIRS_Dataset, scene_datetime, self.study_area_polygon_filename,
                                             self.near_real_time, self.data_source, self.acspo_version,
                                             threading_lock): scene_datetime for scene_datetime in self.pass_times}
 
                 # yield results as threads complete
-                for completed_future in concurrent.futures.as_completed(scene_futures):
+                for completed_future in futures.as_completed(scene_futures):
                     if type(completed_future.exception()) is not _utilities.NoDataError:
                         viirs_dataset = completed_future.result()
                         scene_datetime = scene_futures[completed_future]
@@ -385,7 +384,7 @@ class VIIRS_Range:
         """
 
         # write a raster for each pass retrieved scene
-        with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+        with futures.ThreadPoolExecutor() as concurrency_pool:
             for dataset_datetime, dataset in self.datasets.items():
                 output_filename = os.path.join(output_dir,
                                                f'{filename_prefix}_{dataset_datetime.strftime("%Y%m%d%H%M%S")}.tiff')
@@ -427,7 +426,7 @@ class VIIRS_Range:
             scenes_data = []
 
             # concurrently populate array with data from every VIIRS scene
-            with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+            with futures.ThreadPoolExecutor() as concurrency_pool:
                 scenes_futures = []
 
                 for pass_datetime in pass_datetimes:
@@ -435,7 +434,7 @@ class VIIRS_Range:
                     # scenes_data.append(dataset.get_sst(correct_bias))
                     scenes_futures.append(concurrency_pool.submit(dataset.sst, subtract_sses))
 
-                for completed_future in concurrent.futures.as_completed(scenes_futures):
+                for completed_future in futures.as_completed(scenes_futures):
                     if completed_future._exception is None:
                         result = completed_future.result()
 
