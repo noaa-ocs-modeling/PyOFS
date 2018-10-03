@@ -59,14 +59,14 @@ class WCOFS_Dataset:
     variable_grids = None
     masks = {}
 
-    def __init__(self, model_date: datetime.datetime, source: str = None, time_indices: list = None,
+    def __init__(self, model_date: datetime.datetime, source: str = None, time_deltas: list = None,
                  x_size: float = None, y_size: float = None, uri: str = None):
         """
         Creates new dataset object from datetime and given model parameters.
 
         :param model_date: Model run date.
         :param source: One of 'stations', 'fields', 'avg', or '2ds'.
-        :param time_indices: List of integers of times from model start for which to retrieve data (days for avg, hours for others).
+        :param time_deltas: List of integers of times from model start for which to retrieve data (days for avg, hours for others).
         :param x_size: Size of cell in X direction.
         :param y_size: Size of cell in Y direction.
         :param uri: URI of local resource. Will override fetching hours, and only store a single dataset.
@@ -83,14 +83,14 @@ class WCOFS_Dataset:
 
         self.source = source
 
-        # 'avg' location is daily average datasets
-        if time_indices is not None:
-            self.time_indices = time_indices
+        # 'avg' is daily average datasets
+        if time_deltas is not None:
+            self.time_deltas = time_deltas
         else:
             if self.source == 'avg':
-                self.time_indices = [-1, 1, 2, 3]
+                self.time_deltas = [-1, 0, 1, 2]
             else:
-                self.time_indices = range(WCOFS_MODEL_HOURS['n'], WCOFS_MODEL_HOURS['f'] + 1)
+                self.time_deltas = list(range(WCOFS_MODEL_HOURS['n'], WCOFS_MODEL_HOURS['f'] + 1))
 
         # set start time to PyOFS model run time (0300 UTC)
         self.model_datetime = model_date.replace(hour=3, minute=0, second=0)
@@ -106,12 +106,15 @@ class WCOFS_Dataset:
         if self.uri is not None:
             self.netcdf_datasets[0] = xarray.open_dataset(self.uri, decode_times=False)
         elif self.source == 'avg':
-            for day in self.time_indices:
-                model_type = 'forecast' if day > 0 else 'nowcast'
+            for day in self.time_deltas:
+                if day > 0 and 1 in self.netcdf_datasets.keys():
+                    continue
+
+                model_type = 'nowcast' if day < 0 else 'forecast'
                 url = f'https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS/{month_string}/nos.wcofs.avg.{model_type}.{date_string}.t{WCOFS_MODEL_RUN_HOUR:02}z.nc'
 
                 try:
-                    self.netcdf_datasets[day if day in [-1, 1] else 1] = xarray.open_dataset(url, decode_times=False)
+                    self.netcdf_datasets[-1 if day < 0 else 1] = xarray.open_dataset(url, decode_times=False)
                 except OSError:
                     print(f'No WCOFS dataset found at {url}')
         else:
@@ -119,7 +122,7 @@ class WCOFS_Dataset:
             with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
                 netcdf_futures = {}
 
-                for hour in self.time_indices:
+                for hour in self.time_deltas:
                     url = f'https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS/{month_string}/nos.wcofs.{self.location}.{"n" if hour <= 0 else "f"}{abs(hour):03}.{date_string}.t{self.cycle:02}z.nc'
 
                     future = concurrency_pool.submit(xarray.open_dataset, url, decode_times=False)
@@ -141,7 +144,7 @@ class WCOFS_Dataset:
         if len(self.netcdf_datasets) > 0:
             self.sample_netcdf_dataset = next(iter(self.netcdf_datasets.values()))
 
-            self.dataset_locks = {hour: threading.Lock() for hour in self.netcdf_datasets.keys()}
+            self.dataset_locks = {time_delta: threading.Lock() for time_delta in self.netcdf_datasets.keys()}
 
             # get maximum pixel resolution that preserves data
             if self.x_size is None:
@@ -189,7 +192,8 @@ class WCOFS_Dataset:
                         WCOFS_Dataset.masks[grid_name] = ~(
                             self.sample_netcdf_dataset[f'mask_{grid_name}'].values).astype(bool)
         else:
-            raise _utilities.NoDataError(f'No WCOFS datasets found for {self.model_datetime} at the given hours.')
+            raise _utilities.NoDataError(
+                    f'No WCOFS datasets found for {self.model_datetime} at the given time indices ({time_deltas}).')
 
     def bounds(self, variable: str = 'psi') -> tuple:
         """
@@ -202,68 +206,69 @@ class WCOFS_Dataset:
         grid_name = WCOFS_Dataset.variable_grids[variable]
         return WCOFS_Dataset.grid_bounds[grid_name]
 
-    def data(self, variable: str, time_index: int) -> numpy.ndarray:
+    def data(self, variable: str, time_delta: int) -> numpy.ndarray:
         """
         Get data of specified variable at specified hour.
 
         :param variable: Name of variable to retrieve.
-        :param time_index: Time index to retrieve (days for avg, hours for others).
+        :param time_delta: Time index to retrieve (days for avg, hours for others).
         :return: Array of data.
         """
 
-        if self.source == 'avg' and time_index in self.time_indices:
-            if time_index > 0:
-                day_index = time_index - 1
-                dataset_index = 1
+        if time_delta in self.time_deltas:
+            if self.source == 'avg':
+                if time_delta >= 0:
+                    dataset_index = 1
+                    day_index = time_delta
+                else:
+                    dataset_index = -1
+                    day_index = 0
+
+                with self.dataset_locks[dataset_index]:
+                    # get surface layer; the last layer (of 40) at dimension 1
+                    # if variable in ['u', 'v']:
+                    #     raw_u = self.netcdf_datasets[dataset_index]['u'][day_index, -1, :-1, :].values
+                    #     raw_v = self.netcdf_datasets[dataset_index]['v'][day_index, -1, :, :-1].values
+                    #     theta = self.netcdf_datasets[dataset_index]['angle'][:-1, :-1].values
+                    #
+                    #     if variable == 'u':
+                    #         output_data = raw_u * numpy.cos(theta) - raw_v * numpy.sin(theta)
+                    #         extra_row = numpy.empty((1, output_data.shape[1]), dtype=output_data.dtype)
+                    #         extra_row[:] = numpy.nan
+                    #         output_data = numpy.concatenate((output_data, extra_row), axis=0)
+                    #     elif variable == 'v':
+                    #         output_data = raw_u * numpy.sin(theta) + raw_v * numpy.cos(theta)
+                    #         extra_column = numpy.empty((output_data.shape[0], 1), dtype=output_data.dtype)
+                    #         extra_column[:] = numpy.nan
+                    #         output_data = numpy.concatenate((output_data, extra_column), axis=1)
+                    # else:
+                    output_data = self.netcdf_datasets[dataset_index][variable][day_index, -1, :, :].values
+
             else:
-                day_index = 0
-                dataset_index = -1
-
-            with self.dataset_locks[dataset_index]:
-                # get surface layer; the last layer (of 40) at dimension 1
-                # if variable in ['u', 'v']:
-                #     raw_u = self.netcdf_datasets[dataset_index]['u'][day_index, -1, :-1, :].values
-                #     raw_v = self.netcdf_datasets[dataset_index]['v'][day_index, -1, :, :-1].values
-                #     theta = self.netcdf_datasets[dataset_index]['angle'][:-1, :-1].values
-                #
-                #     if variable == 'u':
-                #         output_data = raw_u * numpy.cos(theta) - raw_v * numpy.sin(theta)
-                #         extra_row = numpy.empty((1, output_data.shape[1]), dtype=output_data.dtype)
-                #         extra_row[:] = numpy.nan
-                #         output_data = numpy.concatenate((output_data, extra_row), axis=0)
-                #     elif variable == 'v':
-                #         output_data = raw_u * numpy.sin(theta) + raw_v * numpy.cos(theta)
-                #         extra_column = numpy.empty((output_data.shape[0], 1), dtype=output_data.dtype)
-                #         extra_column[:] = numpy.nan
-                #         output_data = numpy.concatenate((output_data, extra_column), axis=1)
-                # else:
-                output_data = self.netcdf_datasets[dataset_index][variable][day_index, -1, :, :].values
-
-        elif time_index in self.netcdf_datasets.keys():
-            with self.dataset_locks[time_index]:
-                output_data = self.netcdf_datasets[time_index][variable][0, :, :].values
+                with self.dataset_locks[time_delta]:
+                    output_data = self.netcdf_datasets[time_delta][variable][0, :, :].values
         else:
             output_data = numpy.empty(WCOFS_Dataset.grid_shapes[WCOFS_Dataset.variable_grids[variable]])
             output_data[:] = numpy.nan
 
         return output_data
 
-    def data_average(self, variable: str, time_indices: list = None) -> numpy.ndarray:
+    def data_average(self, variable: str, time_deltas: list = None) -> numpy.ndarray:
         """
         Writes interpolation of averaged data of given variable to output path.
 
         :param variable: Variable to use.
-        :param time_indices: List of integers of time indices to use in average (days for avg, hours for others).
+        :param time_deltas: List of integers of time indices to use in average (days for avg, hours for others).
         :return: Array of data.
         """
 
-        time_indices = time_indices if time_indices is not None else self.netcdf_datasets.keys()
+        time_deltas = time_deltas if time_deltas is not None else self.netcdf_datasets.keys()
 
         variable_data = []
 
         # concurrently populate array with data for every hour
         with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
-            variable_futures = {concurrency_pool.submit(self.data, variable, hour): hour for hour in time_indices}
+            variable_futures = {concurrency_pool.submit(self.data, variable, hour): hour for hour in time_deltas}
 
             for completed_future in concurrent.futures.as_completed(variable_futures):
                 variable_data.append(completed_future.result())
@@ -387,13 +392,13 @@ class WCOFS_Dataset:
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(masked_data, 1)
 
-    def write_vector(self, output_filename: str, layer_name: str = None, time_indices: list = None):
+    def write_vector(self, output_filename: str, layer_name: str = None, time_deltas: list = None):
         """
         Write average of surface velocity vector data for all hours in the given time interval to a single layer of the provided output file.
 
         :param output_filename: Path to output file.
         :param layer_name: Name of layer to write.
-        :param time_indices: List of integers of hours to use in average.
+        :param time_deltas: List of integers of hours to use in average.
         """
 
         variables = MEASUREMENT_VARIABLES_2DS if self.source == '2ds' else MEASUREMENT_VARIABLES
@@ -404,8 +409,8 @@ class WCOFS_Dataset:
 
         # concurrently populate dictionary with averaged data within given time interval for each variable
         with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
-            variable_futures = {concurrency_pool.submit(self.data_average, variable, time_indices): variable for
-                                variable in variables}
+            variable_futures = {concurrency_pool.submit(self.data_average, variable, time_deltas): variable for variable
+                                in variables}
 
             for completed_future in concurrent.futures.as_completed(variable_futures):
                 variable = variable_futures[completed_future]
@@ -472,13 +477,13 @@ class WCOFS_Dataset:
 
         print(f'writing features took {(datetime.datetime.now() - start_time).seconds} seconds')
 
-    def write_vector_fiona(self, output_filename: str, layer_name: str = None, time_indices: list = None):
+    def write_vector_fiona(self, output_filename: str, layer_name: str = None, time_deltas: list = None):
         """
         Write average of surface velocity vector data for all hours in the given time interval to the provided output file.
 
         :param output_filename: Path to output file.
         :param layer_name: Name of layer to write.
-        :param time_indices: List of integers of hours to use in average.
+        :param time_deltas: List of integers of hours to use in average.
         """
 
         variables = MEASUREMENT_VARIABLES_2DS if self.source == '2ds' else MEASUREMENT_VARIABLES
@@ -489,8 +494,8 @@ class WCOFS_Dataset:
 
         # concurrently populate dictionary with averaged data within given time interval for each variable
         with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
-            variable_futures = {concurrency_pool.submit(self.data_average, variable, time_indices): variable for
-                                variable in variables}
+            variable_futures = {concurrency_pool.submit(self.data_average, variable, time_deltas): variable for variable
+                                in variables}
 
             for completed_future in concurrent.futures.as_completed(variable_futures):
                 variable = variable_futures[completed_future]
@@ -587,7 +592,7 @@ class WCOFS_Dataset:
 
     def __repr__(self):
         used_params = [self.model_datetime.__repr__()]
-        optional_params = [self.source, self.time_indices, self.x_size, self.y_size, self.uri]
+        optional_params = [self.source, self.time_deltas, self.x_size, self.y_size, self.uri]
 
         for param in optional_params:
             if param is not None:
@@ -613,19 +618,19 @@ class WCOFS_Range:
     variable_grids = None
 
     def __init__(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime, source: str = None,
-                 time_indices: list = None):
+                 time_deltas: list = None):
         """
         Create range of WCOFS datasets from the given time interval.
 
         :param start_datetime: Beginning of time interval.
         :param end_datetime: End of time interval.
         :param source: One of 'stations', 'fields', 'avg', or '2ds'.
-        :param time_indices: List of time indices (nowcast or forecast) to retrieve.
+        :param time_deltas: List of time indices (nowcast or forecast) to retrieve.
         :raises NoDataError: if data does not exist.
         """
 
         self.source = source
-        self.time_indices = time_indices
+        self.time_deltas = time_deltas
 
         if self.source == 'avg':
             self.start_datetime = _utilities.round_to_day(start_datetime)
@@ -637,10 +642,10 @@ class WCOFS_Range:
         print(f'Collecting WCOFS stack between {self.start_datetime} and {self.end_datetime}...')
 
         # get all possible model dates that could overlap with the given time interval
-        overlapping_models_start_datetime = self.start_datetime - datetime.timedelta(hours=WCOFS_MODEL_HOURS['f'])
-        overlapping_models_end_datetime = self.end_datetime - datetime.timedelta(hours=WCOFS_MODEL_HOURS['n'])
-        model_dates = _utilities.day_range(_utilities.round_to_day(overlapping_models_start_datetime, 'floor'),
-                                           _utilities.round_to_day(overlapping_models_end_datetime, 'ceiling'))
+        overlapping_start_datetime = self.start_datetime - datetime.timedelta(hours=WCOFS_MODEL_HOURS['f'] - 24)
+        overlapping_end_datetime = self.end_datetime + datetime.timedelta(hours=-WCOFS_MODEL_HOURS['n'] - 24)
+        model_dates = _utilities.day_range(_utilities.round_to_day(overlapping_start_datetime, 'floor'),
+                                           _utilities.round_to_day(overlapping_end_datetime, 'ceiling'))
 
         self.datasets = {}
 
@@ -658,32 +663,24 @@ class WCOFS_Range:
                     end_day = round(end_duration.total_seconds() / (60 * 60 * 24))
 
                     if start_day <= WCOFS_MODEL_HOURS['n'] / 24:
-                        start_day = WCOFS_MODEL_HOURS['n'] / 24
+                        start_day = round(WCOFS_MODEL_HOURS['n'] / 24)
                     elif start_day >= WCOFS_MODEL_HOURS['f'] / 24:
-                        start_day = WCOFS_MODEL_HOURS['f'] / 24
+                        start_day = round(WCOFS_MODEL_HOURS['f'] / 24)
                     if end_day <= WCOFS_MODEL_HOURS['n'] / 24:
-                        end_day = WCOFS_MODEL_HOURS['n'] / 24
+                        end_day = round(WCOFS_MODEL_HOURS['n'] / 24)
                     elif end_day >= WCOFS_MODEL_HOURS['f'] / 24:
-                        end_day = WCOFS_MODEL_HOURS['f'] / 24
+                        end_day = round(WCOFS_MODEL_HOURS['f'] / 24)
 
-                    overlapping_days = list(range(round(start_day) + 1, round(end_day) + 1))
+                    overlapping_days = list(range(start_day, end_day))
 
-                    for index in range(len(overlapping_days)):
-                        if overlapping_days[index] <= 0:
-                            overlapping_days[index] -= 1
+                    if self.time_deltas is not None:
+                        time_deltas = []
 
-                    if self.time_indices is not None:
-                        time_indices = []
-
-                        for day in self.time_indices:
-                            if day >= 0:
-                                if day - 1 in overlapping_days:
-                                    time_indices.append(day)
-                            else:
-                                if day in overlapping_days:
-                                    time_indices.append(day)
+                        for day in self.time_deltas:
+                            if day in overlapping_days:
+                                time_deltas.append(day)
                     else:
-                        time_indices = overlapping_days
+                        time_deltas = overlapping_days
                 else:
                     model_datetime = model_date + datetime.timedelta(hours=3)
 
@@ -705,18 +702,18 @@ class WCOFS_Range:
 
                     overlapping_hours = list(range(start_hour, end_hour))
 
-                    if self.time_indices is not None:
-                        time_indices = []
+                    if self.time_deltas is not None:
+                        time_deltas = []
 
                         for overlapping_hour in overlapping_hours:
-                            if overlapping_hour in self.time_indices:
-                                time_indices.append(overlapping_hour)
+                            if overlapping_hour in self.time_deltas:
+                                time_deltas.append(overlapping_hour)
                     else:
-                        time_indices = overlapping_hours
+                        time_deltas = overlapping_hours
 
                 # get dataset for the current hours (usually all hours)
-                if time_indices is None or len(time_indices) > 0:
-                    future = concurrency_pool.submit(WCOFS_Dataset, model_date, self.source, time_indices)
+                if time_deltas is None or len(time_deltas) > 0:
+                    future = concurrency_pool.submit(WCOFS_Dataset, model_date, self.source, time_deltas)
 
                     dataset_futures[future] = model_date
 
@@ -733,26 +730,27 @@ class WCOFS_Range:
             self.sample_wcofs_dataset = next(iter(self.datasets.values()))
 
             with GLOBAL_LOCK:
-                WCOFS_Range.grid_transforms = WCOFS_Dataset.grid_transforms
-                WCOFS_Range.grid_shapes = WCOFS_Dataset.grid_shapes
-                WCOFS_Range.grid_bounds = WCOFS_Dataset.grid_bounds
-                WCOFS_Range.data_coordinates = WCOFS_Dataset.data_coordinates
-                WCOFS_Range.variable_grids = WCOFS_Dataset.variable_grids
+                if WCOFS_Range.grid_transforms is None:
+                    WCOFS_Range.grid_transforms = WCOFS_Dataset.grid_transforms
+                    WCOFS_Range.grid_shapes = WCOFS_Dataset.grid_shapes
+                    WCOFS_Range.grid_bounds = WCOFS_Dataset.grid_bounds
+                    WCOFS_Range.data_coordinates = WCOFS_Dataset.data_coordinates
+                    WCOFS_Range.variable_grids = WCOFS_Dataset.variable_grids
         else:
             raise _utilities.NoDataError(
                     f'No WCOFS datasets found between {self.start_datetime} and {self.end_datetime}.')
 
-    def data(self, variable: str, model_datetime: datetime.datetime, time_index: int) -> numpy.ndarray:
+    def data(self, variable: str, model_datetime: datetime.datetime, time_delta: int) -> numpy.ndarray:
         """
         Return data from given model run at given variable and hour.
 
         :param variable: Name of variable to use.
         :param model_datetime: Datetime of start of model run.
-        :param time_index: Index of time to retrieve (days for avg, hours for others).
+        :param time_delta: Index of time to retrieve (days for avg, hours for others).
         :return: Matrix of data.
         """
 
-        return self.datasets[model_datetime].data(variable, time_index)
+        return self.datasets[model_datetime].data(variable, time_delta)
 
     def data_stack(self, variable: str, input_datetime: datetime.datetime) -> dict:
         """
@@ -773,18 +771,16 @@ class WCOFS_Range:
                 if self.source == 'avg':
                     # get current day index
                     timedelta = input_datetime - day
-                    time_index = round(timedelta.total_seconds() / (60 * 60 * 24))
-                    if time_index >= 0:
-                        time_index += 1
+                    time_delta = round(timedelta.total_seconds() / (60 * 60 * 24))
                 else:
                     # get current hour index
                     timedelta = input_datetime - day.replace(hour=3, minute=0, second=0)
-                    time_index = round(timedelta.total_seconds() / (60 * 60))
+                    time_delta = round(timedelta.total_seconds() / (60 * 60))
 
-                if time_index in dataset.time_indices:
-                    future = concurrency_pool.submit(dataset.data, variable, time_index)
-                    time_index_string = f'{"f" if time_index > 0 else "n"}{abs(time_index):03}'
-                    data_futures[future] = f'{day.strftime("%Y%m%d")}_{time_index_string}'
+                if time_delta in dataset.time_deltas:
+                    future = concurrency_pool.submit(dataset.data, variable, time_delta)
+                    time_delta_string = f'{"f" if time_delta > 0 else "n"}{abs(time_delta):03}'
+                    data_futures[future] = f'{day.strftime("%Y%m%d")}_{time_delta_string}'
 
             for completed_future in concurrent.futures.as_completed(data_futures):
                 model_string = data_futures[completed_future]
@@ -968,8 +964,6 @@ class WCOFS_Range:
 
             del variable_futures
 
-        print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).seconds} seconds')
-
         if vector_components:
             if self.source == '2ds':
                 u_name = 'u_sur'
@@ -983,6 +977,8 @@ class WCOFS_Range:
 
             if v_name not in variable_data_stack_averages:
                 variable_data_stack_averages[v_name] = self.data_averages(v_name, start_datetime, end_datetime)
+
+        print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds()} seconds')
 
         start_time = datetime.datetime.now()
 
@@ -1020,8 +1016,6 @@ class WCOFS_Range:
 
             del variable_interpolation_futures
 
-        print(f'parallel grid interpolation took {(datetime.datetime.now() - start_time).seconds} seconds')
-
         if vector_components:
             interpolated_data['dir'] = {}
             interpolated_data['mag'] = {}
@@ -1042,6 +1036,8 @@ class WCOFS_Range:
 
             if v_name not in variables:
                 del interpolated_data[v_name]
+
+        print(f'parallel grid interpolation took {(datetime.datetime.now() - start_time).total_seconds()} seconds')
 
         # write interpolated grids to raster files
         for variable, variable_data_stack in interpolated_data.items():
@@ -1124,7 +1120,7 @@ class WCOFS_Range:
         print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).seconds} seconds')
 
         model_datetime_strings = [model_datetime for model_datetime in
-                           next(iter(variable_data_stack_averages.values())).keys()]
+                                  next(iter(variable_data_stack_averages.values())).keys()]
 
         # define layer schema
         schema = {
@@ -1155,7 +1151,8 @@ class WCOFS_Range:
                 rho_lat = WCOFS_Range.data_coordinates['rho']['lat'][row, col]
 
                 for model_datetime_string in model_datetime_strings:
-                    data = [variable_data_stack_averages[variable][model_datetime_string][row, col] for variable in variables]
+                    data = [variable_data_stack_averages[variable][model_datetime_string][row, col] for variable in
+                            variables]
 
                     if not numpy.isnan(data).all():
                         feature = QgsFeature()
@@ -1176,7 +1173,7 @@ class WCOFS_Range:
 
     def __repr__(self):
         used_params = [self.start_datetime.__repr__(), self.end_datetime.__repr__()]
-        optional_params = [self.source, self.time_indices]
+        optional_params = [self.source, self.time_deltas]
 
         for param in optional_params:
             if param is not None:

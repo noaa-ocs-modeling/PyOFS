@@ -87,26 +87,25 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
                     log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
                     print(error)
 
-        if not os.path.exists(log_path):
-            # only retrieve forecasts that have not already been written
-            if day_delta == -1:
-                wcofs_time_indices = [-1]
-            else:
-                wcofs_time_indices = [day_delta + 1]
+        # only retrieve forecasts that have not already been written
+        if day_delta == -1:
+            wcofs_day_deltas = [-1]
+        else:
+            wcofs_day_deltas = [day_delta]
 
-            try:
-                # print(f'Processing WCOFS for {date}')
-                wcofs_range = dataset.wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg',
-                                                        time_indices=wcofs_time_indices)
-                wcofs_range.write_rasters(daily_average_dir, ['temp'], drivers=['GTiff'],
-                                          fill_value=LEAFLET_NODATA_VALUE)
-                wcofs_range.write_rasters(daily_average_dir, ['u', 'v'], vector_components=True, drivers=['AAIGrid'],
-                                          fill_value=LEAFLET_NODATA_VALUE)
-                del wcofs_range
-            except dataset._utilities.NoDataError as error:
-                with open(log_path, 'a') as log_file:
-                    log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
-                    print(error)
+        try:
+            # print(f'Processing WCOFS for {date}')
+            wcofs_range = dataset.wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg',
+                                                    time_deltas=wcofs_day_deltas)
+            wcofs_range.write_rasters(daily_average_dir, ['temp'], drivers=['GTiff'],
+                                      fill_value=LEAFLET_NODATA_VALUE)
+            wcofs_range.write_rasters(daily_average_dir, ['u', 'v'], vector_components=True, drivers=['AAIGrid'],
+                                      fill_value=LEAFLET_NODATA_VALUE)
+            del wcofs_range
+        except dataset._utilities.NoDataError as error:
+            with open(log_path, 'a') as log_file:
+                log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
+                print(error)
 
         with open(log_path, 'a') as log_file:
             message = f'Wrote files to {daily_average_dir}'
