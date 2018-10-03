@@ -84,14 +84,13 @@ class VIIRS_Dataset:
 
             url = f'{url_prefix}/{url_suffix}'
 
-            if requests.get(url).status_code == 200:
-                try:
+            try:
+                if requests.get(url).status_code == 200:
                     self.netcdf_dataset = xarray.open_dataset(url)
                     self.url = url
                     break
-                except OSError:
-                    print(
-                        f'Error collecting dataset at {source} {url}')  # else:  #     print(f'Dataset not found at {source} {url}')
+            except Exception as error:
+                print(f'Error collecting dataset from {source} at ({url}): {error}')
         else:
             raise _utilities.NoDataError(f'{self.granule_datetime}: No VIIRS dataset found.')
 
