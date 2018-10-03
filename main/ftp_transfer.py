@@ -57,7 +57,7 @@ if __name__ == '__main__':
                     current_start_time = datetime.datetime.now()
 
                     # download file (copy via binary connection) to local destination if it does not already exist
-                    if not (os.path.exists(output_path) and os.stat('somefile.txt').st_size > 232000):
+                    if not (os.path.exists(output_path) and os.stat(output_path).st_size > 232000):
                         with open(output_path, 'wb') as output_file:
                             ftp_connection.retrbinary(f'RETR {input_path}', output_file.write)
                             message = f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s): Copied "{input_path}" to "{output_path}"'
