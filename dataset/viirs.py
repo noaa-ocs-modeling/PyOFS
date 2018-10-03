@@ -17,6 +17,7 @@ import fiona
 import numpy
 import rasterio
 import rasterio.features
+import requests
 import shapely
 import shapely.geometry
 import shapely.wkt
@@ -35,7 +36,7 @@ RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
 
 SOURCE_URLS = {
     'NESDIS': 'https://www.star.nesdis.noaa.gov/thredds/dodsC',
-    'JPL': 'https://podaac-opendap.jpl.nasa.gov:443/opendap/allData/ghrsst/data/GDS2/L3U/VIIRS_NPP',
+    'JPL':    'https://podaac-opendap.jpl.nasa.gov:443/opendap/allData/ghrsst/data/GDS2/L3U/VIIRS_NPP',
     'NODC':   'https://data.nodc.noaa.gov/thredds/catalog/ghrsst/L3U/VIIRS_NPP'
 }
 
@@ -76,19 +77,22 @@ class VIIRS_Dataset:
                      f'{self.granule_datetime.strftime("%Y%m%d%H%M%S")}-{self.data_source}-L3U_GHRSST-SSTsubskin-VIIRS_NPP-ACSPO_V{self.acspo_version}-v02.0-fv01.0.nc'
 
         for source, url_prefix in SOURCE_URLS.items():
-            try:
-                if source == 'JPL':
-                    url_prefix = f'{url_prefix}/{data_source}/v{acspo_version}'
-                elif source in 'NODC':
-                    url_prefix = f'{url_prefix}/{data_source}'
+            if source == 'JPL':
+                url_prefix = f'{url_prefix}/{data_source}/v{acspo_version}'
+            elif source in 'NODC':
+                url_prefix = f'{url_prefix}/{data_source}'
 
-                url = f'{url_prefix}/{url_suffix}'
-                self.netcdf_dataset = xarray.open_dataset(url)
+            url = f'{url_prefix}/{url_suffix}'
 
-                self.url = url
-                break
-            except OSError:
-                print(f'Dataset not found at {source} {url}')
+            if requests.get(url).status_code == 200:
+                try:
+                    self.netcdf_dataset = xarray.open_dataset(url)
+                    self.url = url
+                    break
+                except OSError:
+                    print(f'Error collecting dataset at {source} {url}')
+            # else:
+            #     print(f'Dataset not found at {source} {url}')
         else:
             raise _utilities.NoDataError(f'{self.granule_datetime}: No VIIRS dataset found.')
 
@@ -309,7 +313,7 @@ class VIIRS_Range:
         """
 
         self.start_datetime = start_datetime
-        self.end_datetime = end_datetime
+        self.end_datetime = end_datetime if end_datetime < datetime.datetime.utcnow() else datetime.datetime.utcnow()
         self.study_area_polygon_filename = study_area_polygon_filename
         self.viirs_pass_times_filename = viirs_pass_times_filename
         self.near_real_time = near_real_time
