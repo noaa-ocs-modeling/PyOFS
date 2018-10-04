@@ -7,10 +7,10 @@ Created on Jun 25, 2018
 @author: zachary.burnett
 """
 
-from concurrent import futures
 import datetime
 import os
 import threading
+from concurrent import futures
 
 import fiona
 import fiona.crs
@@ -42,6 +42,8 @@ WCOFS_MODEL_RUN_HOUR = 3
 
 DATA_DIR = os.environ['OFS_DATA']
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
+WCOFS_4KM_GRID_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs_4km_grid.nc")
+WCOFS_2KM_GRID_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs_2km_grid.nc")
 
 GLOBAL_LOCK = threading.Lock()
 
@@ -59,7 +61,7 @@ class WCOFS_Dataset:
     masks = {}
 
     def __init__(self, model_date: datetime.datetime, source: str = None, time_deltas: list = None,
-                 x_size: float = None, y_size: float = None, uri: str = None):
+                 x_size: float = None, y_size: float = None, grid_filename: str = None, uri: str = None):
         """
         Creates new dataset object from datetime and given model parameters.
 
@@ -68,6 +70,7 @@ class WCOFS_Dataset:
         :param time_deltas: List of integers of times from model start for which to retrieve data (days for avg, hours for others).
         :param x_size: Size of cell in X direction.
         :param y_size: Size of cell in Y direction.
+        :param grid: Filename of NetCDF containing WCOFS grid coordinates.
         :param uri: URI of local resource. Will override fetching hours, and only store a single dataset.
         :raises ValueError: if source is not valid.
         :raises NoDataError: if no datasets exist for the given model run.
@@ -95,6 +98,7 @@ class WCOFS_Dataset:
         self.model_datetime = model_date.replace(hour=3, minute=0, second=0)
         self.x_size = x_size
         self.y_size = y_size
+        self.grid_filename = grid_filename
         self.uri = uri
 
         month_string = self.model_datetime.strftime('%Y%m')
@@ -142,14 +146,7 @@ class WCOFS_Dataset:
 
         if len(self.netcdf_datasets) > 0:
             self.sample_netcdf_dataset = next(iter(self.netcdf_datasets.values()))
-
             self.dataset_locks = {time_delta: threading.Lock() for time_delta in self.netcdf_datasets.keys()}
-
-            # get maximum pixel resolution that preserves data
-            if self.x_size is None:
-                self.x_size = numpy.max(numpy.diff(self.sample_netcdf_dataset[f'lon_psi']))
-            if self.y_size is None:
-                self.y_size = numpy.max(numpy.diff(self.sample_netcdf_dataset[f'lat_psi']))
 
             with GLOBAL_LOCK:
                 if WCOFS_Dataset.grid_transforms is None:
@@ -159,16 +156,17 @@ class WCOFS_Dataset:
                     WCOFS_Dataset.data_coordinates = {}
                     WCOFS_Dataset.variable_grids = {}
 
+                    wcofs_grid = xarray.open_dataset(
+                        self.grid_filename) if self.grid_filename is not None else self.sample_netcdf_dataset
+
                     for variable_name, variable in self.sample_netcdf_dataset.data_vars.items():
                         if 'location' in variable.attrs:
                             grid_name = GRID_LOCATIONS[variable.location]
                             WCOFS_Dataset.variable_grids[variable_name] = grid_name
 
-                            # if grid_name not in WCOFS_Dataset.grid_names.keys():  #     WCOFS_Dataset.grid_names[grid_name] = []  #  # WCOFS_Dataset.grid_names[grid_name].append(variable_name)
-
                     for grid_name in GRID_LOCATIONS.values():
-                        lon = self.sample_netcdf_dataset[f'lon_{grid_name}'].values
-                        lat = self.sample_netcdf_dataset[f'lat_{grid_name}'].values
+                        lon = wcofs_grid[f'lon_{grid_name}'].values
+                        lat = wcofs_grid[f'lat_{grid_name}'].values
 
                         WCOFS_Dataset.data_coordinates[grid_name] = {}
                         WCOFS_Dataset.data_coordinates[grid_name]['lon'] = lon
@@ -190,6 +188,12 @@ class WCOFS_Dataset:
 
                         WCOFS_Dataset.masks[grid_name] = ~(
                             self.sample_netcdf_dataset[f'mask_{grid_name}'].values).astype(bool)
+
+                # set pixel resolution if not specified
+                if self.x_size is None:
+                    self.x_size = numpy.max(numpy.diff(WCOFS_Dataset.data_coordinates['psi']['lon']))
+                if self.y_size is None:
+                    self.y_size = numpy.max(numpy.diff(WCOFS_Dataset.data_coordinates['psi']['lat']))
         else:
             raise _utilities.NoDataError(
                     f'No WCOFS datasets found for {self.model_datetime} at the given time indices ({time_deltas}).')
@@ -267,7 +271,8 @@ class WCOFS_Dataset:
 
         # concurrently populate array with data for every hour
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            variable_futures = {concurrency_pool.submit(self.data, variable, time_delta): time_delta for time_delta in time_deltas}
+            variable_futures = {concurrency_pool.submit(self.data, variable, time_delta): time_delta for time_delta in
+                                time_deltas}
 
             for completed_future in futures.as_completed(variable_futures):
                 variable_data.append(completed_future.result())
@@ -591,7 +596,7 @@ class WCOFS_Dataset:
 
     def __repr__(self):
         used_params = [self.model_datetime.__repr__()]
-        optional_params = [self.source, self.time_deltas, self.x_size, self.y_size, self.uri]
+        optional_params = [self.source, self.time_deltas, self.x_size, self.y_size, self.grid_filename, self.uri]
 
         for param in optional_params:
             if param is not None:
