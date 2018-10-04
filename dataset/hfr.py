@@ -7,9 +7,9 @@ Created on Jun 13, 2018
 @author: zachary.burnett
 """
 
-from concurrent import futures
 import datetime
 import os
+from concurrent import futures
 
 import fiona
 import fiona.crs

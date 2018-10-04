@@ -157,7 +157,7 @@ class WCOFS_Dataset:
                     WCOFS_Dataset.variable_grids = {}
 
                     wcofs_grid = xarray.open_dataset(
-                        self.grid_filename) if self.grid_filename is not None else self.sample_netcdf_dataset
+                            self.grid_filename) if self.grid_filename is not None else self.sample_netcdf_dataset
 
                     for variable_name, variable in self.sample_netcdf_dataset.data_vars.items():
                         if 'location' in variable.attrs:
