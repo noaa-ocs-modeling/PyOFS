@@ -50,42 +50,42 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
             if day_delta < 0 and os.path.exists(log_path):
                 continue
 
-            # print(f'Processing HFR for {start_datetime}')
-            try:
-                hfr_range = dataset.hfr.HFR_Range(start_datetime, end_datetime)
-                hfr_range.write_rasters(daily_average_dir, filename_suffix=f'{start_datetime.strftime("%Y%m%d")}',
-                                        variables=['u', 'v'], vector_components=True, drivers=['AAIGrid'],
-                                        fill_value=LEAFLET_NODATA_VALUE)
-                del hfr_range
-            except dataset._utilities.NoDataError as error:
-                with open(log_path, 'a') as log_file:
-                    log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
-                    print(error)
-
-            # print(f'Processing VIIRS for {start_datetime}')
-            try:
-                morning_datetime = start_datetime + datetime.timedelta(hours=6)
-                evening_datetime = start_datetime + datetime.timedelta(hours=18)
-
-                viirs_range = dataset.viirs.VIIRS_Range(start_datetime, end_datetime)
-
-                viirs_range.write_raster(daily_average_dir,
-                                         filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_morning',
-                                         start_datetime=start_datetime, end_datetime=morning_datetime,
-                                         drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
-                viirs_range.write_raster(daily_average_dir,
-                                         filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_daytime',
-                                         start_datetime=morning_datetime, end_datetime=evening_datetime,
-                                         drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
-                viirs_range.write_raster(daily_average_dir,
-                                         filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_evening',
-                                         start_datetime=evening_datetime, end_datetime=end_datetime, drivers=['GTiff'],
-                                         fill_value=LEAFLET_NODATA_VALUE)
-                del viirs_range
-            except dataset._utilities.NoDataError as error:
-                with open(log_path, 'a') as log_file:
-                    log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
-                    print(error)
+            # # print(f'Processing HFR for {start_datetime}')
+            # try:
+            #     hfr_range = dataset.hfr.HFR_Range(start_datetime, end_datetime)
+            #     hfr_range.write_rasters(daily_average_dir, filename_suffix=f'{start_datetime.strftime("%Y%m%d")}',
+            #                             variables=['u', 'v'], vector_components=True, drivers=['AAIGrid'],
+            #                             fill_value=LEAFLET_NODATA_VALUE)
+            #     del hfr_range
+            # except dataset._utilities.NoDataError as error:
+            #     with open(log_path, 'a') as log_file:
+            #         log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
+            #         print(error)
+            #
+            # # print(f'Processing VIIRS for {start_datetime}')
+            # try:
+            #     morning_datetime = start_datetime + datetime.timedelta(hours=6)
+            #     evening_datetime = start_datetime + datetime.timedelta(hours=18)
+            #
+            #     viirs_range = dataset.viirs.VIIRS_Range(start_datetime, end_datetime)
+            #
+            #     viirs_range.write_raster(daily_average_dir,
+            #                              filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_morning',
+            #                              start_datetime=start_datetime, end_datetime=morning_datetime,
+            #                              drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
+            #     viirs_range.write_raster(daily_average_dir,
+            #                              filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_daytime',
+            #                              start_datetime=morning_datetime, end_datetime=evening_datetime,
+            #                              drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
+            #     viirs_range.write_raster(daily_average_dir,
+            #                              filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_evening',
+            #                              start_datetime=evening_datetime, end_datetime=end_datetime, drivers=['GTiff'],
+            #                              fill_value=LEAFLET_NODATA_VALUE)
+            #     del viirs_range
+            # except dataset._utilities.NoDataError as error:
+            #     with open(log_path, 'a') as log_file:
+            #         log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
+            #         print(error)
 
         # print(f'Processing WCOFS for {date}')
 

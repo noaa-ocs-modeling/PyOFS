@@ -58,7 +58,7 @@ class WCOFS_Dataset:
     grid_bounds = None
     data_coordinates = None
     variable_grids = None
-    masks = {}
+    masks = None
 
     def __init__(self, model_date: datetime.datetime, source: str = None, time_deltas: list = None,
                  x_size: float = None, y_size: float = None, grid_filename: str = None, uri: str = None):
@@ -149,20 +149,20 @@ class WCOFS_Dataset:
             self.dataset_locks = {time_delta: threading.Lock() for time_delta in self.netcdf_datasets.keys()}
 
             with GLOBAL_LOCK:
-                if WCOFS_Dataset.grid_transforms is None:
-                    WCOFS_Dataset.grid_transforms = {}
-                    WCOFS_Dataset.grid_shapes = {}
-                    WCOFS_Dataset.grid_bounds = {}
-                    WCOFS_Dataset.data_coordinates = {}
+                if WCOFS_Dataset.variable_grids is None:
                     WCOFS_Dataset.variable_grids = {}
-
-                    wcofs_grid = xarray.open_dataset(
-                            self.grid_filename) if self.grid_filename is not None else self.sample_netcdf_dataset
 
                     for variable_name, variable in self.sample_netcdf_dataset.data_vars.items():
                         if 'location' in variable.attrs:
                             grid_name = GRID_LOCATIONS[variable.location]
                             WCOFS_Dataset.variable_grids[variable_name] = grid_name
+
+            with GLOBAL_LOCK:
+                if WCOFS_Dataset.data_coordinates is None:
+                    WCOFS_Dataset.data_coordinates = {}
+
+                    wcofs_grid = xarray.open_dataset(
+                            self.grid_filename) if self.grid_filename is not None else self.sample_netcdf_dataset
 
                     for grid_name in GRID_LOCATIONS.values():
                         lon = wcofs_grid[f'lon_{grid_name}'].values
@@ -172,11 +172,28 @@ class WCOFS_Dataset:
                         WCOFS_Dataset.data_coordinates[grid_name]['lon'] = lon
                         WCOFS_Dataset.data_coordinates[grid_name]['lat'] = lat
 
+            with GLOBAL_LOCK:
+                if WCOFS_Dataset.grid_shapes is None:
+                    WCOFS_Dataset.grid_shapes = {}
+
+                    for grid_name in GRID_LOCATIONS.values():
                         WCOFS_Dataset.grid_shapes[grid_name] = self.sample_netcdf_dataset[f'lon_{grid_name}'].shape
 
+            # set pixel resolution if not specified
+            if self.x_size is None:
+                self.x_size = numpy.max(numpy.diff(WCOFS_Dataset.data_coordinates['psi']['lon']))
+            if self.y_size is None:
+                self.y_size = numpy.max(numpy.diff(WCOFS_Dataset.data_coordinates['psi']['lat']))
+
+            with GLOBAL_LOCK:
+                if WCOFS_Dataset.grid_transforms is None:
+                    WCOFS_Dataset.grid_transforms = {}
+
+                    for grid_name in GRID_LOCATIONS.values():
+                        lon = wcofs_grid[f'lon_{grid_name}'].values
+                        lat = wcofs_grid[f'lat_{grid_name}'].values
+
                         west = numpy.min(lon)
-                        north = numpy.max(lat)
-                        east = numpy.max(lon)
                         south = numpy.min(lat)
 
                         WCOFS_Dataset.grid_transforms[grid_name] = rasterio.transform.from_origin(west=west,
@@ -184,16 +201,28 @@ class WCOFS_Dataset:
                                                                                                   xsize=self.x_size,
                                                                                                   ysize=-self.y_size)
 
+            with GLOBAL_LOCK:
+                if WCOFS_Dataset.grid_bounds is None:
+                    WCOFS_Dataset.grid_bounds = {}
+
+                    for grid_name in GRID_LOCATIONS.values():
+                        lon = wcofs_grid[f'lon_{grid_name}'].values
+                        lat = wcofs_grid[f'lat_{grid_name}'].values
+
+                        west = numpy.min(lon)
+                        north = numpy.max(lat)
+                        east = numpy.max(lon)
+                        south = numpy.min(lat)
+
                         WCOFS_Dataset.grid_bounds[grid_name] = (west, north, east, south)
 
+            with GLOBAL_LOCK:
+                if WCOFS_Dataset.masks is None:
+                    WCOFS_Dataset.masks = {}
+
+                    for grid_name in GRID_LOCATIONS.values():
                         WCOFS_Dataset.masks[grid_name] = ~(
                             self.sample_netcdf_dataset[f'mask_{grid_name}'].values).astype(bool)
-
-                # set pixel resolution if not specified
-                if self.x_size is None:
-                    self.x_size = numpy.max(numpy.diff(WCOFS_Dataset.data_coordinates['psi']['lon']))
-                if self.y_size is None:
-                    self.y_size = numpy.max(numpy.diff(WCOFS_Dataset.data_coordinates['psi']['lat']))
         else:
             raise _utilities.NoDataError(
                     f'No WCOFS datasets found for {self.model_datetime} at the given time indices ({time_deltas}).')
