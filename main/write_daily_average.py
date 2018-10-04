@@ -50,8 +50,8 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
             if day_delta < 0 and os.path.exists(log_path):
                 continue
 
+            # print(f'Processing HFR for {start_datetime}')
             try:
-                # print(f'Processing HFR for {start_datetime}')
                 hfr_range = dataset.hfr.HFR_Range(start_datetime, end_datetime)
                 hfr_range.write_rasters(daily_average_dir, filename_suffix=f'{start_datetime.strftime("%Y%m%d")}',
                                         variables=['u', 'v'], vector_components=True, drivers=['AAIGrid'],
@@ -62,12 +62,12 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
                     log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
                     print(error)
 
+            # print(f'Processing VIIRS for {start_datetime}')
             try:
-                # print(f'Processing VIIRS for {start_datetime}')
-                viirs_range = dataset.viirs.VIIRS_Range(start_datetime, end_datetime)
-
                 morning_datetime = start_datetime + datetime.timedelta(hours=6)
                 evening_datetime = start_datetime + datetime.timedelta(hours=18)
+
+                viirs_range = dataset.viirs.VIIRS_Range(start_datetime, end_datetime)
 
                 viirs_range.write_raster(daily_average_dir,
                                          filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_morning',
@@ -87,6 +87,8 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
                     log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
                     print(error)
 
+        # print(f'Processing WCOFS for {date}')
+
         # only retrieve forecasts that have not already been written
         if day_delta == -1:
             wcofs_day_deltas = [-1]
@@ -94,7 +96,6 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
             wcofs_day_deltas = [day_delta]
 
         try:
-            # print(f'Processing WCOFS for {date}')
             wcofs_range = dataset.wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg',
                                                     time_deltas=wcofs_day_deltas)
             wcofs_range.write_rasters(daily_average_dir, ['temp'], drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)

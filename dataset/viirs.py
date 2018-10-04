@@ -395,7 +395,7 @@ class VIIRS_Range:
                      end_datetime: datetime.datetime = None, subtract_sses: bool = False, average: bool = False,
                      fill_value: float = -9999, drivers: list = ['GTiff']):
         """
-        Write VIIRS raster of stacked SST data (averaged or overlapped).
+        Write VIIRS raster of SST data (either overlapped or averaged) from the given time interval.
 
         :param output_dir: Path to output directory.
         :param filename_prefix: Prefix for output filenames.
