@@ -86,8 +86,7 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
 
         # print(f'Processing WCOFS for {date}')
         try:
-            wcofs_range = dataset.wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg',
-                                                    time_deltas=[day_delta])
+            wcofs_range = dataset.wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg', time_deltas=[day_delta])
             wcofs_range.write_rasters(daily_average_dir, ['temp'], drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
             wcofs_range.write_rasters(daily_average_dir, ['u', 'v'], vector_components=True, drivers=['AAIGrid'],
                                       fill_value=LEAFLET_NODATA_VALUE)
