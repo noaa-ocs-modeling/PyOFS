@@ -47,9 +47,6 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
         end_datetime = start_datetime + datetime.timedelta(days=1)
 
         if day_delta <= 0:
-            if day_delta < 0 and os.path.exists(log_path):
-                continue
-
             # print(f'Processing HFR for {start_datetime}')
             try:
                 hfr_range = dataset.hfr.HFR_Range(start_datetime, end_datetime)
@@ -88,16 +85,9 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
                     print(error)
 
         # print(f'Processing WCOFS for {date}')
-
-        # only retrieve forecasts that have not already been written
-        if day_delta == -1:
-            wcofs_day_deltas = [-1]
-        else:
-            wcofs_day_deltas = [day_delta]
-
         try:
             wcofs_range = dataset.wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg',
-                                                    time_deltas=wcofs_day_deltas)
+                                                    time_deltas=[day_delta])
             wcofs_range.write_rasters(daily_average_dir, ['temp'], drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
             wcofs_range.write_rasters(daily_average_dir, ['u', 'v'], vector_components=True, drivers=['AAIGrid'],
                                       fill_value=LEAFLET_NODATA_VALUE)
