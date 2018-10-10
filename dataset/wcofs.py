@@ -258,23 +258,23 @@ class WCOFS_Dataset:
 
                 with self.dataset_locks[dataset_index]:
                     # get surface layer; the last layer (of 40) at dimension 1
-                    # if variable in ['u', 'v']:
-                    #     raw_u = self.netcdf_datasets[dataset_index]['u'][day_index, -1, :-1, :].values
-                    #     raw_v = self.netcdf_datasets[dataset_index]['v'][day_index, -1, :, :-1].values
-                    #     theta = self.netcdf_datasets[dataset_index]['angle'][:-1, :-1].values
-                    #
-                    #     if variable == 'u':
-                    #         output_data = raw_u * numpy.cos(theta) - raw_v * numpy.sin(theta)
-                    #         extra_row = numpy.empty((1, output_data.shape[1]), dtype=output_data.dtype)
-                    #         extra_row[:] = numpy.nan
-                    #         output_data = numpy.concatenate((output_data, extra_row), axis=0)
-                    #     elif variable == 'v':
-                    #         output_data = raw_u * numpy.sin(theta) + raw_v * numpy.cos(theta)
-                    #         extra_column = numpy.empty((output_data.shape[0], 1), dtype=output_data.dtype)
-                    #         extra_column[:] = numpy.nan
-                    #         output_data = numpy.concatenate((output_data, extra_column), axis=1)
-                    # else:
-                    output_data = self.netcdf_datasets[dataset_index][variable][day_index, -1, :, :].values
+                    if variable in ['u', 'v']:
+                        raw_u = self.netcdf_datasets[dataset_index]['u'][day_index, -1, :-1, :].values
+                        raw_v = self.netcdf_datasets[dataset_index]['v'][day_index, -1, :, :-1].values
+                        theta = self.netcdf_datasets[dataset_index]['angle'][:-1, :-1].values
+
+                        if variable == 'u':
+                            output_data = raw_u * numpy.cos(theta) - raw_v * numpy.sin(theta)
+                            extra_row = numpy.empty((1, output_data.shape[1]), dtype=output_data.dtype)
+                            extra_row[:] = numpy.nan
+                            output_data = numpy.concatenate((output_data, extra_row), axis=0)
+                        elif variable == 'v':
+                            output_data = raw_u * numpy.sin(theta) + raw_v * numpy.cos(theta)
+                            extra_column = numpy.empty((output_data.shape[0], 1), dtype=output_data.dtype)
+                            extra_column[:] = numpy.nan
+                            output_data = numpy.concatenate((output_data, extra_column), axis=1)
+                    else:
+                        output_data = self.netcdf_datasets[dataset_index][variable][day_index, -1, :, :].values
 
             else:
                 with self.dataset_locks[time_delta]:
@@ -970,17 +970,6 @@ class WCOFS_Range:
             east = WCOFS_Range.grid_bounds[grid_name][2]
             south = WCOFS_Range.grid_bounds[grid_name][3]
 
-            # if None not in (west, north, east, south):
-            #     west_cell_offset = round((west - west) / x_size)
-            #     north_cell_offset = round((north - north) / y_size)
-            #     east_cell_offset = round((east - east) / x_size)
-            #     south_cell_offset = round((south - south) / y_size)
-            #
-            #     west = west + (west_cell_offset * x_size)
-            #     north = north + (north_cell_offset * y_size)
-            #     east = east + (east_cell_offset * x_size)
-            #     south = south + (south_cell_offset * y_size)
-
             # WCOFS grid starts at southwest corner
             output_grid_coordinates[variable]['lon'] = numpy.arange(west, east, x_size)
             output_grid_coordinates[variable]['lat'] = numpy.arange(south, north, y_size)
@@ -1303,9 +1292,12 @@ if __name__ == '__main__':
     start_datetime = datetime.datetime(2018, 8, 10)
     end_datetime = datetime.datetime(2018, 8, 11)
 
-    wcofs_dataset = WCOFS_Dataset(uri=r'C:\Data\output\test\test2.nc')
+    ds = xarray.open_dataset(r'C:\Data\output\test\test2.nc', decode_times=False)
 
-    wcofs_range = WCOFS_Range(start_datetime, end_datetime, source='avg')
+    wcofs_dataset = WCOFS_Dataset(model_date=datetime.datetime.now(), uri=r'C:\Data\output\test\test2.nc')
+    wcofs_dataset.write_rasters(output_dir)
+
+    # wcofs_range = WCOFS_Range(start_datetime, end_datetime, source='avg')
     # wcofs_range.write_rasters(output_dir, ['temp'])
     # wcofs_range.write_rasters(output_dir, ['u', 'v'], vector_components=True, drivers=['AAIGrid'])
 
