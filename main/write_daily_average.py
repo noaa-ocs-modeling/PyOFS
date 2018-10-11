@@ -28,7 +28,7 @@ LEAFLET_NODATA_VALUE = -9999
 
 
 def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_deltas: list, log_path: str):
-    if type(model_run_date) == 'datetime.Date':
+    if 'datetime.date' in str(type(model_run_date)):
         model_run_date = datetime.datetime.combine(model_run_date, datetime.datetime.min.time())
 
     # define directories to which output rasters will be written
@@ -69,15 +69,15 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
                 viirs_range.write_raster(daily_average_dir,
                                          filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_morning',
                                          start_datetime=start_datetime, end_datetime=morning_datetime,
-                                         drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
+                                         drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE, sses_correction=True)
                 viirs_range.write_raster(daily_average_dir,
                                          filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_daytime',
                                          start_datetime=morning_datetime, end_datetime=evening_datetime,
-                                         drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
+                                         drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE, sses_correction=True)
                 viirs_range.write_raster(daily_average_dir,
                                          filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_evening',
                                          start_datetime=evening_datetime, end_datetime=end_datetime, drivers=['GTiff'],
-                                         fill_value=LEAFLET_NODATA_VALUE)
+                                         fill_value=LEAFLET_NODATA_VALUE, sses_correction=True)
                 del viirs_range
             except dataset._utilities.NoDataError as error:
                 with open(log_path, 'a') as log_file:
@@ -136,7 +136,7 @@ if __name__ == '__main__':
     day_deltas = [-1, 0, 1, 2]
 
     # get current date
-    model_run_date = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
+    model_run_date = datetime.date.today()
     # model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 9, 26),
     #                                                datetime.datetime.now() + datetime.timedelta(days=1))
     #

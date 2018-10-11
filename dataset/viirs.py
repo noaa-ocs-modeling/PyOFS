@@ -175,7 +175,7 @@ class VIIRS_Dataset:
 
         return self.netcdf_dataset.geospatial_lon_resolution, self.netcdf_dataset.geospatial_lat_resolution
 
-    def sst(self, subtract_sses: bool = False) -> numpy.ndarray:
+    def sst(self, sses_correction: bool = False) -> numpy.ndarray:
         """
         Return matrix of sea surface temperature.
 
@@ -197,8 +197,19 @@ class VIIRS_Dataset:
                 if numpy.nanmin(output_sst_data) <= 0:
                     output_sst_data[output_sst_data <= 0] = numpy.nan
 
-                if subtract_sses:
-                    output_sst_data -= self.sses()
+                if sses_correction:
+                    sses_bias = self.sses()
+
+                    mismatched_records = len(numpy.where(numpy.isnan(output_sst_data) != (sses_bias == 0))[0])
+                    total_records = output_sst_data.shape[0] * output_sst_data.shape[1]
+                    mismatch_percentage = mismatched_records / total_records * 100
+
+                    # use correction if mismatch is less than threshold
+                    if mismatch_percentage <= 5:
+                        output_sst_data -= sses_bias
+                    else:
+                        print(
+                                f'{self.granule_datetime}: SSES extent mismatch at {mismatch_percentage}%; aborting SST correction...')
 
                 # convert from Kelvin to Celsius (subtract 273.15)
                 output_sst_data = output_sst_data - 273.15
@@ -226,23 +237,25 @@ class VIIRS_Dataset:
         sses_bias_data[numpy.isnan(sses_bias_data)] = 0
         return sses_bias_data
 
-    def write_rasters(self, output_dir: str, variables: list = ['sst', 'sses'], fill_value: float = -9999.0,
-                      drivers: list = ['GTiff'], subtract_sses: bool = False):
+    def write_rasters(self, output_dir: str, variables: list = ['sst', 'sses'], filename_prefix: str = 'viirs',
+                      fill_value: float = -9999.0, drivers: list = ['GTiff'], sses_correction: bool = False):
         """
         Write VIIRS rasters to file using data from given variables.
 
         :param output_dir: Path to output directory.
         :param variables: List of variable names to write.
+        :param filename_prefix: Prefix for output filenames.
         :param fill_value: Desired fill value of output.
         :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
-        :param subtract_sses: Whether to subtract SSES bias from SST.
+        :param sses_correction: Whether to subtract SSES bias from SST.
         """
 
         for variable in variables:
             if variable == 'sst':
-                input_data = self.sst(subtract_sses=subtract_sses)
+                input_data = self.sst(sses_correction=sses_correction)
             elif variable == 'sses':
                 input_data = self.sses()
+                fill_value = 0
 
             if input_data is not None and not numpy.isnan(input_data).all():
                 if fill_value is not -9999.0:
@@ -262,7 +275,7 @@ class VIIRS_Dataset:
                     elif driver == 'GPKG':
                         file_extension = 'gpkg'
 
-                    output_filename = os.path.join(output_dir, f'viirs_{variable}.{file_extension}')
+                    output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
 
                     # use rasterio to write to raster with GDAL args
                     print(f'Writing to {output_filename}')
@@ -371,29 +384,29 @@ class VIIRS_Range:
         return (self.sample_dataset.netcdf_dataset.geospatial_lon_resolution,
                 self.sample_dataset.netcdf_dataset.geospatial_lat_resolution)
 
-    def write_rasters(self, output_dir: str, filename_prefix: str = 'viirs_sst', fill_value: float = None,
-                      drivers: list = ['GTiff']):
+    def write_rasters(self, output_dir: str, variables: list = ['sst', 'sses'], filename_prefix: str = 'viirs',
+                      fill_value: float = None, drivers: list = ['GTiff'], sses_correction: bool = False):
         """
         Write individual VIIRS rasters to directory.
 
         :param output_dir: Path to output directory.
+        :param variables: List of variable names to write.
         :param filename_prefix: Prefix for output filenames.
         :param fill_value: Desired fill value of output.
         :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
+        :param sses_correction: Whether to subtract SSES bias from L3 sea surface temperature data.
         """
 
         # write a raster for each pass retrieved scene
         with futures.ThreadPoolExecutor() as concurrency_pool:
             for dataset_datetime, dataset in self.datasets.items():
-                output_filename = os.path.join(output_dir,
-                                               f'{filename_prefix}_{dataset_datetime.strftime("%Y%m%d%H%M%S")}.tiff')
-
-                # write to raster file
-                concurrency_pool.submit(dataset.write_rasters, output_filename, fill_value=fill_value, drivers=drivers)
+                concurrency_pool.submit(dataset.write_rasters, output_dir, variables=variables,
+                                        filename_prefix=f'{filename_prefix}_{dataset_datetime.strftime("%Y%m%d%H%M%S")}',
+                                        fill_value=fill_value, drivers=drivers, sses_correction=sses_correction)
 
     def write_raster(self, output_dir: str, filename_prefix: str = None, start_datetime: datetime.datetime = None,
-                     end_datetime: datetime.datetime = None, subtract_sses: bool = False, average: bool = False,
-                     fill_value: float = -9999, drivers: list = ['GTiff']):
+                     end_datetime: datetime.datetime = None, average: bool = False, fill_value: float = -9999,
+                     drivers: list = ['GTiff'], sses_correction: bool = False):
         """
         Write VIIRS raster of SST data (either overlapped or averaged) from the given time interval.
 
@@ -401,10 +414,10 @@ class VIIRS_Range:
         :param filename_prefix: Prefix for output filenames.
         :param start_datetime: Beginning of time interval.
         :param end_datetime: End of time interval.
-        :param subtract_sses: Whether to subtract SSES bias from L3 sea surface temperature data.
         :param average: Whether to average rasters, otherwise overlap them.
         :param fill_value: Desired fill value of output.
         :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
+        :param sses_correction: Whether to subtract SSES bias from L3 sea surface temperature data.
         """
 
         start_datetime = start_datetime if start_datetime is not None else self.start_datetime
@@ -431,7 +444,7 @@ class VIIRS_Range:
                 for pass_datetime in pass_datetimes:
                     dataset = self.datasets[pass_datetime]
                     # scenes_data.append(dataset.get_sst(correct_bias))
-                    scenes_futures.append(concurrency_pool.submit(dataset.sst, subtract_sses))
+                    scenes_futures.append(concurrency_pool.submit(dataset.sst, sses_correction))
 
                 for completed_future in futures.as_completed(scenes_futures):
                     if completed_future._exception is None:
@@ -446,7 +459,7 @@ class VIIRS_Range:
                 output_sst_data = numpy.nanmean(numpy.stack(scenes_data), axis=2)
         else:  # otherwise overlap based on datetime
             for pass_datetime in pass_datetimes:
-                sst_data = self.datasets[pass_datetime].sst(subtract_sses=subtract_sses)
+                sst_data = self.datasets[pass_datetime].sst(sses_correction=sses_correction)
 
                 if output_sst_data is None:
                     output_sst_data = numpy.empty_like(sst_data)
@@ -652,18 +665,25 @@ def get_pass_times(start_datetime: datetime.datetime, end_datetime: datetime.dat
 
 
 if __name__ == '__main__':
-    output_dir = os.path.join(DATA_DIR, r'output\test')
+    output_dir = os.path.join(DATA_DIR, r'output\test\viirs')
 
-    start_datetime = datetime.datetime.combine(datetime.date(2018, 9, 23), datetime.datetime.min.time())
-    morning_datetime = start_datetime + datetime.timedelta(hours=6)
-    evening_datetime = start_datetime + datetime.timedelta(hours=18)
-    end_datetime = start_datetime + datetime.timedelta(days=1)
+    viirs_dates = _utilities.day_range(datetime.datetime(2018, 9, 28),
+                                       datetime.datetime.now() + datetime.timedelta(days=1))
 
-    # write overlapped scenes from specified time interval
-    viirs_range = VIIRS_Range(start_datetime, end_datetime)
-    viirs_range.write_raster(output_dir, start_datetime=start_datetime, end_datetime=morning_datetime)
-    viirs_range.write_raster(output_dir, start_datetime=morning_datetime, end_datetime=evening_datetime)
-    viirs_range.write_raster(output_dir, start_datetime=evening_datetime, end_datetime=end_datetime)
-    viirs_range.write_raster(output_dir)
+    for viirs_date in viirs_dates:
+        viirs_range = VIIRS_Range(viirs_date, viirs_date + datetime.timedelta(days=1))
+
+        for granule_datetime, dataset in viirs_range.datasets.items():
+            dataset.sst(sses_correction=True)
+
+    # start_datetime = datetime.datetime.combine(datetime.date(2018, 8, 25),
+    #                                            datetime.datetime.min.time()) - datetime.timedelta(days=1)
+    # end_datetime = start_datetime + datetime.timedelta(days=1)
+    #
+    # # write overlapped scenes from specified time interval
+    # viirs_range = VIIRS_Range(start_datetime, end_datetime)
+    # viirs_range.write_rasters(output_dir, variables=['sses'], filename_prefix='sses')
+    # viirs_range.write_rasters(output_dir, variables=['sst'], filename_prefix='uncorrected')
+    # viirs_range.write_rasters(output_dir, variables=['sst'], filename_prefix='corrected', sses_correction=True)
 
     print('done')
