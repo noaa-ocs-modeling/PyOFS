@@ -9,7 +9,6 @@ Created on Jun 13, 2018
 
 import datetime
 import os
-from concurrent import futures
 
 import fiona
 import fiona.crs
@@ -81,7 +80,9 @@ class HFR_Range:
         print(
                 f'Collecting HFR velocity from {self.source} between {numpy.min(self.datetimes)} and {numpy.max(self.datetimes)}...')
 
-        self.data = {'lon': self.netcdf_dataset['lon'].values, 'lat': self.netcdf_dataset['lat'].values}
+        self.data = {
+            'lon': self.netcdf_dataset['lon'].values, 'lat': self.netcdf_dataset['lat'].values
+        }
 
         for variable in MEASUREMENT_VARIABLES:
             self.data[variable] = self.netcdf_dataset[variable][self.start_index:self.end_index, :, :].values
@@ -182,13 +183,14 @@ class HFR_Range:
             layer.writerecords(layer_records)
 
     def write_vectors(self, output_filename: str, start_datetime: datetime.datetime = None,
-                      end_datetime: datetime.datetime = None):
+                      end_datetime: datetime.datetime = None, dop_threshold: float = 0.5):
         """
         Write HFR data to a layer of the provided output file for every hour in the given time interval.
 
         :param output_filename: Path to output file.
         :param start_datetime: Beginning of time interval.
         :param end_datetime: End of time interval.
+        :param dop_threshold: Threshold for dilution of precision above which data is not useable.
         """
 
         start_datetime = start_datetime if start_datetime is not None else self.start_datetime
@@ -197,6 +199,9 @@ class HFR_Range:
         # get indices of selected datetimes
         datetime_indices = self.get_datetime_indices(start_datetime, end_datetime)
 
+        dop_mask = ((self.data['DOPx'][datetime_indices, :, :] <= dop_threshold) | (
+                self.data['DOPy'][datetime_indices, :, :] <= dop_threshold))
+
         # dataset data
         hfr_u = self.data['u'][datetime_indices, :, :].values
         hfr_v = self.data['v'][datetime_indices, :, :].values
@@ -204,6 +209,13 @@ class HFR_Range:
         hfr_lat = self.data['lat'][:].values
         hfr_dop_lon = self.data['dop_lon'][datetime_indices, :, :].values
         hfr_dop_lat = self.data['dop_lat'][datetime_indices, :, :].values
+
+        hfr_u[~dop_mask] = numpy.nan
+        hfr_v[~dop_mask] = numpy.nan
+        hfr_lon[~dop_mask] = numpy.nan
+        hfr_lat[~dop_mask] = numpy.nan
+        hfr_dop_lon[~dop_mask] = numpy.nan
+        hfr_dop_lat[~dop_mask] = numpy.nan
 
         # define layer schema
         schema = {
@@ -268,7 +280,7 @@ class HFR_Range:
             layer.commitChanges()
 
     def write_vector(self, output_filename: str, layer_name: str = 'uv', start_datetime: datetime.datetime = None,
-                     end_datetime: datetime.datetime = None):
+                     end_datetime: datetime.datetime = None, dop_threshold: float = 0.5):
         """
         Write average of HFR data for all hours in the given time interval to a single layer of the provided output file.
 
@@ -276,6 +288,7 @@ class HFR_Range:
         :param layer_name: Name of layer to write.
         :param start_datetime: Beginning of time interval.
         :param end_datetime: End of time interval.
+        :param dop_threshold: Threshold for dilution of precision above which data is not useable.
         """
 
         start_datetime = start_datetime if start_datetime is not None else self.start_datetime
@@ -287,20 +300,17 @@ class HFR_Range:
         if datetime_indices is not None and len(datetime_indices) > 0:
             measurement_variables = ['u', 'v', 'DOPx', 'DOPy']
 
+            dop_mask = ((self.data['DOPx'][datetime_indices, :, :] <= dop_threshold) | (
+                    self.data['DOPy'][datetime_indices, :, :] <= dop_threshold))
+
             variable_means = {}
 
-            # concurrently populate dictionary with averaged data for each
-            # variable
-            with futures.ThreadPoolExecutor() as concurrency_pool:
-                variable_futures = {
-                    concurrency_pool.submit(numpy.mean, self.data[variable][datetime_indices, :, :], axis=0): variable
-                    for variable in measurement_variables}
+            for variable in measurement_variables:
+                variable_data = self.data[variable][datetime_indices, :, :]
+                variable_data[~dop_mask] = numpy.nan
 
-                for completed_future in futures.as_completed(variable_futures):
-                    variable = variable_futures[completed_future]
-                    variable_means[variable] = completed_future.result()
-
-                del variable_futures
+                variable_mean = numpy.mean(variable_data, axis=0)
+                variable_means[variable] = variable_mean
 
             # define layer schema
             schema = {
@@ -347,10 +357,10 @@ class HFR_Range:
             layer.dataProvider().addFeatures(layer_features)
             layer.commitChanges()
 
-    def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = None,
+    def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = '',
                       variables: list = None, start_datetime: datetime.datetime = None,
                       end_datetime: datetime.datetime = None, vector_components: bool = False,
-                      fill_value: float = -9999, drivers: list = ['GTiff']):
+                      fill_value: float = -9999, drivers: list = ['GTiff'], dop_threshold: float = 0.5):
         """
         Write average of HFR data for all hours in the given time interval to rasters.
 
@@ -363,6 +373,7 @@ class HFR_Range:
         :param vector_components: Whether to write direction and magnitude rasters.
         :param fill_value: Desired fill value of output.
         :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
+        :param dop_threshold: Threshold for dilution of precision above which data is not useable.
         """
 
         start_datetime = start_datetime if start_datetime is not None else self.start_datetime
@@ -371,25 +382,23 @@ class HFR_Range:
         # get indices of selected datetimes
         datetime_indices = self.get_datetime_indices(start_datetime, end_datetime)
 
-        if filename_suffix is not None:
+        if filename_suffix is not '':
             filename_suffix = f'_{filename_suffix}'
 
         if datetime_indices is not None:
             variables = variables if variables is not None else ['u', 'v', 'DOPx', 'DOPy']
 
+            dop_mask = ((self.data['DOPx'][datetime_indices, :, :] <= dop_threshold) | (
+                    self.data['DOPy'][datetime_indices, :, :] <= dop_threshold))
+
             variable_means = {}
 
-            # concurrently populate dictionary with averaged data for each variable
-            with futures.ThreadPoolExecutor() as concurrency_pool:
-                variable_futures = {
-                    concurrency_pool.submit(numpy.mean, self.data[variable][datetime_indices, :, :], axis=0): variable
-                    for variable in variables}
+            for variable in variables:
+                variable_data = self.data[variable][datetime_indices, :, :]
+                variable_data[~dop_mask] = numpy.nan
 
-                for completed_future in futures.as_completed(variable_futures):
-                    variable = variable_futures[completed_future]
-                    variable_means[variable] = completed_future.result()
-
-                del variable_futures
+                variable_mean = numpy.mean(variable_data, axis=0)
+                variable_means[variable] = variable_mean
 
             if vector_components:
                 if 'u' in variables:
