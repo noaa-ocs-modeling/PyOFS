@@ -10,8 +10,6 @@ Created on Jun 25, 2018
 import os
 import sys
 
-from qgis.core import QgsApplication
-
 from dataset import hfr, viirs, wcofs
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
@@ -22,10 +20,6 @@ STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:stud
 DAILY_AVERAGE_DIR = os.path.join(DATA_DIR, r'output\daily_averages')
 
 if __name__ == '__main__':
-    qgis_application = QgsApplication([], True, None)
-    qgis_application.setPrefixPath(os.environ['QGIS_PREFIX_PATH'], True)
-    qgis_application.initQgis()
-
     import argparse
     import dateutil.parser
 

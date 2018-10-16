@@ -16,7 +16,6 @@ import numpy
 import rasterio
 import scipy.interpolate
 import xarray
-from qgis.core import QgsFeature, QgsGeometry, QgsPoint, QgsVectorLayer
 
 from dataset import _utilities
 
@@ -70,7 +69,7 @@ class HFR_Range:
         except OSError:
             raise _utilities.NoDataError(f'No HFR dataset found at {self.url}')
 
-        self.datetimes = self.netcdf_dataset['time'].values.astype(numpy.datetime64)
+        self.datetimes = numpy.array(self.netcdf_dataset['time'].values, dtype='datetime64[h]')
 
         self.start_index = numpy.searchsorted(self.datetimes, numpy.datetime64(self.start_datetime))
         self.end_index = numpy.searchsorted(self.datetimes, numpy.datetime64(self.end_datetime))
@@ -159,6 +158,20 @@ class HFR_Range:
 
         layer_records = []
 
+        for site_index in range(len(radar_sites_code)):
+            site_code = radar_sites_code[site_index, :].tobytes().decode().strip('\x00').strip()
+            site_network_code = radar_sites_network_code[site_index, :].tobytes().decode().strip('\x00').strip()
+            lon = float(radar_sites_lon[site_index])
+            lat = float(radar_sites_lat[site_index])
+
+            record = {
+                'id': site_index + 1, 'geometry': {'type': 'Point', 'coordinates': (lon, lat)}, 'properties': {
+                    'code': site_code, 'net_code': site_network_code, 'lon': float(lon), 'lat': float(lat)
+                }
+            }
+
+            layer_records.append(record)
+
         schema = {
             'geometry': 'Point', 'properties': {
                 'code': 'str', 'net_code': 'str', 'lon': 'float', 'lat': 'float'
@@ -166,20 +179,6 @@ class HFR_Range:
         }
 
         with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_WGS84) as layer:
-            for site_index in range(len(radar_sites_code)):
-                site_code = radar_sites_code[site_index, :].tobytes().decode().strip('\x00').strip()
-                site_network_code = radar_sites_network_code[site_index, :].tobytes().decode().strip('\x00').strip()
-                lon = float(radar_sites_lon[site_index])
-                lat = float(radar_sites_lat[site_index])
-
-                record = {
-                    'id': site_index + 1, 'geometry': {'type': 'Point', 'coordinates': (lon, lat)}, 'properties': {
-                        'code': site_code, 'net_code': site_network_code, 'lon': float(lon), 'lat': float(lat)
-                    }
-                }
-
-                layer_records.append(record)
-
             layer.writerecords(layer_records)
 
     def write_vectors(self, output_filename: str, start_datetime: datetime.datetime = None,
@@ -199,42 +198,37 @@ class HFR_Range:
         # get indices of selected datetimes
         datetime_indices = self.get_datetime_indices(start_datetime, end_datetime)
 
+        numpy.warnings.filterwarnings('ignore')
+
         dop_mask = ((self.data['DOPx'][datetime_indices, :, :] <= dop_threshold) | (
                 self.data['DOPy'][datetime_indices, :, :] <= dop_threshold))
 
+        numpy.warnings.filterwarnings('default')
+
         # dataset data
-        hfr_u = self.data['u'][datetime_indices, :, :].values
-        hfr_v = self.data['v'][datetime_indices, :, :].values
-        hfr_lon = self.data['lon'][:].values
-        hfr_lat = self.data['lat'][:].values
-        hfr_dop_lon = self.data['dop_lon'][datetime_indices, :, :].values
-        hfr_dop_lat = self.data['dop_lat'][datetime_indices, :, :].values
+        hfr_u = self.data['u'][datetime_indices, :, :]
+        hfr_v = self.data['v'][datetime_indices, :, :]
+        hfr_lon = self.data['lon'][:]
+        hfr_lat = self.data['lat'][:]
+        hfr_dop_lon = self.data['DOPx'][datetime_indices, :, :]
+        hfr_dop_lat = self.data['DOPy'][datetime_indices, :, :]
 
         hfr_u[~dop_mask] = numpy.nan
         hfr_v[~dop_mask] = numpy.nan
-        hfr_lon[~dop_mask] = numpy.nan
-        hfr_lat[~dop_mask] = numpy.nan
         hfr_dop_lon[~dop_mask] = numpy.nan
         hfr_dop_lat[~dop_mask] = numpy.nan
 
-        # define layer schema
-        schema = {
-            'geometry': 'Point', 'properties': {
-                'u': 'float', 'v': 'float', 'lat': 'float', 'lon': 'float', 'dop_lat': 'float', 'dop_lon': 'float'
-            }
-        }
-
         # create dict to store features
-        layer_features = {}
+        layers = {}
 
         # create layer using OGR, then add features using QGIS
         for datetime_index in range(len(datetime_indices)):
             vector_datetime = self.datetimes[datetime_indices[datetime_index]]
 
-            layer_name = f'{vector_datetime.strftime("%Y%m%dT%H%M%S")}'
+            layer_name = f'{vector_datetime.astype(datetime.datetime).strftime("%Y%m%dT%H%M%S")}'
 
             # create QGIS features
-            layer_features = []
+            layer_records = []
 
             feature_index = 1
 
@@ -250,34 +244,29 @@ class HFR_Range:
                         lon = hfr_lon[lon_index]
                         lat = hfr_lat[lat_index]
 
-                        point = QgsGeometry(QgsPoint(lon, lat))
+                        record = {
+                            'id':         feature_index, 'geometry': {'type': 'Point', 'coordinates': (lon, lat)},
+                            'properties': {
+                                'lon':  float(lon), 'lat': float(lat), 'u': float(u), 'v': float(v),
+                                'DOPx': float(dop_lon), 'DOPy': float(dop_lat)
+                            }
+                        }
 
-                        feature = QgsFeature()
-
-                        feature.setAttributes(
-                                [feature_index, float(u), float(v), float(lon), float(lat), float(dop_lon),
-                                 float(dop_lat)])
-
-                        feature.setGeometry(point)
-
-                        layer_features.append(feature)
-
+                        layer_records.append(record)
                         feature_index += 1
 
-            layer_features[layer_name] = layer_features
+            layers[layer_name] = layer_records
 
         # write queued features to their respective layers
-        for layer_name, layer_features in layer_features.items():
-            layer = QgsVectorLayer(f'{output_filename}|layername={layer_name}', layer_name, 'ogr')
+        schema = {
+            'geometry': 'Point', 'properties': {
+                'u': 'float', 'v': 'float', 'lat': 'float', 'lon': 'float', 'dop_lat': 'float', 'dop_lon': 'float'
+            }
+        }
 
-            # open layer for editing
-            layer.startEditing()
-
-            # add features to layer
-            layer.dataProvider().addFeatures(layer_features)
-
-            # write changes to layer
-            layer.commitChanges()
+        for layer_name, layer_records in layers.items():
+            with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_WGS84) as layer:
+                layer.writerecords(layer_records)
 
     def write_vector(self, output_filename: str, layer_name: str = 'uv', start_datetime: datetime.datetime = None,
                      end_datetime: datetime.datetime = None, dop_threshold: float = 0.5):
@@ -300,8 +289,12 @@ class HFR_Range:
         if datetime_indices is not None and len(datetime_indices) > 0:
             measurement_variables = ['u', 'v', 'DOPx', 'DOPy']
 
+            numpy.warnings.filterwarnings('ignore')
+
             dop_mask = ((self.data['DOPx'][datetime_indices, :, :] <= dop_threshold) | (
                     self.data['DOPy'][datetime_indices, :, :] <= dop_threshold))
+
+            numpy.warnings.filterwarnings('default')
 
             variable_means = {}
 
@@ -321,41 +314,40 @@ class HFR_Range:
 
             schema['properties'].update({variable: 'float' for variable in measurement_variables})
 
-            # create layer
-            fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_WGS84, layer=layer_name).close()
-
             # dataset data
-            hfr_lon = self.data['lon'].values
-            hfr_lat = self.data['lat'].values
+            hfr_lon = self.data['lon']
+            hfr_lat = self.data['lat']
 
             # create features
-            layer_features = []
+            layer_records = []
 
             feature_index = 1
 
             for lon_index in range(len(hfr_lon)):
                 for lat_index in range(len(hfr_lat)):
-                    data = [variable_means[variable][lat_index, lon_index] for variable in measurement_variables]
+                    data = [float(variable_means[variable][lat_index, lon_index]) for variable in measurement_variables]
 
                     # stop if record has masked values
                     if numpy.all(~numpy.isnan(data)):
                         lon = hfr_lon[lon_index]
                         lat = hfr_lat[lat_index]
 
-                        feature = QgsFeature()
-                        feature.setGeometry(QgsGeometry(QgsPoint(lon, lat)))
-                        feature.setAttributes(
-                                [feature_index, float(lon), float(lat)] + [float(entry) for entry in data])
+                        record = {
+                            'id':         feature_index, 'geometry': {'type': 'Point', 'coordinates': (lon, lat)},
+                            'properties': {
+                                'lon': float(lon), 'lat': float(lat)
+                            }
+                        }
 
-                        layer_features.append(feature)
+                        record['properties'].update(dict(zip(measurement_variables, data)))
+
+                        layer_records.append(record)
                         feature_index += 1
 
             # write queued features to layer
             print(f'Writing {output_filename}')
-            layer = QgsVectorLayer(f'{output_filename}|layername={layer_name}', layer_name, 'ogr')
-            layer.startEditing()
-            layer.dataProvider().addFeatures(layer_features)
-            layer.commitChanges()
+            with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_WGS84) as layer:
+                layer.writerecords(layer_records)
 
     def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = '',
                       variables: list = None, start_datetime: datetime.datetime = None,
@@ -388,8 +380,12 @@ class HFR_Range:
         if datetime_indices is not None:
             variables = variables if variables is not None else ['u', 'v', 'DOPx', 'DOPy']
 
+            numpy.warnings.filterwarnings('ignore')
+
             dop_mask = ((self.data['DOPx'][datetime_indices, :, :] <= dop_threshold) | (
                     self.data['DOPy'][datetime_indices, :, :] <= dop_threshold))
+
+            numpy.warnings.filterwarnings('default')
 
             variable_means = {}
 
@@ -455,6 +451,9 @@ class HFR_Range:
                     output_filename = os.path.join(output_dir,
                                                    f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
 
+                    if os.path.isfile(output_filename):
+                        os.remove(output_filename)
+
                     print(f'Writing {output_filename}')
                     with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                         output_raster.write(numpy.flipud(raster_data), 1)
@@ -487,6 +486,7 @@ if __name__ == '__main__':
     date_interval_string = f'{start_datetime.strftime("%m%d%H")}_{end_datetime.strftime("%m%d%H")}'
 
     # write HFR raster
-    hfr_dataset.write_rasters(output_dir, f'hfr_{date_interval_string}')
+    # hfr_dataset.write_vectors(os.path.join(output_dir, 'hfr.gpkg'))
+    hfr_dataset.write_vector(os.path.join(output_dir, 'hfr.gpkg'))
 
     print('done')

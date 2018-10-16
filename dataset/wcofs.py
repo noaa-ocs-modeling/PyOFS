@@ -22,7 +22,6 @@ import rasterio.warp
 import scipy.interpolate
 import shapely.geometry
 import xarray
-from qgis.core import QgsFeature, QgsGeometry, QgsPoint, QgsVectorLayer
 from rasterio.io import MemoryFile
 
 from dataset import _utilities
@@ -189,6 +188,9 @@ class WCOFS_Dataset:
                 if WCOFS_Dataset.grid_transforms is None:
                     WCOFS_Dataset.grid_transforms = {}
 
+                    wcofs_grid = xarray.open_dataset(
+                            self.grid_filename) if self.grid_filename is not None else self.sample_netcdf_dataset
+
                     for grid_name in GRID_LOCATIONS.values():
                         lon = wcofs_grid[f'lon_{grid_name}'].values
                         lat = wcofs_grid[f'lat_{grid_name}'].values
@@ -202,8 +204,11 @@ class WCOFS_Dataset:
                                                                                                   ysize=-self.y_size)
 
             with GLOBAL_LOCK:
-                if WCOFS_Dataset.grid_bounds is None:
+                if WCOFS_Dataset.grid_bounds is None and 'wcofs_grid' in locals():
                     WCOFS_Dataset.grid_bounds = {}
+
+                    wcofs_grid = xarray.open_dataset(
+                            self.grid_filename) if self.grid_filename is not None else self.sample_netcdf_dataset
 
                     for grid_name in GRID_LOCATIONS.values():
                         lon = wcofs_grid[f'lon_{grid_name}'].values
@@ -308,7 +313,7 @@ class WCOFS_Dataset:
 
             del variable_futures
 
-        variable_data = numpy.mean(numpy.stack(variable_data), axis=2)
+        variable_data = numpy.mean(numpy.stack(variable_data), axis=0)
 
         return variable_data
 
@@ -368,7 +373,7 @@ class WCOFS_Dataset:
             layer_name = None
 
         with fiona.open(study_area_polygon_filename, layer=layer_name) as vector_layer:
-            study_area_geojson = vector_layer.next()['geometry']
+            study_area_geojson = next(iter(vector_layer))['geometry']
 
         grid_name = WCOFS_Dataset.variable_grids[variable]
 
@@ -421,96 +426,14 @@ class WCOFS_Dataset:
 
             output_filename = f'{os.path.splitext(output_filename)[0]}{file_extension}'
 
+            if os.path.isfile(output_filename):
+                os.remove(output_filename)
+
             print(f'Writing {output_filename}')
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(masked_data, 1)
 
     def write_vector(self, output_filename: str, layer_name: str = None, time_deltas: list = None):
-        """
-        Write average of surface velocity vector data for all hours in the given time interval to a single layer of the provided output file.
-
-        :param output_filename: Path to output file.
-        :param layer_name: Name of layer to write.
-        :param time_deltas: List of integers of hours to use in average.
-        """
-
-        variables = MEASUREMENT_VARIABLES_2DS if self.source == '2ds' else MEASUREMENT_VARIABLES
-
-        start_time = datetime.datetime.now()
-
-        variable_means = {}
-
-        # concurrently populate dictionary with averaged data within given time interval for each variable
-        with futures.ThreadPoolExecutor() as concurrency_pool:
-            variable_futures = {concurrency_pool.submit(self.data_average, variable, time_deltas): variable for variable
-                                in variables}
-
-            for completed_future in futures.as_completed(variable_futures):
-                variable = variable_futures[completed_future]
-                variable_means[variable] = completed_future.result()
-
-            del variable_futures
-
-        print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
-
-        schema = {
-            'geometry': 'Point', 'properties': {
-                'fid': 'int', 'row': 'int', 'col': 'int', 'rho_lon': 'float', 'rho_lat': 'float'
-            }
-        }
-
-        # create layer
-        fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_WGS84, layer=layer_name).close()
-
-        start_time = datetime.datetime.now()
-
-        print('Creating features...')
-
-        # create features
-        layer_features = []
-
-        feature_index = 1
-
-        grid_height, grid_width = WCOFS_Dataset.data_coordinates['psi']['lon'].shape
-
-        with futures.ThreadPoolExecutor() as concurrency_pool:
-            feature_futures = []
-
-            for col in range(grid_width):
-                for row in range(grid_height):
-                    if WCOFS_Dataset.masks['psi'][row, col] == 1:
-                        feature_futures.append(
-                                concurrency_pool.submit(self._create_qgis_feature, variable_means, row, col,
-                                                        feature_index))
-                        feature_index += 1
-
-            for completed_future in futures.as_completed(feature_futures):
-                result = completed_future.result()
-
-                if result is not None:
-                    layer_features.append(result)
-
-        print(f'creating features took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
-
-        start_time = datetime.datetime.now()
-
-        print(f'Writing {output_filename}:{layer_name}')
-
-        # open layer in QGIS
-        layer = QgsVectorLayer(f'{output_filename}|layername={layer_name}', layer_name, 'ogr')
-
-        # put layer in editing mode
-        layer.startEditing()
-
-        # add features to layer
-        layer.dataProvider().addFeatures(layer_features)
-
-        # save changes to layer
-        layer.commitChanges()
-
-        print(f'writing features took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
-
-    def write_vector_fiona(self, output_filename: str, layer_name: str = None, time_deltas: list = None):
         """
         Write average of surface velocity vector data for all hours in the given time interval to the provided output file.
 
@@ -562,7 +485,7 @@ class WCOFS_Dataset:
 
             for col in range(grid_width):
                 for row in range(grid_height):
-                    if WCOFS_Dataset.masks['psi'][row, col] == 1:
+                    if WCOFS_Dataset.masks['psi'][row, col] == 0:
                         # check if current record is unmasked
                         record_futures.append(
                                 concurrency_pool.submit(self._create_fiona_record, variable_means, row, col,
@@ -587,23 +510,6 @@ class WCOFS_Dataset:
             output_vector_file.writerecords(layer_records)
 
         print(f'writing records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
-
-    def _create_qgis_feature(self, variable_means, row, col, feature_index):
-        # get coordinates of cell center
-        rho_lon = WCOFS_Dataset.data_coordinates['rho']['lon'][row, col]
-        rho_lat = WCOFS_Dataset.data_coordinates['rho']['lat'][row, col]
-
-        # create feature
-        feature = QgsFeature()
-
-        data = [feature_index, row, col, float(rho_lon), float(rho_lat)]
-        for variable in variable_means.keys():
-            data.append(float(variable_means[variable][row, col]))
-
-        feature.setGeometry(QgsGeometry(QgsPoint(rho_lon, rho_lat)))
-        feature.setAttributes(data)
-
-        return feature
 
     def _create_fiona_record(self, variable_means, row, col, feature_index):
         # get coordinates of cell center
@@ -650,7 +556,7 @@ class WCOFS_Range:
     data_coordinates = None
     variable_grids = None
 
-    def __init__(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime, source: str = None,
+    def __init__(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime, source: str = '2ds',
                  time_deltas: list = None):
         """
         Create range of WCOFS datasets from the given time interval.
@@ -918,7 +824,7 @@ class WCOFS_Range:
                       study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
                       start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
                       vector_components: bool = False, x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999,
-                      drivers: list = ['GTiff']):
+                      drivers: list = ['GTiff'], filename_suffix: str = None):
         """
         Write raster data of given variables to given output directory, averaged over given time interval.
 
@@ -932,6 +838,7 @@ class WCOFS_Range:
         :param y_size: Cell size of output grid in Y direction.
         :param fill_value: Desired fill value of output.
         :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
+        :param filename_suffix: Suffix for filenames.
         """
 
         if variables is None:
@@ -943,13 +850,15 @@ class WCOFS_Range:
             study_area_polygon_layer_name = None
 
         with fiona.open(study_area_polygon_geopackage, layer=study_area_polygon_layer_name) as vector_layer:
-            study_area_geojson = vector_layer.next()['geometry']
+            study_area_geojson = next(iter(vector_layer))['geometry']
 
         # if cell sizes are not specified, get maximum coordinate differences between cell points on psi grid
         if x_size is None:
             x_size = numpy.max(numpy.diff(self.sample_wcofs_dataset.sample_netcdf_dataset['lon_psi'][:]))
         if y_size is None:
             y_size = numpy.max(numpy.diff(self.sample_wcofs_dataset.sample_netcdf_dataset['lat_psi'][:]))
+
+        filename_suffix = f'_{filename_suffix}' if filename_suffix is not None else ''
 
         output_grid_coordinates = {}
 
@@ -1107,7 +1016,11 @@ class WCOFS_Range:
                         elif driver == 'GPKG':
                             file_extension = 'gpkg'
 
-                        output_filename = os.path.join(output_dir, f'wcofs_{variable}_{model_string}.{file_extension}')
+                        output_filename = os.path.join(output_dir,
+                                                       f'wcofs_{variable}_{model_string}{filename_suffix}.{file_extension}')
+
+                        if os.path.isfile(output_filename):
+                            os.remove(output_filename)
 
                         print(f'Writing to {output_filename}')
                         with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
@@ -1150,23 +1063,18 @@ class WCOFS_Range:
 
         # define layer schema
         schema = {
-            'geometry': 'Point', 'properties': {'fid': 'int'}
+            'geometry': 'Point', 'properties': {'lon': 'float', 'lat': 'float'}
         }
 
         for variable in variables:
             schema['properties'][variable] = 'float'
 
-        # create layers
-        for model_datetime_string in model_datetime_strings:
-            fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_WGS84,
-                       layer=model_datetime_string).close()
-
-        print('Creating features...')
+        print('Creating records...')
 
         # create features
-        layer_features = {model_datetime: [] for model_datetime in model_datetime_strings}
+        layers = {model_datetime: [] for model_datetime in model_datetime_strings}
 
-        layer_feature_indices = {layer_name: 1 for layer_name in layer_features.keys()}
+        layer_feature_indices = {layer_name: 1 for layer_name in layers.keys()}
 
         grid_height, grid_width = WCOFS_Range.data_coordinates['psi']['lon'].shape
 
@@ -1177,25 +1085,28 @@ class WCOFS_Range:
                 rho_lat = WCOFS_Range.data_coordinates['rho']['lat'][row, col]
 
                 for model_datetime_string in model_datetime_strings:
-                    data = [variable_data_stack_averages[variable][model_datetime_string][row, col] for variable in
-                            variables]
+                    data = [float(variable_data_stack_averages[variable][model_datetime_string][row, col]) for variable
+                            in variables]
 
                     if not numpy.isnan(data).all():
-                        feature = QgsFeature()
-                        feature.setGeometry(QgsGeometry(QgsPoint(rho_lon, rho_lat)))
-                        feature.setAttributes(
-                                [layer_feature_indices[model_datetime_string]] + [float(entry) for entry in data])
+                        record = {
+                            'id':       layer_feature_indices[model_datetime_string],
+                            'geometry': {'type': 'Point', 'coordinates': (rho_lon, rho_lat)}, 'properties': {
+                                'lon': float(rho_lon), 'lat': float(rho_lat)
+                            }
+                        }
 
-                        layer_features[model_datetime_string].append(feature)
+                        record['properties'].update(dict(zip(variables, data)))
+
+                        layers[model_datetime_string].append(record)
                         layer_feature_indices[model_datetime_string] += 1
 
         # write queued features to layer
-        for layer_name, layer_features in layer_features.items():
+        for layer_name, layer_records in layers.items():
             print(f'Writing {output_filename}:{layer_name}')
-            layer = QgsVectorLayer(f'{output_filename}|layername={layer_name}', layer_name, 'ogr')
-            layer.startEditing()
-            layer.dataProvider().addFeatures(layer_features)
-            layer.commitChanges()
+            with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_WGS84,
+                            layer=layer_name) as layer:
+                layer.writerecords(layer_records)
 
     def __repr__(self):
         used_params = [self.start_datetime.__repr__(), self.end_datetime.__repr__()]
@@ -1287,24 +1198,16 @@ def write_convex_hull(netcdf_dataset: xarray.Dataset, output_filename: str, grid
 
 
 if __name__ == '__main__':
-    output_dir = os.path.join(DATA_DIR, r'output\test\unrotated')
+    output_dir = os.path.join(DATA_DIR, r'output\test')
 
-    start_datetime = datetime.datetime(2018, 8, 10)
-    end_datetime = datetime.datetime(2018, 8, 11)
+    wcofs_dataset = WCOFS_Dataset(datetime.datetime.now(), source='avg')
 
-    ds = xarray.open_dataset(r'C:\Data\output\test\test2.nc', decode_times=False)
-
-    wcofs_dataset = WCOFS_Dataset(model_date=datetime.datetime.now(), uri=r'C:\Data\output\test\test2.nc')
-    wcofs_dataset.write_rasters(output_dir)
+    # start_datetime = datetime.datetime(2018, 8, 10)
+    # end_datetime = datetime.datetime(2018, 8, 11)
 
     # wcofs_range = WCOFS_Range(start_datetime, end_datetime, source='avg')
-    # wcofs_range.write_rasters(output_dir, ['temp'])
-    # wcofs_range.write_rasters(output_dir, ['u', 'v'], vector_components=True, drivers=['AAIGrid'])
+    # wcofs_range.write_vector(os.path.join(output_dir, 'wcofs.gpkg'))
 
-    # from qgis.core import QgsApplication
-    # qgis_application = QgsApplication([], True, None)
-    # qgis_application.setPrefixPath(os.environ['QGIS_PREFIX_PATH'], True)
-    # qgis_application.initQgis()
-    # wcofs_range.write_vector(os.path.join(output_dir, r'wcofs.gpkg'))
+    wcofs_dataset.write_vector(os.path.join(output_dir, r'wcofs.gpkg'))
 
     print('done')

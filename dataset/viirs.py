@@ -7,6 +7,7 @@ Created on Jun 13, 2018
 @author: zachary.burnett
 """
 
+import collections
 import datetime
 import math
 import os
@@ -34,11 +35,11 @@ STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:stud
 
 RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
 
-SOURCE_URLS = {
+SOURCE_URLS = collections.OrderedDict({
     'NESDIS': 'https://www.star.nesdis.noaa.gov/thredds/dodsC',
     'JPL':    'https://podaac-opendap.jpl.nasa.gov:443/opendap/allData/ghrsst/data/GDS2/L3U/VIIRS_NPP',
     'NODC':   'https://data.nodc.noaa.gov/thredds/catalog/ghrsst/L3U/VIIRS_NPP'
-}
+})
 
 
 class VIIRS_Dataset:
@@ -97,7 +98,7 @@ class VIIRS_Dataset:
         # construct rectangular polygon of granule extent
         if 'geospatial_bounds' in self.netcdf_dataset.attrs:
             self.data_extent = shapely.wkt.loads(self.netcdf_dataset.geospatial_bounds)
-        else:
+        elif 'geospatial_lon_min' in self.netcdf_dataset.attrs:
             lon_min = float(self.netcdf_dataset.geospatial_lon_min)
             lon_max = float(self.netcdf_dataset.geospatial_lon_max)
             lat_min = float(self.netcdf_dataset.geospatial_lat_min)
@@ -112,6 +113,8 @@ class VIIRS_Dataset:
                     shapely.geometry.Polygon([(lon_min, lat_max), (180, lat_max), (180, lat_min), (lon_min, lat_min)]),
                     shapely.geometry.Polygon(
                             [(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
+        else:
+            print(f'{self.granule_datetime}: Dataset has no stored bounds...')
 
         lon_pixel_size = self.netcdf_dataset.geospatial_lon_resolution
         lat_pixel_size = self.netcdf_dataset.geospatial_lat_resolution
@@ -124,7 +127,7 @@ class VIIRS_Dataset:
 
             # get first record in layer
             with fiona.open(self.study_area_polygon_filename, layer=self.layer_name) as vector_layer:
-                VIIRS_Dataset.study_area_geojson = vector_layer.next()['geometry']
+                VIIRS_Dataset.study_area_geojson = next(iter(vector_layer))['geometry']
 
             global_west = numpy.min(self.netcdf_dataset['lon'][:])
             global_north = numpy.max(self.netcdf_dataset['lat'][:])
@@ -276,6 +279,9 @@ class VIIRS_Dataset:
                         file_extension = 'gpkg'
 
                     output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
+
+                    if os.path.isfile(output_filename):
+                        os.remove(output_filename)
 
                     # use rasterio to write to raster with GDAL args
                     print(f'Writing to {output_filename}')
@@ -516,6 +522,9 @@ class VIIRS_Range:
 
                 output_filename = os.path.join(output_dir, f'{filename_prefix}.{file_extension}')
 
+                if os.path.isfile(output_filename):
+                    os.remove(output_filename)
+
                 print(f'Writing {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(raster_data, 1)
@@ -572,7 +581,7 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
 
     # construct polygon from the first record in layer
     with fiona.open(study_area_polygon_geopackage, layer=layer_name) as vector_layer:
-        study_area_polygon = shapely.geometry.Polygon(vector_layer.next()['geometry']['coordinates'][0])
+        study_area_polygon = shapely.geometry.Polygon(next(iter(vector_layer))['geometry']['coordinates'][0])
 
     lines = []
 

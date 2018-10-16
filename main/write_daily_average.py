@@ -23,6 +23,9 @@ JSON_PATH = os.path.join(DATA_DIR, r'reference\model_dates.json')
 OUTPUT_DIR = os.path.join(DATA_DIR, 'output')
 DAILY_AVERAGES_DIR = os.path.join(OUTPUT_DIR, 'daily_averages')
 
+# UTC offset of study area
+UTC_OFFSET = -8
+
 # default nodata value used by leaflet-geotiff renderer
 LEAFLET_NODATA_VALUE = -9999
 
@@ -44,7 +47,7 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
         start_time = datetime.datetime.now()
 
         start_datetime = model_run_date + datetime.timedelta(days=day_delta)
-        end_datetime = start_datetime + datetime.timedelta(days=1)
+        end_datetime = datetime.datetime.now() if day_delta == 0 else start_datetime + datetime.timedelta(days=1)
 
         if day_delta <= 0:
             # print(f'Processing HFR for {start_datetime}')
@@ -57,32 +60,45 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
             except dataset._utilities.NoDataError as error:
                 with open(log_path, 'a') as log_file:
                     log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
-                    print(error)
+                print(error)
 
             # print(f'Processing VIIRS for {start_datetime}')
             try:
-                morning_datetime = start_datetime + datetime.timedelta(hours=6)
-                evening_datetime = start_datetime + datetime.timedelta(hours=18)
+                morning_datetime = start_datetime + datetime.timedelta(hours=6 - UTC_OFFSET)
+                evening_datetime = start_datetime + datetime.timedelta(hours=18 - UTC_OFFSET)
 
                 viirs_range = dataset.viirs.VIIRS_Range(start_datetime, end_datetime)
 
                 viirs_range.write_raster(daily_average_dir,
                                          filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_morning',
                                          start_datetime=start_datetime, end_datetime=morning_datetime,
-                                         drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE, sses_correction=True)
+                                         fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'])
                 viirs_range.write_raster(daily_average_dir,
                                          filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_daytime',
                                          start_datetime=morning_datetime, end_datetime=evening_datetime,
-                                         drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE, sses_correction=True)
+                                         fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'])
                 viirs_range.write_raster(daily_average_dir,
                                          filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_evening',
-                                         start_datetime=evening_datetime, end_datetime=end_datetime, drivers=['GTiff'],
-                                         fill_value=LEAFLET_NODATA_VALUE, sses_correction=True)
+                                         start_datetime=evening_datetime, end_datetime=end_datetime,
+                                         fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'])
+
+                viirs_range.write_raster(daily_average_dir,
+                                         filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_morning_corrected',
+                                         start_datetime=start_datetime, end_datetime=morning_datetime,
+                                         fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=True)
+                viirs_range.write_raster(daily_average_dir,
+                                         filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_daytime_corrected',
+                                         start_datetime=morning_datetime, end_datetime=evening_datetime,
+                                         fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=True)
+                viirs_range.write_raster(daily_average_dir,
+                                         filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_evening_corrected',
+                                         start_datetime=evening_datetime, end_datetime=end_datetime,
+                                         fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=True)
                 del viirs_range
             except dataset._utilities.NoDataError as error:
                 with open(log_path, 'a') as log_file:
                     log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
-                    print(error)
+                print(error)
 
         # print(f'Processing WCOFS for {date}')
         try:
@@ -91,27 +107,28 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
             wcofs_range.write_rasters(daily_average_dir, ['u', 'v'], vector_components=True, drivers=['AAIGrid'],
                                       fill_value=LEAFLET_NODATA_VALUE)
             del wcofs_range
+
         except dataset._utilities.NoDataError as error:
             with open(log_path, 'a') as log_file:
                 log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
-                print(error)
+            print(error)
 
+        message = f'Wrote files to {daily_average_dir}'
         with open(log_path, 'a') as log_file:
-            message = f'Wrote files to {daily_average_dir}'
             log_file.write(
                     f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ({(datetime.datetime.now() - start_time).total_seconds():.2f}s): {message}\n')
-            print(message)
+        print(message)
 
         start_time = datetime.datetime.now()
 
         # populate JSON file with new directory structure so that JavaScript application can see it
         json_dir_structure.populate_json(OUTPUT_DIR, JSON_PATH)
 
+        message = f'Updated directory structure at {JSON_PATH}'
         with open(log_path, 'a') as log_file:
-            message = f'Updated directory structure at {JSON_PATH}'
             log_file.write(
                     f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ({(datetime.datetime.now() - start_time).total_seconds():.2f}s): {message}\n')
-            print(message)
+        print(message)
 
 
 if __name__ == '__main__':
@@ -126,26 +143,26 @@ if __name__ == '__main__':
     log_path = os.path.join(LOG_DIR, f'{start_time.strftime("%Y%m%d")}_daily_average.log')
 
     # write initial message
+    message = f'Starting file conversion...'
     with open(log_path, 'a') as log_file:
-        message = f'Starting file conversion...'
         log_file.write(
                 f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ({(datetime.datetime.now() - start_time).total_seconds():.2f}s): {message}\n')
-        print(message)
+    print(message)
 
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = [-1, 0, 1, 2]
 
     # get current date
     model_run_date = datetime.date.today()
-    # model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 9, 26),
+    # model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 8, 25),
     #                                                datetime.datetime.now() + datetime.timedelta(days=1))
     #
     # for model_run_date in model_run_dates:
     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path)
 
+    message = f'Finished writing files. Total time: {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds'
     with open(log_path, 'a') as log_file:
-        message = f'Finished writing files. Total time: {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds'
         log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")}(0.00s): {message}\n')
-        print(message)
+    print(message)
 
     print('done')

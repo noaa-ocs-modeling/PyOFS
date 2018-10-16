@@ -241,7 +241,7 @@ def check_station(dataset: xarray.Dataset, study_area_polygon_filename: str) -> 
 
     # construct polygon from the first record in the layer
     with fiona.open(study_area_polygon_filename, layer=layer_name) as vector_layer:
-        study_area_polygon = shapely.geometry.Polygon(vector_layer.next()['geometry']['coordinates'][0])
+        study_area_polygon = shapely.geometry.Polygon(next(iter(vector_layer))['geometry']['coordinates'][0])
 
     lon = dataset['longitude'][:]
     lat = dataset['latitude'][:]
