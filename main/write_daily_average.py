@@ -47,9 +47,13 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
         start_time = datetime.datetime.now()
 
         start_datetime = model_run_date + datetime.timedelta(days=day_delta)
-        end_datetime = datetime.datetime.now() if day_delta == 0 else start_datetime + datetime.timedelta(days=1)
 
-        if day_delta <= 0:
+        if model_run_date == datetime.datetime.combine(datetime.datetime.now(), datetime.datetime.min.time()):
+            end_datetime = datetime.datetime.now()
+        else:
+            end_datetime = start_datetime + datetime.timedelta(days=1)
+
+        if day_delta == 0:
             # print(f'Processing HFR for {start_datetime}')
             try:
                 hfr_range = dataset.hfr.HFR_Range(start_datetime, end_datetime)
@@ -107,7 +111,6 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
             wcofs_range.write_rasters(daily_average_dir, ['u', 'v'], vector_components=True, drivers=['AAIGrid'],
                                       fill_value=LEAFLET_NODATA_VALUE)
             del wcofs_range
-
         except dataset._utilities.NoDataError as error:
             with open(log_path, 'a') as log_file:
                 log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
