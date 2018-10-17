@@ -18,7 +18,6 @@ import fiona
 import numpy
 import rasterio
 import rasterio.features
-import requests
 import shapely
 import shapely.geometry
 import shapely.wkt
@@ -36,7 +35,7 @@ STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:stud
 RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
 
 SOURCE_URLS = collections.OrderedDict({
-    'NESDIS': 'https://www.star.nesdis.noaa.gov/thredds/dodsC',
+    'NESDIS': 'https://www.star.nesdis.noaa.gov/thredds/dodsC/gridSNPPVIIRSNRTL3UWW00',
     'JPL':    'https://podaac-opendap.jpl.nasa.gov:443/opendap/allData/ghrsst/data/GDS2/L3U/VIIRS_NPP',
     'NODC':   'https://data.nodc.noaa.gov/thredds/catalog/ghrsst/L3U/VIIRS_NPP'
 })
@@ -86,12 +85,11 @@ class VIIRS_Dataset:
             url = f'{url_prefix}/{url_suffix}'
 
             try:
-                if requests.get(url).status_code == 200:
-                    self.netcdf_dataset = xarray.open_dataset(url)
-                    self.url = url
-                    break
+                self.netcdf_dataset = xarray.open_dataset(url)
+                self.url = url
+                break
             except Exception as error:
-                print(f'Error collecting dataset from {source} at ({url}): {error}')
+                print(f'Error collecting dataset from {source} at {url}: {error}')
         else:
             raise _utilities.NoDataError(f'{self.granule_datetime}: No VIIRS dataset found.')
 
@@ -341,7 +339,7 @@ class VIIRS_Range:
 
         if len(self.pass_times) > 0:
             print(
-                    f'Collecting VIIRS data from {len(self.pass_times)} passes between {numpy.min(self.pass_times)} and {numpy.max(self.pass_times)}...')
+                    f'Collecting VIIRS data from {len(self.pass_times)} passes between UTC {numpy.min(self.pass_times)} and UTC {numpy.max(self.pass_times)}...')
 
             # create dictionary to store scenes
             self.datasets = {}
@@ -410,20 +408,23 @@ class VIIRS_Range:
                                         filename_prefix=f'{filename_prefix}_{dataset_datetime.strftime("%Y%m%d%H%M%S")}',
                                         fill_value=fill_value, drivers=drivers, sses_correction=sses_correction)
 
-    def write_raster(self, output_dir: str, filename_prefix: str = None, start_datetime: datetime.datetime = None,
-                     end_datetime: datetime.datetime = None, average: bool = False, fill_value: float = -9999,
-                     drivers: list = ['GTiff'], sses_correction: bool = False):
+    def write_raster(self, output_dir: str, filename_prefix: str = None, filename_suffix: str = None,
+                     start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
+                     average: bool = False, fill_value: float = -9999, drivers: list = ['GTiff'],
+                     sses_correction: bool = False, variables: list = ['sst']):
         """
         Write VIIRS raster of SST data (either overlapped or averaged) from the given time interval.
 
         :param output_dir: Path to output directory.
         :param filename_prefix: Prefix for output filenames.
+        :param filename_prefix: Suffix for output filenames.
         :param start_datetime: Beginning of time interval.
         :param end_datetime: End of time interval.
         :param average: Whether to average rasters, otherwise overlap them.
         :param fill_value: Desired fill value of output.
         :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
         :param sses_correction: Whether to subtract SSES bias from L3 sea surface temperature data.
+        :param variables: List of variables to write (either 'sst' or 'sses').
         """
 
         start_datetime = start_datetime if start_datetime is not None else self.start_datetime
@@ -437,99 +438,117 @@ class VIIRS_Range:
 
         pass_datetimes = dataset_datetimes[start_index:end_index]
 
-        output_sst_data = None
+        for variable in variables:
+            output_data = None
 
-        # check if user wants to average data
-        if average:
-            scenes_data = []
+            # check if user wants to average data
+            if average:
+                scenes_data = []
 
-            # concurrently populate array with data from every VIIRS scene
-            with futures.ThreadPoolExecutor() as concurrency_pool:
-                scenes_futures = []
+                # concurrently populate array with data from every VIIRS scene
+                with futures.ThreadPoolExecutor() as concurrency_pool:
+                    scenes_futures = []
 
+                    for pass_datetime in pass_datetimes:
+                        dataset = self.datasets[pass_datetime]
+
+                        if variable == 'sst':
+                            scenes_futures.append(concurrency_pool.submit(dataset.sst, sses_correction))
+                        elif variable == 'sses':
+                            scenes_futures.append(concurrency_pool.submit(dataset.sses))
+
+                    for completed_future in futures.as_completed(scenes_futures):
+                        if completed_future._exception is None:
+                            result = completed_future.result()
+
+                            if result is not None:
+                                scenes_data.append(result)
+
+                    del scenes_futures
+
+                if len(scenes_data) > 0:
+                    output_data = numpy.nanmean(numpy.stack(scenes_data), axis=2)
+            else:  # otherwise overlap based on datetime
                 for pass_datetime in pass_datetimes:
-                    dataset = self.datasets[pass_datetime]
-                    # scenes_data.append(dataset.get_sst(correct_bias))
-                    scenes_futures.append(concurrency_pool.submit(dataset.sst, sses_correction))
+                    if variable == 'sst':
+                        scene_data = self.datasets[pass_datetime].sst(sses_correction=sses_correction)
+                    elif variable == 'sses':
+                        scene_data = self.datasets[pass_datetime].sses()
+                        scene_data[scene_data == 0] = numpy.nan
 
-                for completed_future in futures.as_completed(scenes_futures):
-                    if completed_future._exception is None:
-                        result = completed_future.result()
+                    if output_data is None:
+                        output_data = numpy.empty_like(scene_data)
+                        output_data[:] = numpy.nan
 
-                        if result is not None:
-                            scenes_data.append(result)
+                    output_data[~numpy.isnan(scene_data)] = scene_data[~numpy.isnan(scene_data)]
 
-                del scenes_futures
+            if output_data is not None:
+                output_data[numpy.isnan(output_data)] = fill_value
 
-            if len(scenes_data) > 0:
-                output_sst_data = numpy.nanmean(numpy.stack(scenes_data), axis=2)
-        else:  # otherwise overlap based on datetime
-            for pass_datetime in pass_datetimes:
-                sst_data = self.datasets[pass_datetime].sst(sses_correction=sses_correction)
+                # define arguments to GDAL driver
+                gdal_args = {
+                    'height':    output_data.shape[0], 'width': output_data.shape[1], 'count': 1, 'crs': RASTERIO_WGS84,
+                    'transform': VIIRS_Range.study_area_transform
+                }
 
-                if output_sst_data is None:
-                    output_sst_data = numpy.empty_like(sst_data)
-                    output_sst_data[:] = numpy.nan
+                for driver in drivers:
+                    if driver == 'AAIGrid':
+                        file_extension = 'asc'
+                        raster_data = output_data.astype(rasterio.float32)
+                        gdal_args.update({
+                            'dtype':          raster_data.dtype,
+                            'nodata':         numpy.array([fill_value]).astype(raster_data.dtype).item(),
+                            'FORCE_CELLSIZE': 'YES'
+                        })
+                    elif driver == 'GTiff':
+                        file_extension = 'tiff'
+                        raster_data = output_data.astype(rasterio.float32)
+                        gdal_args.update({
+                            'dtype':  raster_data.dtype,
+                            'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
+                        })
+                    elif driver == 'GPKG':
+                        file_extension = 'gpkg'
+                        gpkg_dtype = rasterio.uint8
+                        gpkg_fill_value = numpy.iinfo(gpkg_dtype).max
+                        output_data[output_data == fill_value] = gpkg_fill_value
+                        # scale data to within range of uint8
+                        raster_data = ((gpkg_fill_value - 1) * (output_data - numpy.min(output_data)) / numpy.ptp(
+                                output_data)).astype(gpkg_dtype)
+                        gdal_args.update({
+                            'dtype': gpkg_dtype, 'nodata': gpkg_fill_value
+                        })  # , 'TILE_FORMAT': 'PNG8'})
+                    else:
+                        raster_data = numpy.empty_like(output_data)
 
-                output_sst_data[~numpy.isnan(sst_data)] = sst_data[~numpy.isnan(sst_data)]
+                    if filename_prefix is None:
+                        current_filename_prefix = f'viirs_{variable}'
+                    else:
+                        current_filename_prefix = filename_prefix
 
-        if output_sst_data is not None:
-            output_sst_data[numpy.isnan(output_sst_data)] = fill_value
+                    if filename_suffix is None:
+                        start_datetime_string = start_datetime.strftime("%Y%m%d%H%M")
+                        end_datetime_string = end_datetime.strftime("%Y%m%d%H%M")
 
-            # define arguments to GDAL driver
-            gdal_args = {
-                'height': output_sst_data.shape[0], 'width': output_sst_data.shape[1], 'count': 1,
-                'crs':    RASTERIO_WGS84, 'transform': VIIRS_Range.study_area_transform
-            }
+                        if '0000' in start_datetime_string and '0000' in end_datetime_string:
+                            start_datetime_string = start_datetime_string.replace("0000", "")
+                            end_datetime_string = end_datetime_string.replace("0000", "")
 
-            for driver in drivers:
-                if driver == 'AAIGrid':
-                    file_extension = 'asc'
-                    raster_data = output_sst_data.astype(rasterio.float32)
-                    gdal_args.update({
-                        'dtype':  raster_data.dtype,
-                        'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item(), 'FORCE_CELLSIZE': 'YES'
-                    })
-                elif driver == 'GTiff':
-                    file_extension = 'tiff'
-                    raster_data = output_sst_data.astype(rasterio.float32)
-                    gdal_args.update({
-                        'dtype': raster_data.dtype, 'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
-                    })
-                elif driver == 'GPKG':
-                    file_extension = 'gpkg'
-                    gpkg_dtype = rasterio.uint8
-                    gpkg_fill_value = numpy.iinfo(gpkg_dtype).max
-                    output_sst_data[output_sst_data == fill_value] = gpkg_fill_value
-                    # scale data to within range of uint8
-                    raster_data = ((gpkg_fill_value - 1) * (output_sst_data - numpy.min(output_sst_data)) / numpy.ptp(
-                            output_sst_data)).astype(gpkg_dtype)
-                    gdal_args.update({
-                        'dtype': gpkg_dtype, 'nodata': gpkg_fill_value
-                    })  # , 'TILE_FORMAT': 'PNG8'})
-                else:
-                    raster_data = numpy.empty_like(output_sst_data)
+                        current_filename_suffix = f'{start_datetime_string}_{end_datetime_string}'
+                    else:
+                        current_filename_suffix = filename_suffix
 
-                if filename_prefix is None:
-                    start_datetime_string = start_datetime.strftime("%Y%m%d%H%M")
-                    end_datetime_string = end_datetime.strftime("%Y%m%d%H%M")
+                    output_filename = os.path.join(output_dir,
+                                                   f'{current_filename_prefix}_{current_filename_suffix}.{file_extension}')
 
-                    if '0000' in start_datetime_string and '0000' in end_datetime_string:
-                        start_datetime_string = start_datetime_string.replace("0000", "")
-                        end_datetime_string = end_datetime_string.replace("0000", "")
+                    if os.path.isfile(output_filename):
+                        os.remove(output_filename)
 
-                    filename_prefix = f'viirs_sst_{start_datetime_string}_{end_datetime_string}'
-
-                output_filename = os.path.join(output_dir, f'{filename_prefix}.{file_extension}')
-
-                if os.path.isfile(output_filename):
-                    os.remove(output_filename)
-
-                print(f'Writing {output_filename}')
-                with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
-                    output_raster.write(raster_data, 1)
-        else:
-            print(f'No VIIRS data found between {start_datetime} and {end_datetime}.')
+                    print(f'Writing {output_filename}')
+                    with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
+                        output_raster.write(raster_data, 1)
+            else:
+                print(f'No VIIRS {variable} found between {start_datetime} and {end_datetime}.')
 
     def __repr__(self):
         used_params = [self.start_datetime.__repr__(), self.end_datetime.__repr__()]

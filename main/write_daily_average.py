@@ -24,7 +24,7 @@ OUTPUT_DIR = os.path.join(DATA_DIR, 'output')
 DAILY_AVERAGES_DIR = os.path.join(OUTPUT_DIR, 'daily_averages')
 
 # UTC offset of study area
-UTC_OFFSET = -8
+UTC_OFFSET = 8
 
 # default nodata value used by leaflet-geotiff renderer
 LEAFLET_NODATA_VALUE = -9999
@@ -47,11 +47,7 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
         start_time = datetime.datetime.now()
 
         start_datetime = model_run_date + datetime.timedelta(days=day_delta)
-
-        if model_run_date == datetime.datetime.combine(datetime.datetime.now(), datetime.datetime.min.time()):
-            end_datetime = datetime.datetime.now()
-        else:
-            end_datetime = start_datetime + datetime.timedelta(days=1)
+        end_datetime = model_run_date + datetime.timedelta(days=day_delta + 1)
 
         if day_delta == 0:
             # print(f'Processing HFR for {start_datetime}')
@@ -68,36 +64,27 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
 
             # print(f'Processing VIIRS for {start_datetime}')
             try:
-                morning_datetime = start_datetime + datetime.timedelta(hours=6 - UTC_OFFSET)
-                evening_datetime = start_datetime + datetime.timedelta(hours=18 - UTC_OFFSET)
+                utc_start_datetime = start_datetime + datetime.timedelta(hours=UTC_OFFSET)
+                utc_morning_datetime = start_datetime + datetime.timedelta(hours=6 + UTC_OFFSET)
+                utc_evening_datetime = start_datetime + datetime.timedelta(hours=18 + UTC_OFFSET)
+                utc_end_datetime = end_datetime + datetime.timedelta(hours=UTC_OFFSET)
 
-                viirs_range = dataset.viirs.VIIRS_Range(start_datetime, end_datetime)
-
-                viirs_range.write_raster(daily_average_dir,
-                                         filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_morning',
-                                         start_datetime=start_datetime, end_datetime=morning_datetime,
-                                         fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'])
-                viirs_range.write_raster(daily_average_dir,
-                                         filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_daytime',
-                                         start_datetime=morning_datetime, end_datetime=evening_datetime,
-                                         fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'])
-                viirs_range.write_raster(daily_average_dir,
-                                         filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_evening',
-                                         start_datetime=evening_datetime, end_datetime=end_datetime,
-                                         fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'])
+                viirs_range = dataset.viirs.VIIRS_Range(utc_start_datetime, utc_end_datetime)
 
                 viirs_range.write_raster(daily_average_dir,
-                                         filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_morning_corrected',
-                                         start_datetime=start_datetime, end_datetime=morning_datetime,
-                                         fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=True)
+                                         filename_suffix=f'{start_datetime.strftime("%Y%m%d")}_morning',
+                                         start_datetime=utc_start_datetime, end_datetime=utc_morning_datetime,
+                                         fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], variables=['sses'])
                 viirs_range.write_raster(daily_average_dir,
-                                         filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_daytime_corrected',
-                                         start_datetime=morning_datetime, end_datetime=evening_datetime,
-                                         fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=True)
+                                         filename_suffix=f'{start_datetime.strftime("%Y%m%d")}_daytime',
+                                         start_datetime=utc_morning_datetime, end_datetime=utc_evening_datetime,
+                                         fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=False,
+                                         variables=['sst'])
                 viirs_range.write_raster(daily_average_dir,
-                                         filename_prefix=f'viirs_sst_{start_datetime.strftime("%Y%m%d")}_evening_corrected',
-                                         start_datetime=evening_datetime, end_datetime=end_datetime,
-                                         fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=True)
+                                         filename_suffix=f'{start_datetime.strftime("%Y%m%d")}_evening',
+                                         start_datetime=utc_evening_datetime, end_datetime=utc_end_datetime,
+                                         fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=False,
+                                         variables=['sst'])
                 del viirs_range
             except dataset._utilities.NoDataError as error:
                 with open(log_path, 'a') as log_file:
@@ -157,7 +144,7 @@ if __name__ == '__main__':
 
     # get current date
     model_run_date = datetime.date.today()
-    # model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 8, 25),
+    # model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 10, 4),
     #                                                datetime.datetime.now() + datetime.timedelta(days=1))
     #
     # for model_run_date in model_run_dates:
