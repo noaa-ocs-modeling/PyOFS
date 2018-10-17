@@ -74,7 +74,8 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
                 viirs_range.write_raster(daily_average_dir,
                                          filename_suffix=f'{start_datetime.strftime("%Y%m%d")}_morning',
                                          start_datetime=utc_start_datetime, end_datetime=utc_morning_datetime,
-                                         fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], variables=['sses'])
+                                         fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=False,
+                                         variables=['sst'])
                 viirs_range.write_raster(daily_average_dir,
                                          filename_suffix=f'{start_datetime.strftime("%Y%m%d")}_daytime',
                                          start_datetime=utc_morning_datetime, end_datetime=utc_evening_datetime,
