@@ -18,9 +18,10 @@ import dataset._utilities, dataset.hfr, dataset.viirs, dataset.wcofs
 from main import json_dir_structure
 
 DATA_DIR = os.environ['OFS_DATA']
+DATA_DIR = os.path.join(DATA_DIR, 'develop')
 LOG_DIR = os.path.join(DATA_DIR, 'log')
 JSON_PATH = os.path.join(DATA_DIR, r'reference\model_dates.json')
-OUTPUT_DIR = os.path.join(DATA_DIR, 'output_develop')
+OUTPUT_DIR = os.path.join(DATA_DIR, 'output')
 DAILY_AVERAGES_DIR = os.path.join(OUTPUT_DIR, 'daily_averages')
 
 # UTC offset of study area
