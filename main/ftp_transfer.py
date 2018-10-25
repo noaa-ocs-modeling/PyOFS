@@ -15,6 +15,7 @@ FTP_URI = 'tidepool.nos.noaa.gov'
 INPUT_DIR = '/pub/outgoing/CSDL'
 
 DATA_DIR = os.environ['OFS_DATA']
+DATA_DIR = os.path.join(DATA_DIR, 'develop')
 
 OUTPUT_DIR = os.path.join(DATA_DIR, 'input')
 LOG_DIR = os.path.join(DATA_DIR, 'log')
@@ -25,8 +26,10 @@ if __name__ == '__main__':
     # create boolean flag to determine if script found any new files
     num_downloads = 0
 
+    month_dir = os.path.join(OUTPUT_DIR, datetime.datetime.now().strftime('%Y%m'))
+
     # create folders if they do not exist
-    for dir in [OUTPUT_DIR, LOG_DIR]:
+    for dir in [OUTPUT_DIR, LOG_DIR, month_dir]:
         if not os.path.isdir(dir):
             os.mkdir(dir)
 
@@ -50,7 +53,15 @@ if __name__ == '__main__':
             with open(log_path, 'a') as log_file:
                 extension = os.path.splitext(input_path)[-1]
                 filename = os.path.basename(input_path)
-                output_path = os.path.join(OUTPUT_DIR, filename)
+
+                if extension == '.sur':
+                    filename = filename[:-4]
+                    extension = '.nc'
+
+                if extension == '.nc':
+                    output_path = os.path.join(month_dir, filename)
+                else:
+                    output_path = os.path.join(OUTPUT_DIR, filename)
 
                 # filter for NetCDF and TAR archives
                 if ('.nc' in filename or extension == '.tar') and 'mod' not in filename:

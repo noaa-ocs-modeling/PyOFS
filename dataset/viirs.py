@@ -29,6 +29,7 @@ VIIRS_START_DATETIME = datetime.datetime.strptime('2012-03-01 00:10:00', '%Y-%m-
 VIIRS_PERIOD = datetime.timedelta(days=16)
 
 DATA_DIR = os.environ['OFS_DATA']
+DATA_DIR = os.path.join(DATA_DIR, 'develop')
 VIIRS_PASS_TIMES_FILENAME = os.path.join(DATA_DIR, r"reference\viirs_pass_times.txt")
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 
