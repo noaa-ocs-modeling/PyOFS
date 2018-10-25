@@ -25,6 +25,7 @@ FIONA_WGS84 = fiona.crs.from_epsg(4326)
 RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
 
 DATA_DIR = os.environ['OFS_DATA']
+DATA_DIR = os.path.join(DATA_DIR, 'develop')
 
 
 class HFR_Range:
@@ -475,7 +476,7 @@ class HFR_Range:
 
 
 if __name__ == '__main__':
-    output_dir = os.path.join(DATA_DIR, r'develop\output\test')
+    output_dir = os.path.join(DATA_DIR, r'output\test')
 
     start_datetime = datetime.datetime(2018, 10, 15)
     end_datetime = datetime.datetime(2018, 10, 15) + datetime.timedelta(days=1)
