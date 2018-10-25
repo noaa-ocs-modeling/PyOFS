@@ -18,7 +18,6 @@ import dataset._utilities, dataset.hfr, dataset.viirs, dataset.wcofs
 from main import json_dir_structure
 
 DATA_DIR = os.environ['OFS_DATA']
-DATA_DIR = os.path.join(DATA_DIR, 'develop')
 JSON_PATH = os.path.join(DATA_DIR, r'reference\model_dates.json')
 LOG_DIR = os.path.join(DATA_DIR, 'log')
 OUTPUT_DIR = os.path.join(DATA_DIR, 'output')

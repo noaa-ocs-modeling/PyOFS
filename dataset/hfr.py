@@ -25,7 +25,6 @@ FIONA_WGS84 = fiona.crs.from_epsg(4326)
 RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
 
 DATA_DIR = os.environ['OFS_DATA']
-DATA_DIR = os.path.join(DATA_DIR, 'develop')
 
 
 class HFR_Range:
