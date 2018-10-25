@@ -180,7 +180,7 @@ class VIIRS_Dataset:
         """
         Return matrix of sea surface temperature.
 
-        :return: Matrix of SST in Kelvin.
+        :return: Matrix of SST in Celsius.
         """
 
         west_index = VIIRS_Dataset.study_area_index_bounds[0]
@@ -199,18 +199,16 @@ class VIIRS_Dataset:
                     output_sst_data[output_sst_data <= 0] = numpy.nan
 
                 if sses_correction:
-                    sses_bias = self.sses()
+                    sses = self.sses()
 
-                    mismatched_records = len(numpy.where(numpy.isnan(output_sst_data) != (sses_bias == 0))[0])
+                    mismatched_records = len(numpy.where(numpy.isnan(output_sst_data) != (sses == 0))[0])
                     total_records = output_sst_data.shape[0] * output_sst_data.shape[1]
                     mismatch_percentage = mismatched_records / total_records * 100
 
-                    # use correction if mismatch is less than threshold
-                    if mismatch_percentage <= 5:
-                        output_sst_data -= sses_bias
-                    else:
-                        print(
-                                f'{self.granule_datetime}: SSES extent mismatch at {mismatch_percentage}%; aborting SST correction...')
+                    if mismatch_percentage > 0:
+                        print(f'{self.granule_datetime}: SSES extent mismatch at {mismatch_percentage:.1f}%')
+
+                    output_sst_data -= sses
 
                 # convert from Kelvin to Celsius (subtract 273.15)
                 output_sst_data = output_sst_data - 273.15
@@ -223,7 +221,7 @@ class VIIRS_Dataset:
         """
         Return matrix of sensor-specific error statistics.
 
-        :return: Array of SSES bias in Kelvin.
+        :return: Array of SSES bias in Celsius.
         """
 
         west_index = VIIRS_Dataset.study_area_index_bounds[0]
@@ -232,11 +230,15 @@ class VIIRS_Dataset:
         south_index = VIIRS_Dataset.study_area_index_bounds[3]
 
         # dataset bias values using vertically reflected VIIRS grid
-        sses_bias_data = self.netcdf_dataset['sses_bias'][0, north_index:south_index, west_index:east_index].values
+        sses_data = self.netcdf_dataset['sses_bias'][0, north_index:south_index, west_index:east_index].values
 
         # replace masked values with 0
-        sses_bias_data[numpy.isnan(sses_bias_data)] = 0
-        return sses_bias_data
+        sses_data[numpy.isnan(sses_data)] = 0
+
+        # offset by 2.048
+        sses_data = sses_data - 2.048
+
+        return sses_data
 
     def write_rasters(self, output_dir: str, variables: list = ['sst', 'sses'], filename_prefix: str = 'viirs',
                       fill_value: float = -9999.0, drivers: list = ['GTiff'], sses_correction: bool = False):

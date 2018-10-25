@@ -475,18 +475,15 @@ class HFR_Range:
 
 
 if __name__ == '__main__':
-    output_dir = os.path.join(DATA_DIR, r'output\test')
+    output_dir = os.path.join(DATA_DIR, r'develop\output\test')
 
-    start_datetime = datetime.datetime.now() - datetime.timedelta(days=1)
-    end_datetime = datetime.datetime.now()
+    start_datetime = datetime.datetime(2018, 10, 15)
+    end_datetime = datetime.datetime(2018, 10, 15) + datetime.timedelta(days=1)
 
     # get dataset from source
     hfr_dataset = HFR_Range(start_datetime, end_datetime)
 
-    date_interval_string = f'{start_datetime.strftime("%m%d%H")}_{end_datetime.strftime("%m%d%H")}'
-
     # write HFR raster
-    # hfr_dataset.write_vectors(os.path.join(output_dir, 'hfr.gpkg'))
     hfr_dataset.write_vector(os.path.join(output_dir, 'hfr.gpkg'))
 
     print('done')
