@@ -36,7 +36,7 @@ STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:stud
 RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
 
 SOURCE_URLS = collections.OrderedDict({
-    'NESDIS': 'https://www.star.nesdis.noaa.gov/thredds/dodsC/gridSNPPVIIRSNRTL3UWW00',
+    'NESDIS': 'https://www.star.nesdis.noaa.gov/thredds/dodsC',
     'JPL': 'https://podaac-opendap.jpl.nasa.gov:443/opendap/allData/ghrsst/data/GDS2/L3U/VIIRS_NPP',
     'NODC': 'https://data.nodc.noaa.gov/thredds/catalog/ghrsst/L3U/VIIRS_NPP'
 })
@@ -48,14 +48,13 @@ class VIIRS_Dataset:
     study_area_geojson = None
     
     def __init__(self, granule_datetime: datetime.datetime,
-                 study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, near_real_time: bool = True,
+                 study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
                  data_source: str = 'OSPO', acspo_version: str = '2.41', threading_lock: threading.Lock = None):
         """
         Retrieve VIIRS NetCDF dataset from NOAA with given datetime.
 
         :param granule_datetime: Dataset datetime.
         :param study_area_polygon_filename: Filename of vector file containing study area boundary.
-        :param near_real_time: Whether dataset should be Near Real Time.
         :param data_source: Either 'STAR' or 'OSPO'.
         :param acspo_version: ACSPO Version number (2.40 - 2.41).
         :param threading_lock: Global lock in case of threaded dataset compilation.
@@ -70,7 +69,8 @@ class VIIRS_Dataset:
         if self.layer_name == '':
             self.layer_name = None
         
-        self.near_real_time = near_real_time
+        # use NRT flag if granule is less than 13 days old
+        self.near_real_time = datetime.datetime.now() - granule_datetime <= datetime.timedelta(days=13)
         self.data_source = data_source
         self.acspo_version = acspo_version
         
@@ -78,7 +78,9 @@ class VIIRS_Dataset:
                      f'{self.granule_datetime.strftime("%Y%m%d%H%M%S")}-{self.data_source}-L3U_GHRSST-SSTsubskin-VIIRS_NPP-ACSPO_V{self.acspo_version}-v02.0-fv01.0.nc'
         
         for source, url_prefix in SOURCE_URLS.items():
-            if source == 'JPL':
+            if source == 'NESDIS':
+                url_prefix = f'{url_prefix}/gridSNPPVIIRS{"NRT" if self.near_real_time else "SCIENCE"}L3UWW00'
+            elif source == 'JPL':
                 url_prefix = f'{url_prefix}/{data_source}/v{acspo_version}'
             elif source in 'NODC':
                 url_prefix = f'{url_prefix}/{data_source}'
@@ -315,8 +317,8 @@ class VIIRS_Range:
     
     def __init__(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime,
                  study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
-                 viirs_pass_times_filename: str = VIIRS_PASS_TIMES_FILENAME, near_real_time: bool = True,
-                 data_source: str = 'OSPO', acspo_version: str = '2.41'):
+                 viirs_pass_times_filename: str = VIIRS_PASS_TIMES_FILENAME, data_source: str = 'OSPO',
+                 acspo_version: str = '2.41'):
         """
         Collect VIIRS datasets within time interval.
 
@@ -324,7 +326,6 @@ class VIIRS_Range:
         :param end_datetime: End of time interval.
         :param study_area_polygon_filename: Filename of vector file of study area boundary.
         :param viirs_pass_times_filename: Path to text file with pass times.
-        :param near_real_time: Whether dataset should be Near Real Time.
         :param data_source: Either 'STAR' or 'OSPO'.
         :param acspo_version: ACSPO Version number (2.40 - 2.41).
         :raises NoDataError: if data does not exist.
@@ -334,7 +335,6 @@ class VIIRS_Range:
         self.end_datetime = end_datetime if end_datetime < datetime.datetime.utcnow() else datetime.datetime.utcnow()
         self.study_area_polygon_filename = study_area_polygon_filename
         self.viirs_pass_times_filename = viirs_pass_times_filename
-        self.near_real_time = near_real_time
         self.data_source = data_source
         self.acspo_version = acspo_version
         
@@ -353,7 +353,7 @@ class VIIRS_Range:
             with futures.ThreadPoolExecutor() as concurrency_pool:
                 scene_futures = {
                     concurrency_pool.submit(VIIRS_Dataset, scene_datetime, self.study_area_polygon_filename,
-                                            self.near_real_time, self.data_source, self.acspo_version,
+                                            self.data_source, self.acspo_version,
                                             threading_lock): scene_datetime for scene_datetime in self.pass_times}
                 
                 # yield results as threads complete
@@ -555,7 +555,7 @@ class VIIRS_Range:
     
     def __repr__(self):
         used_params = [self.start_datetime.__repr__(), self.end_datetime.__repr__()]
-        optional_params = [self.study_area_polygon_filename, self.viirs_pass_times_filename, self.near_real_time,
+        optional_params = [self.study_area_polygon_filename, self.viirs_pass_times_filename,
                            self.data_source, self.acspo_version]
         
         for param in optional_params:
@@ -573,7 +573,7 @@ class VIIRS_Range:
 def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
                            start_datetime: datetime.datetime = VIIRS_START_DATETIME,
                            output_filename: str = VIIRS_PASS_TIMES_FILENAME, num_periods: int = 1,
-                           near_real_time: bool = False, data_source: str = 'STAR', subskin: bool = False,
+                           data_source: str = 'STAR', subskin: bool = False,
                            acspo_version: str = '2.40'):
     """
     Compute VIIRS pass times from the given start date along the number of periods specified.
@@ -582,7 +582,6 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
     :param start_datetime: Beginning of given VIIRS period.
     :param output_filename: Path to output file.
     :param num_periods: Number of periods to store.
-    :param near_real_time: Whether dataset should be Near Real Time.
     :param data_source: Either 'STAR' or 'OSPO'.
     :param subskin: Whether dataset should use subskin or not.
     :param acspo_version: ACSPO Version number (2.40 - 2.41)
@@ -621,8 +620,8 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
             
             try:
                 # get dataset of new datetime
-                dataset = VIIRS_Dataset(cycle_datetime, study_area_polygon_filename, near_real_time, data_source,
-                                        subskin, acspo_version)
+                dataset = VIIRS_Dataset(cycle_datetime, study_area_polygon_filename, data_source, subskin,
+                                        acspo_version)
                 
                 # check if dataset falls within polygon extent
                 if dataset.data_extent.is_valid and study_area_polygon.intersects(dataset.data_extent):
