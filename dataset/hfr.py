@@ -17,15 +17,13 @@ import rasterio
 import scipy.interpolate
 import xarray
 
+from main import DATA_DIR
 from dataset import _utilities
 
 MEASUREMENT_VARIABLES = ['u', 'v', 'DOPx', 'DOPy']
 
 FIONA_WGS84 = fiona.crs.from_epsg(4326)
 RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
-
-DATA_DIR = os.environ['OFS_DATA']
-DATA_DIR = os.path.join(DATA_DIR, 'develop')
 
 
 class HFR_Range:

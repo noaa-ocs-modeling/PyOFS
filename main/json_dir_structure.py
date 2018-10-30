@@ -11,6 +11,7 @@ import functools
 import json
 import os
 
+from main import DATA_DIR
 
 def get_directory_structure(rootdir):
     """
@@ -35,8 +36,7 @@ def populate_json(input_dir, json_path):
 
 
 if __name__ == '__main__':
-    data_dir = os.environ['OFS_DATA']
-    json_path = os.path.join(data_dir, r'reference\model_dates.json')
-    input_dir = os.path.join(data_dir, 'output')
+    json_path = os.path.join(DATA_DIR, r'reference\model_dates.json')
+    input_dir = os.path.join(DATA_DIR, 'output')
 
     populate_json(input_dir, json_path)
