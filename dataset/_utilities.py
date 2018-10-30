@@ -22,17 +22,17 @@ def copy_xarray(input_path: str, output_path: str) -> xarray.Dataset:
     :param output_path: Path to output file.
     :return: Copied dataset, now at local filename.
     """
-
+    
     print(f'Copying dataset to {output_path}')
-
+    
     input_dataset = xarray.open_dataset(input_path, decode_times=False)
-
+    
     # deep copy of xarray dataset
     output_dataset = input_dataset.copy(deep=True)
-
+    
     # save dataset to file
     output_dataset.to_netcdf(output_path)
-
+    
     return output_dataset
 
 
@@ -44,15 +44,15 @@ def round_to_day(datetime_object: datetime.datetime, direction: str = None) -> d
     :param direction: Either 'ceiling' or 'floor', optional.
     :return: Rounded datetime.
     """
-
+    
     start_of_day = datetime_object.replace(hour=0, minute=0, second=0, microsecond=0)
     half_day = datetime_object.replace(hour=12, minute=0, second=0, microsecond=0)
-
+    
     if direction == 'ceiling' or (direction is None and datetime_object >= half_day):
         datetime_object = start_of_day + datetime.timedelta(days=1)
     elif direction == 'floor' or (direction is None and datetime_object < half_day):
         datetime_object = start_of_day
-
+    
     return datetime_object
 
 
@@ -64,15 +64,15 @@ def round_to_hour(datetime_object: datetime.datetime, direction: str = None) -> 
     :param direction: Either 'ceiling' or 'floor', optional.
     :return: Rounded datetime.
     """
-
+    
     start_of_hour = datetime_object.replace(minute=0, second=0, microsecond=0)
     half_hour = datetime_object.replace(minute=30, second=0, microsecond=0)
-
+    
     if direction == 'ceiling' or datetime_object >= half_hour:
         datetime_object = start_of_hour + datetime.timedelta(hours=1)
     elif direction == 'floor' or datetime_object < half_hour:
         datetime_object = start_of_hour
-
+    
     return datetime_object
 
 
@@ -83,7 +83,7 @@ def round_to_ten_minutes(datetime_object: datetime.datetime) -> datetime.datetim
     :param datetime_object: Datetime to round.
     :return: Rounded datetime.
     """
-
+    
     return datetime_object.replace(minute=int(round(datetime_object.minute, -1)), second=0, microsecond=0)
 
 
@@ -95,11 +95,15 @@ def day_range(start_datetime: datetime.datetime, end_datetime: datetime.datetime
     :param end_datetime: End of time interval.
     :return: Range of datetimes.
     """
-
+    
     duration = end_datetime - start_datetime
-    return [start_datetime + datetime.timedelta(days=day) for day in range(duration.days)]
+    days = duration.days
+    stride = 1 if days > 0 else -1
+    
+    return [start_datetime + datetime.timedelta(days=day) for day in range(0, days, stride)]
 
-    # return numpy.arange(start_datetime, end_datetime, dtype='datetime64[D]')
+
+# return numpy.arange(start_datetime, end_datetime, dtype='datetime64[D]')
 
 
 def hour_range(start_datetime: datetime.datetime, end_datetime: datetime.datetime) -> list:
@@ -110,12 +114,14 @@ def hour_range(start_datetime: datetime.datetime, end_datetime: datetime.datetim
     :param end_datetime: End of time interval.
     :return: Range of datetimes.
     """
-
+    
     duration = end_datetime - start_datetime
-    return [start_datetime + datetime.timedelta(hours=hour) for hour in
-            range(int((duration.days * 24) + (duration.seconds / 3600)))]
+    hours = int(duration.total_seconds() / 3600)
+    stride = 1 if duration.days > 0 else -1
+    return [start_datetime + datetime.timedelta(hours=hour) for hour in range(0, hours, stride)]
 
-    # return numpy.arange(start_datetime, end_datetime, dtype='datetime64[h]')
+
+# return numpy.arange(start_datetime, end_datetime, dtype='datetime64[h]')
 
 
 def ten_minute_range(start_datetime: datetime.datetime, end_datetime: datetime.datetime) -> list:
@@ -126,10 +132,11 @@ def ten_minute_range(start_datetime: datetime.datetime, end_datetime: datetime.d
     :param end_datetime: End of time interval.
     :return: Range of datetimes.
     """
-
+    
     duration = end_datetime - start_datetime
-    return [start_datetime + datetime.timedelta(minutes=minute) for minute in
-            range(0, int((duration.days * 24 * 60) + (duration.seconds / 60)) + 1, 10)]
+    minutes = int(duration.total_seconds() / 60)
+    stride = 10
+    return [start_datetime + datetime.timedelta(minutes=minute) for minute in range(0, minutes + 1, stride)]
 
 
 def get_masked_data(masked_constant: numpy.ma.core.MaskedConstant) -> object:
@@ -139,7 +146,7 @@ def get_masked_data(masked_constant: numpy.ma.core.MaskedConstant) -> object:
     :param masked_constant: Input constant.
     :return: Data held within masked constant.
     """
-
+    
     if 'MaskedConstant' in str(type(masked_constant)) or 'MaskedArray' in str(type(masked_constant)):
         return masked_constant.data
     else:
@@ -165,7 +172,7 @@ def write_gpkg_subdataset(input_data: numpy.ndarray, output_filename: str, layer
     :param overwrite: Whether to erase entire geopackage, if replacing existing layer.
     :raises Exception: raised GDAL error.
     """
-
+    
     with rasterio.Env(OGR_GPKG_FOREIGN_KEY_CHECK='NO') as env:
         try:
             with rasterio.open(output_filename, 'w', driver='GPKG', height=height, width=width, count=1, dtype=dtype,
@@ -173,16 +180,26 @@ def write_gpkg_subdataset(input_data: numpy.ndarray, output_filename: str, layer
                                raster_identifier=layer_name, raster_description=layer_name,
                                append_subdataset='YES') as output_raster:
                 output_raster.write(input_data.astype(dtype), 1)
-
+            
             print(f'Writing {output_filename}:{layer_name}')
-
+        
         except rasterio._err.CPLE_AppDefinedError as exception:
             print(f'Subdataset already exists at {output_filename}:{layer_name}')
-
-            # if overwrite:  #     print(f'Erasing {output_filename}')  #     # if error with appending, erase entire dataset and append as new  #     with rasterio.open(output_filename, 'w', driver='GPKG', height=height, width=width, count=1,  #                        dtype=dtype, crs=crs, transform=transform, nodata=nodata, raster_table=layer_name,  #                        raster_identifier=layer_name, raster_description=layer_name) as output_raster:  #         output_raster.write(input_data.astype(dtype), 1)
+    
+    if overwrite:
+        print(f'Erasing {output_filename}')
+    
+    # if error with appending, erase entire dataset and append as new
+    with rasterio.open(output_filename, 'w', driver='GPKG', height=height, width=width, count=1, dtype=dtype, crs=crs,
+                       transform=transform, nodata=nodata, raster_table=layer_name, raster_identifier=layer_name,
+                       raster_description=layer_name) as output_raster:
+        output_raster.write(input_data.astype(dtype), 1)
 
 
 class NoDataError(Exception):
+    """
+    Error for no data found.
+    """
     pass
 
 
