@@ -77,7 +77,7 @@ if __name__ == '__main__':
                         output_path = os.path.join(month_dir, filename)
 
                 # filter for NetCDF and TAR archives
-                if ('.nc' in filename or '.tar' in filename) and 'mod' not in filename:
+                if '.nc' in filename or '.tar' in filename:
                     current_start_time = datetime.datetime.now()
 
                     # download file (copy via binary connection) to local destination if it does not already exist
