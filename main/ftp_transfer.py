@@ -15,7 +15,6 @@ FTP_URI = 'tidepool.nos.noaa.gov'
 INPUT_DIR = '/pub/outgoing/CSDL'
 
 DATA_DIR = os.environ['OFS_DATA']
-DATA_DIR = os.path.join(DATA_DIR, 'develop')
 
 OUTPUT_DIR = os.path.join(DATA_DIR, 'input')
 LOG_DIR = os.path.join(DATA_DIR, 'log')
@@ -26,10 +25,18 @@ if __name__ == '__main__':
     # create boolean flag to determine if script found any new files
     num_downloads = 0
 
-    month_dir = os.path.join(OUTPUT_DIR, datetime.datetime.now().strftime('%Y%m'))
+    wcofs_dir = os.path.join(OUTPUT_DIR, 'wcofs')
+    rtofs_dir = os.path.join(OUTPUT_DIR, 'rtofs')
+
+    avg_dir = os.path.join(wcofs_dir, 'avg')
+    fwd_dir = os.path.join(wcofs_dir, 'fwd')
+    obs_dir = os.path.join(wcofs_dir, 'obs')
+    mod_dir = os.path.join(wcofs_dir, 'mod')
+
+    month_dir = os.path.join(avg_dir, datetime.datetime.now().strftime('%Y%m'))
 
     # create folders if they do not exist
-    for dir in [OUTPUT_DIR, LOG_DIR, month_dir]:
+    for dir in [OUTPUT_DIR, LOG_DIR, wcofs_dir, rtofs_dir, avg_dir, fwd_dir, obs_dir, mod_dir, month_dir]:
         if not os.path.isdir(dir):
             os.mkdir(dir)
 
@@ -54,17 +61,23 @@ if __name__ == '__main__':
                 extension = os.path.splitext(input_path)[-1]
                 filename = os.path.basename(input_path)
 
-                if extension == '.sur':
-                    filename = filename[:-4]
-                    extension = '.nc'
+                if 'rtofs' in filename:
+                    output_path = os.path.join(rtofs_dir, filename)
+                elif 'wcofs' in filename:
+                    if filename[-4:] == '.sur':
+                        filename = filename[:-4]
 
-                if extension == '.nc':
-                    output_path = os.path.join(month_dir, filename)
-                else:
-                    output_path = os.path.join(OUTPUT_DIR, filename)
+                    if 'fwd' in filename:
+                        output_path = os.path.join(fwd_dir, filename)
+                    elif 'obs' in filename:
+                        output_path = os.path.join(obs_dir, filename)
+                    elif 'mod' in filename:
+                        output_path = os.path.join(mod_dir, filename)
+                    else:
+                        output_path = os.path.join(month_dir, filename)
 
                 # filter for NetCDF and TAR archives
-                if ('.nc' in filename or extension == '.tar') and 'mod' not in filename:
+                if ('.nc' in filename or '.tar' in filename) and 'mod' not in filename:
                     current_start_time = datetime.datetime.now()
 
                     # download file (copy via binary connection) to local destination if it does not already exist
