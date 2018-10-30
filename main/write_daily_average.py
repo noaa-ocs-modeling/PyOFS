@@ -6,7 +6,6 @@ Created on Aug 21, 2018
 
 @author: zachary.burnett
 """
-
 import datetime
 import os
 import sys
@@ -168,11 +167,13 @@ if __name__ == '__main__':
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = [-1, 0, 1, 2]
     
-    # get current date
+    # model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 10, 2), datetime.datetime(2018, 9, 1))
+    # with concurrent.futures.ThreadPoolExecutor() as concurrency_pool:
+    #     for model_run_date in model_run_dates:
+    #         concurrency_pool.submit(write_daily_average, os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date,
+    #                                 day_deltas, log_path)
+    
     model_run_date = datetime.date.today()
-    # model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 10, 2), datetime.datetime(2018, 8, 4))
-    #
-    # for model_run_date in model_run_dates:
     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path)
     
     message = f'Finished writing files. Total time: {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds'
