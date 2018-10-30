@@ -51,7 +51,7 @@ WCOFS_COOPS_URL = 'https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/
 
 class WCOFS_Dataset:
     """
-    West Coast Ocean Forecasting System (PyOFS) NetCDF dataset.
+    West Coast Ocean Forecasting System (WCOFS) NetCDF dataset.
     """
 
     grid_transforms = None
@@ -101,8 +101,8 @@ class WCOFS_Dataset:
         if source_url is None:
             source_url = WCOFS_COOPS_URL
 
-        # set start time to PyOFS model run time (0300 UTC)
-        self.model_datetime = model_date.replace(hour=3, minute=0, second=0)
+        # set start time to WCOFS model run time (0300 UTC)
+        self.model_datetime = model_date.replace(hour=3, minute=0, second=0, microsecond=0)
         self.x_size = x_size
         self.y_size = y_size
         self.grid_filename = grid_filename
