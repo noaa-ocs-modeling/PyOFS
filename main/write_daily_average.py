@@ -103,25 +103,27 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
 
             wcofs_range = dataset.wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg', time_deltas=[day_delta],
                                                     grid_filename=dataset.wcofs.WCOFS_4KM_GRID_FILENAME,
-                                                    source_url=os.path.join(DATA_DIR, 'input'), wcofs_string='wcofs4')
+                                                    source_url=os.path.join(DATA_DIR, 'input/wcofs/avg'),
+                                                    wcofs_string='wcofs4')
             wcofs_range.write_rasters(daily_average_dir, ['temp'], filename_suffix='noDA_4km', drivers=['GTiff'],
                                       fill_value=LEAFLET_NODATA_VALUE)
             wcofs_range.write_rasters(daily_average_dir, ['u', 'v'], filename_suffix='noDA_4km', vector_components=True,
                                       drivers=['AAIGrid'], fill_value=LEAFLET_NODATA_VALUE)
             del wcofs_range
 
-            dataset.wcofs.reset_dataset_grid()
-
-            wcofs_range = dataset.wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg', time_deltas=[day_delta],
-                                                    grid_filename=dataset.wcofs.WCOFS_2KM_GRID_FILENAME,
-                                                    source_url=os.path.join(DATA_DIR, 'input'), wcofs_string='wcofs2')
-            wcofs_range.write_rasters(daily_average_dir, ['temp'], filename_suffix='noDA_2km', x_size=0.02, y_size=0.02,
-                                      drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
-            wcofs_range.write_rasters(daily_average_dir, ['u', 'v'], filename_suffix='noDA_2km', vector_components=True,
-                                      x_size=0.02, y_size=0.02, drivers=['AAIGrid'], fill_value=LEAFLET_NODATA_VALUE)
-            del wcofs_range
-
-            dataset.wcofs.reset_dataset_grid()
+            # dataset.wcofs.reset_dataset_grid()
+            #
+            # wcofs_range = dataset.wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg', time_deltas=[day_delta],
+            #                                         grid_filename=dataset.wcofs.WCOFS_2KM_GRID_FILENAME,
+            #                                         source_url=os.path.join(DATA_DIR, 'input/wcofs/avg'),
+            #                                         wcofs_string='wcofs2')
+            # wcofs_range.write_rasters(daily_average_dir, ['temp'], filename_suffix='noDA_2km', x_size=0.02, y_size=0.02,
+            #                           drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
+            # wcofs_range.write_rasters(daily_average_dir, ['u', 'v'], filename_suffix='noDA_2km', vector_components=True,
+            #                           x_size=0.02, y_size=0.02, drivers=['AAIGrid'], fill_value=LEAFLET_NODATA_VALUE)
+            # del wcofs_range
+            #
+            # dataset.wcofs.reset_dataset_grid()
         except dataset._utilities.NoDataError as error:
             with open(log_path, 'a') as log_file:
                 log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
