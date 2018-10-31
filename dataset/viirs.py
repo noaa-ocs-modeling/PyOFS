@@ -79,15 +79,12 @@ class VIIRS_Dataset:
         
         self.url = None
         
+        satellite = 'NPP'
+        
         month_dir = f'{self.granule_datetime.year}/{self.granule_datetime.timetuple().tm_yday:03}'
         filename = f'{self.granule_datetime.strftime("%Y%m%d%H%M%S")}-{self.algorithm}-L3U_GHRSST-SSTsubskin-VIIRS_{satellite.upper()}-ACSPO_V{self.version}-v02.0-fv01.0.nc'
         
-        satellite = 'NPP'
-        
         for source_format, urls in SOURCES.items():
-            if source_format == 'FTP':
-                import tempfile
-            
             for source, source_url in urls.items():
                 if source_format == 'OpenDAP':
                     # TODO N20 does not have an OpenDAP archive
@@ -110,6 +107,7 @@ class VIIRS_Dataset:
                             # TODO N20 does not have a reanalysis archive
                             if satellite.upper() == 'N20':
                                 continue
+                            
                             ftp_path = f'/{input_dir}/ran/viirs/{satellite.lower()}/l3u/{month_dir}/{filename}'
                         
                         url = f'{source_url}/{ftp_path.lstrip("/")}'
@@ -119,9 +117,12 @@ class VIIRS_Dataset:
                     elif source_format == 'FTP':
                         with ftplib.FTP(host_url) as ftp_connection:
                             ftp_connection.login()
-                            with tempfile.TemporaryFile('w') as temp_file:
+                            temp_filename = os.path.join(DATA_DIR, 'tempfile.nc')
+                            with open(temp_filename, 'wb') as temp_file:
                                 ftp_connection.retrbinary(f'RETR {ftp_path}', temp_file.write)
-                                self.netcdf_dataset = xarray.open_dataset(temp_file.name)
+                                self.netcdf_dataset = xarray.open_dataset(temp_filename)
+                            
+                            os.remove(temp_filename)
                     
                     self.url = url
                     break
@@ -736,6 +737,6 @@ def get_pass_times(start_datetime: datetime.datetime, end_datetime: datetime.dat
 if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIR, r'output\test\viirs')
     
-    viirs_dataset = VIIRS_Dataset(datetime.datetime(2018, 10, 29, 12), satellite='N20', version='2.60')
+    viirs_dataset = VIIRS_Dataset(datetime.datetime(2018, 10, 29, 12), version='2.60')
     
     print('done')
