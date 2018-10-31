@@ -7,9 +7,10 @@ Created on Jun 13, 2018
 @author: zachary.burnett
 """
 
-import collections
+from collections import OrderedDict
 from concurrent import futures
 import datetime
+import ftplib
 import math
 import os
 import threading
@@ -23,21 +24,24 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-from main import DATA_DIR
 from dataset import _utilities
+from main import DATA_DIR
 
 VIIRS_START_DATETIME = datetime.datetime.strptime('2012-03-01 00:10:00', '%Y-%m-%d %H:%M:%S')
 VIIRS_PERIOD = datetime.timedelta(days=16)
 
-VIIRS_PASS_TIMES_FILENAME = os.path.join(DATA_DIR, r"reference\viirs_pass_times.txt")
+PASS_TIMES_FILENAME = os.path.join(DATA_DIR, r"reference\viirs_pass_times.txt")
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 
 RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
 
-SOURCE_URLS = collections.OrderedDict({
+SOURCES = OrderedDict({'OpenDAP': OrderedDict({
     'NESDIS': 'https://www.star.nesdis.noaa.gov/thredds/dodsC',
-    'JPL': 'https://podaac-opendap.jpl.nasa.gov:443/opendap/allData/ghrsst/data/GDS2/L3U/VIIRS_NPP',
-    'NODC': 'https://data.nodc.noaa.gov/thredds/catalog/ghrsst/L3U/VIIRS_NPP'
+    'JPL': 'https://podaac-opendap.jpl.nasa.gov:443/opendap/allData/ghrsst/data/GDS2/L3U',
+    'NODC': 'https://data.nodc.noaa.gov/thredds/catalog/ghrsst/L3U'
+}), 'FTP': OrderedDict({
+    'NESDIS': 'ftp.star.nesdis.noaa.gov/pub/socd2/coastwatch/sst'
+})
 })
 
 
@@ -48,14 +52,14 @@ class VIIRS_Dataset:
     
     def __init__(self, granule_datetime: datetime.datetime,
                  study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
-                 data_source: str = 'OSPO', acspo_version: str = '2.41', threading_lock: threading.Lock = None):
+                 algorithm: str = 'OSPO', version: str = '2.41', threading_lock: threading.Lock = None):
         """
         Retrieve VIIRS NetCDF dataset from NOAA with given datetime.
 
         :param granule_datetime: Dataset datetime.
         :param study_area_polygon_filename: Filename of vector file containing study area boundary.
-        :param data_source: Either 'STAR' or 'OSPO'.
-        :param acspo_version: ACSPO Version number (2.40 - 2.41).
+        :param algorithm: Either 'STAR' or 'OSPO'.
+        :param version: ACSPO Version number (2.40 - 2.41).
         :param threading_lock: Global lock in case of threaded dataset compilation.
         :raises NoDataError: if dataset does not exist.
         """
@@ -70,28 +74,62 @@ class VIIRS_Dataset:
         
         # use NRT flag if granule is less than 13 days old
         self.near_real_time = datetime.datetime.now() - granule_datetime <= datetime.timedelta(days=13)
-        self.data_source = data_source
-        self.acspo_version = acspo_version
+        self.algorithm = algorithm
+        self.version = version
         
-        url_suffix = f'{self.granule_datetime.year}/{self.granule_datetime.timetuple().tm_yday:03}/' \
-                     f'{self.granule_datetime.strftime("%Y%m%d%H%M%S")}-{self.data_source}-L3U_GHRSST-SSTsubskin-VIIRS_NPP-ACSPO_V{self.acspo_version}-v02.0-fv01.0.nc'
+        self.url = None
         
-        for source, url_prefix in SOURCE_URLS.items():
-            if source == 'NESDIS':
-                url_prefix = f'{url_prefix}/gridSNPPVIIRS{"NRT" if self.near_real_time else "SCIENCE"}L3UWW00'
-            elif source == 'JPL':
-                url_prefix = f'{url_prefix}/{data_source}/v{acspo_version}'
-            elif source in 'NODC':
-                url_prefix = f'{url_prefix}/{data_source}'
+        month_dir = f'{self.granule_datetime.year}/{self.granule_datetime.timetuple().tm_yday:03}'
+        filename = f'{self.granule_datetime.strftime("%Y%m%d%H%M%S")}-{self.algorithm}-L3U_GHRSST-SSTsubskin-VIIRS_{satellite.upper()}-ACSPO_V{self.version}-v02.0-fv01.0.nc'
+        
+        satellite = 'NPP'
+        
+        for source_format, urls in SOURCES.items():
+            if source_format == 'FTP':
+                import tempfile
             
-            url = f'{url_prefix}/{url_suffix}'
+            for source, source_url in urls.items():
+                if source_format == 'OpenDAP':
+                    # TODO N20 does not have an OpenDAP archive
+                    if satellite.upper() == 'N20':
+                        continue
+                    
+                    if source == 'NESDIS':
+                        url = f'{source_url}/gridSNPPVIIRS{"NRT" if self.near_real_time else "SCIENCE"}L3UWW00/{month_dir}/{filename}'
+                    elif source == 'JPL':
+                        url = f'{source_url}/VIIRS_{satellite}/{algorithm}/v{self.version}/{month_dir}/{filename}'
+                    elif source in 'NODC':
+                        url = f'{source_url}/VIIRS_{satellite}/{algorithm}/{month_dir}/{filename}'
+                elif source_format == 'FTP':
+                    host_url, input_dir = source_url.split('/', 1)
+                    
+                    if source == 'NESDIS':
+                        if self.near_real_time:
+                            ftp_path = f'/{input_dir}/nrt/viirs_acspo{self.version}/{satellite.lower()}/l3u/{month_dir}/{filename}'
+                        else:
+                            # TODO N20 does not have a reanalysis archive
+                            if satellite.upper() == 'N20':
+                                continue
+                            ftp_path = f'/{input_dir}/ran/viirs/{satellite.lower()}/l3u/{month_dir}/{filename}'
+                        
+                        url = f'{source_url}/{ftp_path.lstrip("/")}'
+                try:
+                    if source_format == 'OpenDAP':
+                        self.netcdf_dataset = xarray.open_dataset(url)
+                    elif source_format == 'FTP':
+                        with ftplib.FTP(host_url) as ftp_connection:
+                            ftp_connection.login()
+                            with tempfile.TemporaryFile('w') as temp_file:
+                                ftp_connection.retrbinary(f'RETR {ftp_path}', temp_file.write)
+                                self.netcdf_dataset = xarray.open_dataset(temp_file.name)
+                    
+                    self.url = url
+                    break
+                except Exception as error:
+                    print(f'Error collecting dataset from {source} at {url}: {error}')
             
-            try:
-                self.netcdf_dataset = xarray.open_dataset(url)
-                self.url = url
+            if self.url is not None:
                 break
-            except Exception as error:
-                print(f'Error collecting dataset from {source} at {url}: {error}')
         else:
             raise _utilities.NoDataError(f'{self.granule_datetime}: No VIIRS dataset found.')
         
@@ -292,7 +330,7 @@ class VIIRS_Dataset:
     
     def __repr__(self):
         used_params = [self.granule_datetime.__repr__()]
-        optional_params = [self.study_area_polygon_filename, self.near_real_time, self.data_source, self.acspo_version]
+        optional_params = [self.study_area_polygon_filename, self.near_real_time, self.algorithm, self.version]
         
         for param in optional_params:
             if param is not None:
@@ -316,26 +354,26 @@ class VIIRS_Range:
     
     def __init__(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime,
                  study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
-                 viirs_pass_times_filename: str = VIIRS_PASS_TIMES_FILENAME, data_source: str = 'OSPO',
-                 acspo_version: str = '2.41'):
+                 pass_times_filename: str = PASS_TIMES_FILENAME, algorithm: str = 'OSPO',
+                 version: str = '2.41'):
         """
         Collect VIIRS datasets within time interval.
 
         :param start_datetime: Beginning of time interval.
         :param end_datetime: End of time interval.
         :param study_area_polygon_filename: Filename of vector file of study area boundary.
-        :param viirs_pass_times_filename: Path to text file with pass times.
-        :param data_source: Either 'STAR' or 'OSPO'.
-        :param acspo_version: ACSPO Version number (2.40 - 2.41).
+        :param pass_times_filename: Path to text file with pass times.
+        :param algorithm: Either 'STAR' or 'OSPO'.
+        :param version: ACSPO Version number (2.40 - 2.41).
         :raises NoDataError: if data does not exist.
         """
         
         self.start_datetime = start_datetime
         self.end_datetime = end_datetime if end_datetime < datetime.datetime.utcnow() else datetime.datetime.utcnow()
         self.study_area_polygon_filename = study_area_polygon_filename
-        self.viirs_pass_times_filename = viirs_pass_times_filename
-        self.data_source = data_source
-        self.acspo_version = acspo_version
+        self.viirs_pass_times_filename = pass_times_filename
+        self.algorithm = algorithm
+        self.version = version
         
         self.pass_times = get_pass_times(self.start_datetime, self.end_datetime, self.viirs_pass_times_filename)
         
@@ -351,9 +389,11 @@ class VIIRS_Range:
             # concurrently populate dictionary with VIIRS dataset object for each pass time in the given time interval
             with futures.ThreadPoolExecutor() as concurrency_pool:
                 scene_futures = {
-                    concurrency_pool.submit(VIIRS_Dataset, scene_datetime, self.study_area_polygon_filename,
-                                            self.data_source, self.acspo_version,
-                                            threading_lock): scene_datetime for scene_datetime in self.pass_times}
+                    concurrency_pool.submit(VIIRS_Dataset, granule_datetime=pass_time,
+                                            study_area_polygon_filename=self.study_area_polygon_filename,
+                                            algorithm=self.algorithm, version=self.version,
+                                            threading_lock=threading_lock): pass_time for pass_time in
+                    self.pass_times}
                 
                 # yield results as threads complete
                 for completed_future in futures.as_completed(scene_futures):
@@ -555,7 +595,7 @@ class VIIRS_Range:
     def __repr__(self):
         used_params = [self.start_datetime.__repr__(), self.end_datetime.__repr__()]
         optional_params = [self.study_area_polygon_filename, self.viirs_pass_times_filename,
-                           self.data_source, self.acspo_version]
+                           self.algorithm, self.version]
         
         for param in optional_params:
             if param is not None:
@@ -571,7 +611,7 @@ class VIIRS_Range:
 
 def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
                            start_datetime: datetime.datetime = VIIRS_START_DATETIME,
-                           output_filename: str = VIIRS_PASS_TIMES_FILENAME, num_periods: int = 1,
+                           output_filename: str = PASS_TIMES_FILENAME, num_periods: int = 1,
                            data_source: str = 'STAR', subskin: bool = False,
                            acspo_version: str = '2.40'):
     """
@@ -646,18 +686,18 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
 
 
 def get_pass_times(start_datetime: datetime.datetime, end_datetime: datetime.datetime,
-                   viirs_pass_times_filename: str = VIIRS_PASS_TIMES_FILENAME):
+                   pass_times_filename: str = PASS_TIMES_FILENAME):
     """
     Retreive array of datetimes of VIIRS passes within the given time interval, given initial period durations.
 
     :param start_datetime: Beginning of time interval.
     :param end_datetime: End of time interval.
-    :param viirs_pass_times_filename: Filename of text file with durations of first VIIRS period.
+    :param pass_times_filename: Filename of text file with durations of first VIIRS period.
     :return:
     """
     
     # get datetime of first pass in given file
-    first_pass_row = numpy.genfromtxt(viirs_pass_times_filename, dtype=str, delimiter=',')[0, :]
+    first_pass_row = numpy.genfromtxt(pass_times_filename, dtype=str, delimiter=',')[0, :]
     viirs_start_datetime = datetime.datetime.strptime(first_pass_row[0], '%Y%m%dT%H%M%S') - datetime.timedelta(
         seconds=float(first_pass_row[1]))
     
@@ -666,7 +706,7 @@ def get_pass_times(start_datetime: datetime.datetime, end_datetime: datetime.dat
         days=numpy.floor((start_datetime - viirs_start_datetime).days / 16) * 16)
     
     # get array of seconds since the start of the first 16-day VIIRS period
-    pass_durations = numpy.genfromtxt(viirs_pass_times_filename, dtype=str, delimiter=',')[:, 1].T.astype(numpy.float32)
+    pass_durations = numpy.genfromtxt(pass_times_filename, dtype=str, delimiter=',')[:, 1].T.astype(numpy.float32)
     pass_durations = numpy.asarray([datetime.timedelta(seconds=float(duration)) for duration in pass_durations])
     
     # add extra VIIRS periods to end of pass durations
@@ -696,23 +736,6 @@ def get_pass_times(start_datetime: datetime.datetime, end_datetime: datetime.dat
 if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIR, r'output\test\viirs')
     
-    viirs_dates = _utilities.day_range(datetime.datetime(2018, 9, 28),
-                                       datetime.datetime.now() + datetime.timedelta(days=1))
-    
-    for viirs_date in viirs_dates:
-        viirs_range = VIIRS_Range(viirs_date, viirs_date + datetime.timedelta(days=1))
-        
-        for granule_datetime, dataset in viirs_range.datasets.items():
-            dataset.sst(sses_correction=True)
-    
-    # start_datetime = datetime.datetime.combine(datetime.date(2018, 8, 25),
-    #                                            datetime.datetime.min.time()) - datetime.timedelta(days=1)
-    # end_datetime = start_datetime + datetime.timedelta(days=1)
-    #
-    # # write overlapped scenes from specified time interval
-    # viirs_range = VIIRS_Range(start_datetime, end_datetime)
-    # viirs_range.write_rasters(output_dir, variables=['sses'], filename_prefix='sses')
-    # viirs_range.write_rasters(output_dir, variables=['sst'], filename_prefix='uncorrected')
-    # viirs_range.write_rasters(output_dir, variables=['sst'], filename_prefix='corrected', sses_correction=True)
+    viirs_dataset = VIIRS_Dataset(datetime.datetime(2018, 10, 29, 12), satellite='N20', version='2.60')
     
     print('done')
