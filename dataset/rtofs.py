@@ -1,6 +1,6 @@
 # coding=utf-8
 """
-PyOFS model output data collection and transformation by interpolation onto Cartesian grid.
+RTOFS model output data collection and transformation by interpolation onto Cartesian grid.
 
 Created on Jun 25, 2018
 
@@ -38,7 +38,7 @@ RTOFS_NOMADS_URL = 'http://nomads.ncep.noaa.gov:9090/dods/rtofs'
 
 class RTOFS_Dataset:
     """
-    West Coast Ocean Forecasting System (WCOFS) NetCDF dataset.
+    Real-Time Ocean Forecasting System (RTOFS) NetCDF dataset.
     """
     
     def __init__(self, model_date: datetime.datetime, time_interval='daily'):

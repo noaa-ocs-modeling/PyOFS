@@ -1,6 +1,6 @@
 # coding=utf-8
 """
-PyOFS model output data collection and transformation by interpolation onto Cartesian grid.
+WCOFS model output data collection and transformation by interpolation onto Cartesian grid.
 
 Created on Jun 25, 2018
 
