@@ -118,6 +118,7 @@ def hour_range(start_datetime: datetime.datetime, end_datetime: datetime.datetim
     duration = end_datetime - start_datetime
     hours = int(duration.total_seconds() / 3600)
     stride = 1 if duration.days > 0 else -1
+    
     return [start_datetime + datetime.timedelta(hours=hour) for hour in range(0, hours, stride)]
 
 
@@ -136,6 +137,7 @@ def ten_minute_range(start_datetime: datetime.datetime, end_datetime: datetime.d
     duration = end_datetime - start_datetime
     minutes = int(duration.total_seconds() / 60)
     stride = 10
+    
     return [start_datetime + datetime.timedelta(minutes=minute) for minute in range(0, minutes + 1, stride)]
 
 
