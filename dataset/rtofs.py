@@ -10,11 +10,13 @@ Created on Jun 25, 2018
 from concurrent import futures
 import datetime
 import os
+import threading
 
 import fiona
 import fiona.crs
 import numpy
 import rasterio.control
+import rasterio.features
 from rasterio.io import MemoryFile
 import rasterio.mask
 import rasterio.warp
@@ -26,14 +28,35 @@ RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
 FIONA_WGS84 = fiona.crs.from_epsg(4326)
 
 COORDINATE_VARIABLES = ['time', 'lev', 'lat', 'lon']
+
+DATASET_STRUCTURE = {
+    '2ds': {
+        'nowcast': {'prog': ['sss', 'sst', 'u_velocity', 'v_velocity'],
+                    'diag': ['ssh', 'ice_coverage', 'ice_thickness']},
+        'forecast': {'prog': ['sss', 'sst', 'u_velocity', 'v_velocity'],
+                     'diag': ['ssh', 'ice_coverage', 'ice_thickness']}
+    },
+    '3dz': {
+        'nowcast': {'salt': ['salinity'], 'temp': ['temperature'], 'uvel': ['u'], 'vvel': ['v']},
+        'forecast': {'salt': ['salinity'], 'temp': ['temperature'], 'uvel': ['u'], 'vvel': ['v']}
+    }
+}
+
 DATA_VARIABLES = {
-    'nowcast': {'salt': ['salinity'], 'temp': ['temperature'], 'uvel': ['u'], 'vvel': ['v']},
-    'forecast': {'prog': ['sss', 'sst', 'u_velocity', 'v_velocity'], 'diag': ['ssh', 'ice_coverage', 'ice_thickness']}
+    'salt': {'2ds': {'prog': 'sss'}, '3dz': {'salt': 'salinity'}},
+    'temp': {'2ds': {'prog': 'sst'}, '3dz': {'temp': 'temperature'}},
+    'u': {'2ds': {'prog': 'u_velocity'}, '3dz': {'uvel': 'u'}},
+    'v': {'2ds': {'prog': 'v_velocity'}, '3dz': {'vvel': 'v'}},
+    'ssh': {'2ds': {'diag': 'ssh'}},
+    'ice_coverage': {'2ds': {'diag': 'ice_coverage'}},
+    'ice_thickness': {'2ds': {'diag': 'ice_thickness'}}
 }
 
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 
-RTOFS_NOMADS_URL = 'http://nomads.ncep.noaa.gov:9090/dods/rtofs'
+SOURCE_URL = 'http://nomads.ncep.noaa.gov:9090/dods/rtofs'
+
+GLOBAL_LOCK = threading.Lock()
 
 
 class RTOFS_Dataset:
@@ -41,91 +64,113 @@ class RTOFS_Dataset:
     Real-Time Ocean Forecasting System (RTOFS) NetCDF dataset.
     """
     
-    def __init__(self, model_date: datetime.datetime, time_interval='daily'):
+    def __init__(self, model_date: datetime.datetime, source: str = '2ds', time_interval: str = 'daily',
+                 study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME):
         """
         Creates new dataset object from datetime and given model parameters.
 
         :param model_date: Model run date.
+        :param source: Either '2ds' or '3dz'.
         :param time_interval: Time interval of model output.
+        :param study_area_polygon_filename: Filename of vector file containing study area boundary.
         """
         
         self.model_datetime = model_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        self.source = source
+        self.time_interval = time_interval
+        
+        self.study_area_polygon_filename, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
+        
+        if study_area_polygon_layer_name == '':
+            study_area_polygon_layer_name = None
+        
+        self.netcdf_datasets = {}
+        self.dataset_locks = {}
         
         date_string = self.model_datetime.strftime('%Y%m%d')
         
-        if time_interval == 'daily':
-            for direction, variable_groups in DATA_VARIABLES.items():
-                self.netcdf_datasets[direction] = {}
+        if self.time_interval == 'daily':
+            for forecast_direction, datasets in DATASET_STRUCTURE[self.source].items():
+                self.netcdf_datasets[forecast_direction] = {}
+                self.dataset_locks[forecast_direction] = {}
                 
-                for variable_group in variable_groups:
-                    url = f'{RTOFS_NOMADS_URL}/rtofs_global{date_string}/rtofs_glo_3dz_{direction}_{time_interval}_{variable_group}'
+                date_dir = f'rtofs_global{date_string}'
+                
+                for dataset_name in datasets:
+                    filename = f'rtofs_glo_{self.source}_{forecast_direction}_{self.time_interval}_{dataset_name}'
+                    url = f'{SOURCE_URL}/{date_dir}/{filename}'
                     
                     try:
-                        self.netcdf_datasets[direction][variable_group] = xarray.open_dataset(url)
+                        dataset = xarray.open_dataset(url)
+                        
+                        self.netcdf_datasets[forecast_direction][dataset_name] = dataset
+                        self.dataset_locks[forecast_direction][dataset_name] = threading.Lock()
+                        
+                        self.lon = dataset['lon'].values
+                        self.lat = dataset['lat'].values
+                        
+                        lon_pixel_size = dataset['lon'].resolution
+                        lat_pixel_size = dataset['lat'].resolution
+                        
+                        # get first record in layer
+                        with fiona.open(self.study_area_polygon_filename,
+                                        layer=study_area_polygon_layer_name) as vector_layer:
+                            study_area_geojson = next(iter(vector_layer))['geometry']
+                        
+                        global_west = numpy.min(self.lon)
+                        global_north = numpy.max(self.lon)
+                        
+                        global_grid_transform = rasterio.transform.from_origin(global_west, global_north,
+                                                                               lon_pixel_size, lat_pixel_size)
+                        
+                        # create array mask of data extent within study area, with the overall shape of the global VIIRS grid
+                        raster_mask = rasterio.features.rasterize([study_area_geojson],
+                                                                  out_shape=(self.lat.shape[0], self.lon.shape[0]),
+                                                                  transform=global_grid_transform)
+                        
+                        # get indices of rows and columns within the data where the polygon mask exists
+                        mask_row_indices, mask_col_indices = numpy.where(raster_mask == 1)
+                        
+                        west_index = numpy.min(mask_col_indices)
+                        north_index = numpy.min(mask_row_indices)
+                        east_index = numpy.max(mask_col_indices)
+                        south_index = numpy.max(mask_row_indices)
+                        
+                        # create variable for the index bounds of the mask within the greater VIIRS global grid (west, north, east, south)
+                        self.study_area_index_bounds = (west_index, north_index, east_index, south_index)
+                        
+                        study_area_west = self.netcdf_dataset['lon'][west_index]
+                        study_area_north = self.netcdf_dataset['lat'][north_index]
+                        
+                        self.study_area_transform = rasterio.transform.from_origin(study_area_west, study_area_north,
+                                                                                   lon_pixel_size, lat_pixel_size)
                     except OSError as error:
                         print(f'Error collecting RTOFS from {url}')
     
-    def bounds(self, variable: str = 'psi') -> tuple:
-        """
-        Returns bounds of grid of given variable.
-
-        :param variable: Variable name.
-        :return: Tuple of (west, north, east, south)
-        """
-        
-        grid_name = RTOFS_Dataset.variable_grids[variable]
-        return RTOFS_Dataset.grid_bounds[grid_name]
-    
-    def data(self, variable: str, time_delta: int) -> numpy.ndarray:
+    def data(self, variable: str, forecast_direction: int) -> numpy.ndarray:
         """
         Get data of specified variable at specified hour.
 
         :param variable: Name of variable to retrieve.
-        :param time_delta: Time index to retrieve (days for avg, hours for others).
+        :param forecast_direction: Direction to retrieve.
         :return: Array of data.
         """
         
-        if time_delta in self.time_deltas:
-            if self.source == 'avg':
-                if time_delta >= 0:
-                    dataset_index = 1
-                    day_index = time_delta
-                else:
-                    dataset_index = -1
-                    day_index = 0
+        if forecast_direction in DATASET_STRUCTURE[self.source]:
+            if variable in DATA_VARIABLES:
+                datasets = DATA_VARIABLES[variable][self.source]
+                dataset_name, variable_name = next(iter(datasets.items()))
                 
-                with self.dataset_locks[dataset_index]:
-                    # get surface layer; the last layer (of 40) at dimension 1
-                    if variable in ['u', 'v']:
-                        raw_u = self.netcdf_datasets[dataset_index]['u'][day_index, -1, :-1, :].values
-                        raw_v = self.netcdf_datasets[dataset_index]['v'][day_index, -1, :, :-1].values
-                        theta = RTOFS_Dataset.angle[:-1, :-1]
-                        
-                        if variable == 'u':
-                            output_data = raw_u * numpy.cos(theta) - raw_v * numpy.sin(theta)
-                            extra_row = numpy.empty((1, output_data.shape[1]), dtype=output_data.dtype)
-                            extra_row[:] = numpy.nan
-                            output_data = numpy.concatenate((output_data, extra_row), axis=0)
-                        elif variable == 'v':
-                            output_data = raw_u * numpy.sin(theta) + raw_v * numpy.cos(theta)
-                            extra_column = numpy.empty((output_data.shape[0], 1), dtype=output_data.dtype)
-                            extra_column[:] = numpy.nan
-                            output_data = numpy.concatenate((output_data, extra_column), axis=1)
-                    else:
-                        output_data = self.netcdf_datasets[dataset_index][variable][day_index, -1, :, :].values
-            
+                with self.dataset_locks[forecast_direction][dataset_name]:
+                    return self.netcdf_datasets[forecast_direction][dataset_name][variable_name][0, :, :].values
             else:
-                with self.dataset_locks[time_delta]:
-                    output_data = self.netcdf_datasets[time_delta][variable][0, :, :].values
+                raise ValueError(f'Variable must be one of {list(DATA_VARIABLES[self.source].keys())}.')
         else:
-            output_data = numpy.empty(RTOFS_Dataset.grid_shapes[RTOFS_Dataset.variable_grids[variable]])
-            output_data[:] = numpy.nan
-        
-        return output_data
+            raise ValueError(f'Forecast direction must be one of {list(DATASET_STRUCTURE[self.source].keys())}.')
     
     def data_average(self, variable: str, time_deltas: list = None) -> numpy.ndarray:
         """
-        Writes interpolation of averaged data of given variable to output path.
+        Gets average of data.
 
         :param variable: Variable to use.
         :param time_deltas: List of integers of time indices to use in average (days for avg, hours for others).
@@ -150,53 +195,16 @@ class RTOFS_Dataset:
         
         return variable_data
     
-    def write_rasters(self, output_dir: str, variables: list = None, time_deltas: list = None, x_size: float = 0.04,
-                      y_size: float = 0.04, drivers: list = ['GTiff']):
-        """
-        Writes interpolated rasters of given variables to output directory using concurrency.
-
-        :param output_dir: Path to directory.
-        :param variables: Variable names to use.
-        :param time_deltas: List of time indices to write.
-        :param x_size: Cell size of output grid in X direction.
-        :param y_size: Cell size of output grid in Y direction.
-        :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
-        """
-        
-        if variables is None:
-            variables = MEASUREMENT_VARIABLES_2DS if self.source == '2ds' else MEASUREMENT_VARIABLES
-        
-        # concurrently write rasters with data from each variable
-        with futures.ThreadPoolExecutor() as concurrency_pool:
-            # get data average for each variable
-            variable_mean_futures = {
-                concurrency_pool.submit(self.data_average, variable_name, time_deltas): variable_name for variable_name
-                in variables}
-            
-            for completed_future in futures.as_completed(variable_mean_futures):
-                variable_name = variable_mean_futures[completed_future]
-                
-                data = completed_future.result()
-                
-                self.write_raster(os.path.join(output_dir, f'wcofs_{variable_name}.tiff'), variable_name,
-                                  input_data=data, x_size=x_size, y_size=y_size, drivers=drivers)
-            
-            del variable_mean_futures
-    
-    def write_raster(self, output_filename: str, variable: str,
-                     study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, time_deltas: int = None,
-                     input_data: numpy.ndarray = None, x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999,
-                     drivers: list = ['GTiff']):
+    def write_raster(self, output_filename: str, variable: str, forecast_direction: str,
+                     study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
+                     fill_value=-9999, drivers: list = ['GTiff']):
         """
         Writes interpolated raster of given variable to output path.
 
         :param output_filename: Path of raster file to create.
         :param variable: Name of variable.
+        :param forecast_direction: Direction to retrieve.
         :param study_area_polygon_filename: Path to vector file containing study area boundary.
-        :param time_deltas: List of time indices to write.
-        :param input_data: Grid data to interpolate and write.
-        :param x_size: Cell size of output grid in X direction.
-        :param y_size: Cell size of output grid in Y direction.
         :param fill_value: Desired fill value of output.
         :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
         """
@@ -209,30 +217,10 @@ class RTOFS_Dataset:
         with fiona.open(study_area_polygon_filename, layer=layer_name) as vector_layer:
             study_area_geojson = next(iter(vector_layer))['geometry']
         
-        grid_name = RTOFS_Dataset.variable_grids[variable]
-        
-        west = RTOFS_Dataset.grid_bounds[grid_name][0]
-        north = RTOFS_Dataset.grid_bounds[grid_name][1]
-        east = RTOFS_Dataset.grid_bounds[grid_name][2]
-        south = RTOFS_Dataset.grid_bounds[grid_name][3]
-        
-        x_size = x_size if x_size is not None else self.x_size
-        y_size = y_size if y_size is not None else self.y_size
-        
-        output_grid_lon = numpy.arange(west, east, x_size)
-        output_grid_lat = numpy.arange(south, north, y_size)
-        
-        grid_transform = RTOFS_Dataset.grid_transforms[grid_name]
-        
-        if input_data is None:
-            input_data = self.data_average(variable, time_deltas)
-        
-        print(f'Starting {variable} interpolation')
-        
-        # interpolate data onto coordinate grid
-        output_data = interpolate_grid(RTOFS_Dataset.data_coordinates[grid_name]['lon'],
-                                       RTOFS_Dataset.data_coordinates[grid_name]['lat'], input_data, output_grid_lon,
-                                       output_grid_lat)
+        output_data = self.data(variable, forecast_direction)
+        grid_transform = rasterio.transform.from_bounds(self.lon.min(), self.lat.min(),
+                                                        self.lon.max(), self.lat.max(),
+                                                        self.lon.shape, self.lat.shape)
         
         gdal_args = {
             'transform': grid_transform, 'height': output_data.shape[0], 'width': output_data.shape[1], 'count': 1,
@@ -266,6 +254,39 @@ class RTOFS_Dataset:
             print(f'Writing {output_filename}')
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(masked_data, 1)
+    
+    def write_rasters(self, output_dir: str, variables: list = None, time_deltas: list = None, x_size: float = 0.04,
+                      y_size: float = 0.04, drivers: list = ['GTiff']):
+        """
+        Writes rasters of given variables to output directory.
+
+        :param output_dir: Path to directory.
+        :param variables: Variable names to use.
+        :param time_deltas: List of time indices to write.
+        :param x_size: Cell size of output grid in X direction.
+        :param y_size: Cell size of output grid in Y direction.
+        :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
+        """
+        
+        if variables is None:
+            variables = list(DATA_VARIABLES[self.source].keys())
+        
+        # concurrently write rasters with data from each variable
+        with futures.ThreadPoolExecutor() as concurrency_pool:
+            # get data average for each variable
+            variable_mean_futures = {
+                concurrency_pool.submit(self.data_average, variable_name, time_deltas): variable_name for variable_name
+                in variables}
+            
+            for completed_future in futures.as_completed(variable_mean_futures):
+                variable_name = variable_mean_futures[completed_future]
+                
+                data = completed_future.result()
+                
+                self.write_raster(os.path.join(output_dir, f'wcofs_{variable_name}.tiff'), variable_name,
+                                  input_data=data, x_size=x_size, y_size=y_size, drivers=drivers)
+            
+            del variable_mean_futures
     
     def write_vector(self, output_filename: str, layer_name: str = None, time_deltas: list = None):
         """
@@ -384,5 +405,6 @@ if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIR, r'output\test')
     
     rtofs_dataset = RTOFS_Dataset(datetime.datetime.now())
+    rtofs_dataset.write_raster(os.path.join(output_dir, 'test.tif'), 'temp', 'nowcast')
     
     print('done')

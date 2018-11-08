@@ -67,10 +67,10 @@ class VIIRS_Dataset:
         # round minute to nearest 10 minutes (VIIRS data interval)
         self.granule_datetime = _utilities.round_to_ten_minutes(granule_datetime)
         
-        self.study_area_polygon_filename, self.layer_name = study_area_polygon_filename.rsplit(':', 1)
+        self.study_area_polygon_filename, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
         
-        if self.layer_name == '':
-            self.layer_name = None
+        if study_area_polygon_layer_name == '':
+            study_area_polygon_layer_name = None
         
         # use NRT flag if granule is less than 13 days old
         self.near_real_time = datetime.datetime.now() - granule_datetime <= datetime.timedelta(days=13)
@@ -165,11 +165,11 @@ class VIIRS_Dataset:
             # print(f'Calculating indices and transform from granule at {self.granule_datetime}...')
             
             # get first record in layer
-            with fiona.open(self.study_area_polygon_filename, layer=self.layer_name) as vector_layer:
+            with fiona.open(self.study_area_polygon_filename, layer=study_area_polygon_layer_name) as vector_layer:
                 VIIRS_Dataset.study_area_geojson = next(iter(vector_layer))['geometry']
             
-            global_west = numpy.min(self.netcdf_dataset['lon'][:])
-            global_north = numpy.max(self.netcdf_dataset['lat'][:])
+            global_west = numpy.min(self.netcdf_dataset['lon'])
+            global_north = numpy.max(self.netcdf_dataset['lat'])
             
             global_grid_transform = rasterio.transform.from_origin(global_west, global_north, lon_pixel_size,
                                                                    lat_pixel_size)
@@ -635,13 +635,13 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
     
     datetime_range = _utilities.ten_minute_range(start_datetime, end_datetime)
     
-    study_area_polygon_geopackage, layer_name = study_area_polygon_filename.rsplit(':', 1)
+    study_area_polygon_geopackage, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
     
-    if layer_name == '':
-        layer_name = None
+    if study_area_polygon_layer_name == '':
+        study_area_polygon_layer_name = None
     
     # construct polygon from the first record in layer
-    with fiona.open(study_area_polygon_geopackage, layer=layer_name) as vector_layer:
+    with fiona.open(study_area_polygon_geopackage, layer=study_area_polygon_layer_name) as vector_layer:
         study_area_polygon = shapely.geometry.Polygon(next(iter(vector_layer))['geometry']['coordinates'][0])
     
     lines = []
@@ -737,6 +737,6 @@ def get_pass_times(start_datetime: datetime.datetime, end_datetime: datetime.dat
 if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIR, r'output\test\viirs')
     
-    viirs_dataset = VIIRS_Dataset(datetime.datetime(2018, 10, 29, 12), version='2.60')
+    viirs_dataset = VIIRS_Dataset(datetime.datetime(2018, 10, 29, 12))
     
     print('done')
