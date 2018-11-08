@@ -52,14 +52,14 @@ class VIIRS_Dataset:
     
     def __init__(self, granule_datetime: datetime.datetime,
                  study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
-                 algorithm: str = 'OSPO', version: str = '2.41', threading_lock: threading.Lock = None):
+                 algorithm: str = 'OSPO', version: str = None, threading_lock: threading.Lock = None):
         """
         Retrieve VIIRS NetCDF dataset from NOAA with given datetime.
 
         :param granule_datetime: Dataset datetime.
         :param study_area_polygon_filename: Filename of vector file containing study area boundary.
         :param algorithm: Either 'STAR' or 'OSPO'.
-        :param version: ACSPO Version number (2.40 - 2.41).
+        :param version: ACSPO algorithm version.
         :param threading_lock: Global lock in case of threaded dataset compilation.
         :raises NoDataError: if dataset does not exist.
         """
@@ -75,7 +75,16 @@ class VIIRS_Dataset:
         # use NRT flag if granule is less than 13 days old
         self.near_real_time = datetime.datetime.now() - granule_datetime <= datetime.timedelta(days=13)
         self.algorithm = algorithm
-        self.version = version
+        
+        if version is None:
+            if granule_datetime >= datetime.datetime(2018, 11, 7, 15, 10):
+                self.version = '2.60'
+            elif granule_datetime >= datetime.datetime(2017, 9, 14, 12, 50):
+                self.version = '2.41'
+            else:
+                self.version = '2.40'
+        else:
+            self.version = version
         
         self.url = None
         
@@ -356,7 +365,7 @@ class VIIRS_Range:
     def __init__(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime,
                  study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
                  pass_times_filename: str = PASS_TIMES_FILENAME, algorithm: str = 'OSPO',
-                 version: str = '2.41'):
+                 version: str = None):
         """
         Collect VIIRS datasets within time interval.
 
@@ -365,7 +374,7 @@ class VIIRS_Range:
         :param study_area_polygon_filename: Filename of vector file of study area boundary.
         :param pass_times_filename: Path to text file with pass times.
         :param algorithm: Either 'STAR' or 'OSPO'.
-        :param version: ACSPO Version number (2.40 - 2.41).
+        :param version: ACSPO algorithm version.
         :raises NoDataError: if data does not exist.
         """
         
