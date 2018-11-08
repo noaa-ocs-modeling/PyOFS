@@ -11,10 +11,11 @@ import datetime
 import ftplib
 import os
 
+import main
+from main import DATA_DIR
+
 FTP_URI = 'tidepool.nos.noaa.gov'
 INPUT_DIR = '/pub/outgoing/CSDL'
-
-DATA_DIR = os.environ['OFS_DATA']
 
 OUTPUT_DIR = os.path.join(DATA_DIR, 'input')
 LOG_DIR = os.path.join(DATA_DIR, 'log')
