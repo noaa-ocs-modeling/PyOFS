@@ -1,6 +1,6 @@
 # coding=utf-8
 """
-PyOFS model output data collection and transformation by interpolation onto Cartesian grid.
+WCOFS model output data collection and transformation by interpolation onto Cartesian grid.
 
 Created on Jun 25, 2018
 
@@ -24,8 +24,8 @@ import scipy.interpolate
 import shapely.geometry
 import xarray
 
-from main import DATA_DIR
 from dataset import _utilities
+from main import DATA_DIR
 
 RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
 FIONA_WGS84 = fiona.crs.from_epsg(4326)
@@ -291,7 +291,7 @@ class WCOFS_Dataset:
     
     def data_average(self, variable: str, time_deltas: list = None) -> numpy.ndarray:
         """
-        Writes interpolation of averaged data of given variable to output path.
+        Gets average of data from given time deltas.
 
         :param variable: Variable to use.
         :param time_deltas: List of integers of time indices to use in average (days for avg, hours for others).
@@ -315,39 +315,6 @@ class WCOFS_Dataset:
         variable_data = numpy.mean(numpy.stack(variable_data), axis=0)
         
         return variable_data
-    
-    def write_rasters(self, output_dir: str, variables: list = None, time_deltas: list = None, x_size: float = 0.04,
-                      y_size: float = 0.04, drivers: list = ['GTiff']):
-        """
-        Writes interpolated rasters of given variables to output directory using concurrency.
-
-        :param output_dir: Path to directory.
-        :param variables: Variable names to use.
-        :param time_deltas: List of time indices to write.
-        :param x_size: Cell size of output grid in X direction.
-        :param y_size: Cell size of output grid in Y direction.
-        :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
-        """
-        
-        if variables is None:
-            variables = MEASUREMENT_VARIABLES_2DS if self.source == '2ds' else MEASUREMENT_VARIABLES
-        
-        # concurrently write rasters with data from each variable
-        with futures.ThreadPoolExecutor() as concurrency_pool:
-            # get data average for each variable
-            variable_mean_futures = {
-                concurrency_pool.submit(self.data_average, variable_name, time_deltas): variable_name for variable_name
-                in variables}
-            
-            for completed_future in futures.as_completed(variable_mean_futures):
-                variable_name = variable_mean_futures[completed_future]
-                
-                data = completed_future.result()
-                
-                self.write_raster(os.path.join(output_dir, f'wcofs_{variable_name}.tiff'), variable_name,
-                                  input_data=data, x_size=x_size, y_size=y_size, drivers=drivers)
-            
-            del variable_mean_futures
     
     def write_raster(self, output_filename: str, variable: str,
                      study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, time_deltas: int = None,
@@ -432,6 +399,39 @@ class WCOFS_Dataset:
             print(f'Writing {output_filename}')
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(masked_data, 1)
+    
+    def write_rasters(self, output_dir: str, variables: list = None, time_deltas: list = None, x_size: float = 0.04,
+                      y_size: float = 0.04, drivers: list = ['GTiff']):
+        """
+        Writes interpolated rasters of given variables to output directory using concurrency.
+
+        :param output_dir: Path to directory.
+        :param variables: Variable names to use.
+        :param time_deltas: List of time indices to write.
+        :param x_size: Cell size of output grid in X direction.
+        :param y_size: Cell size of output grid in Y direction.
+        :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
+        """
+        
+        if variables is None:
+            variables = MEASUREMENT_VARIABLES_2DS if self.source == '2ds' else MEASUREMENT_VARIABLES
+        
+        # concurrently write rasters with data from each variable
+        with futures.ThreadPoolExecutor() as concurrency_pool:
+            # get data average for each variable
+            variable_mean_futures = {
+                concurrency_pool.submit(self.data_average, variable_name, time_deltas): variable_name for variable_name
+                in variables}
+            
+            for completed_future in futures.as_completed(variable_mean_futures):
+                variable_name = variable_mean_futures[completed_future]
+                
+                data = completed_future.result()
+                
+                self.write_raster(os.path.join(output_dir, f'wcofs_{variable_name}.tiff'), variable_name,
+                                  input_data=data, x_size=x_size, y_size=y_size, drivers=drivers)
+            
+            del variable_mean_futures
     
     def write_vector(self, output_filename: str, layer_name: str = None, time_deltas: list = None):
         """
