@@ -87,7 +87,7 @@ def round_to_ten_minutes(datetime_object: datetime.datetime) -> datetime.datetim
     return datetime_object.replace(minute=int(round(datetime_object.minute, -1)), second=0, microsecond=0)
 
 
-def day_range(start_datetime: datetime.datetime, end_datetime: datetime.datetime) -> list:
+def range_daily(start_datetime: datetime.datetime, end_datetime: datetime.datetime) -> list:
     """
     Generate range of times between given times at day intervals.
 
@@ -106,7 +106,7 @@ def day_range(start_datetime: datetime.datetime, end_datetime: datetime.datetime
 # return numpy.arange(start_datetime, end_datetime, dtype='datetime64[D]')
 
 
-def hour_range(start_datetime: datetime.datetime, end_datetime: datetime.datetime) -> list:
+def range_hourly(start_datetime: datetime.datetime, end_datetime: datetime.datetime) -> list:
     """
     Generate range of times between given times at hour intervals.
 
