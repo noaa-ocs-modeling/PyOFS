@@ -122,7 +122,7 @@ class VIIRS_Dataset:
 
                             ftp_path = f'/{input_dir}/ran/viirs/{satellite.lower()}/l3u/{month_dir}/{filename}'
 
-                        url = f'{source_url}/{ftp_path.lstrip("/")}'
+                        url = f'{host_url}/{ftp_path.lstrip("/")}'
                 try:
                     if source_format == 'OpenDAP':
                         self.netcdf_dataset = xarray.open_dataset(url)
