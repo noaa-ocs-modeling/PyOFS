@@ -39,9 +39,9 @@ DATA_VARIABLES = {'other': ['u', 'v', 'w', 'temp', 'salt'], '2ds': ['u_sur', 'v_
 WCOFS_MODEL_HOURS = {'n': -24, 'f': 72}
 WCOFS_MODEL_RUN_HOUR = 3
 
-STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
-WCOFS_4KM_GRID_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs_4km_grid.nc")
-WCOFS_2KM_GRID_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs_2km_grid.nc")
+STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, 'reference', 'wcofs.gpkg:study_area')
+WCOFS_4KM_GRID_FILENAME = os.path.join(DATA_DIR, 'reference', 'wcofs_4km_grid.nc')
+WCOFS_2KM_GRID_FILENAME = os.path.join(DATA_DIR, 'reference', 'wcofs_2km_grid.nc')
 
 GLOBAL_LOCK = threading.Lock()
 
