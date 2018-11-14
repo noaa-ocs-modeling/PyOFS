@@ -19,10 +19,10 @@ import pyproj
 import rasterio.control
 import rasterio.mask
 import rasterio.warp
-import scipy.interpolate
 import shapely.geometry
 import xarray
 from rasterio.io import MemoryFile
+from scipy import interpolate
 
 from dataset import _utilities
 from main import DATA_DIR
@@ -1222,7 +1222,7 @@ class WCOFS_Range:
 
 
 def interpolate_grid(input_lon: numpy.ndarray, input_lat: numpy.ndarray, input_data: numpy.ndarray,
-                     output_lon: numpy.ndarray, output_lat: numpy.ndarray) -> numpy.ndarray:
+                     output_lon: numpy.ndarray, output_lat: numpy.ndarray, method: str = 'nearest') -> numpy.ndarray:
     """
     Interpolate the given data onto a coordinate grid.
 
@@ -1231,7 +1231,8 @@ def interpolate_grid(input_lon: numpy.ndarray, input_lat: numpy.ndarray, input_d
     :param input_data: Masked array of data values in original grid.
     :param output_lon: Longitude values of output grid.
     :param output_lat: Latitude values of output grid.
-    :return: Interpolated values within WGS84 coordinate grid.
+    :param method: Interpolation method.
+    :return: Interpolated values within output grid.
     """
 
     # get unmasked values only
@@ -1239,12 +1240,15 @@ def interpolate_grid(input_lon: numpy.ndarray, input_lat: numpy.ndarray, input_d
     input_lat = input_lat[~numpy.isnan(input_data)]
     input_data = input_data[~numpy.isnan(input_data)]
 
-    output_lon = output_lon[None, :]
-    output_lat = output_lat[:, None]
+    # force empty dimensions onto one-dimensional output coordinates
+    if output_lon.ndim == 1:
+        output_lon = output_lon[None, :]
+    if output_lat.ndim == 1:
+        output_lat = output_lat[:, None]
 
     # get grid interpolation
-    interpolated_grid = scipy.interpolate.griddata((input_lon, input_lat), input_data, (output_lon, output_lat),
-                                                   method='nearest')
+    interpolated_grid = interpolate.griddata((input_lon, input_lat), input_data, (output_lon, output_lat),
+                                             method=method)
 
     return interpolated_grid
 
