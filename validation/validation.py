@@ -111,7 +111,7 @@ def interpolate_grids(datasets: dict) -> dict:
     Interpolate model grids onto observational grids.
     
     :param datasets: Dictionary of xarray Dataset objects.
-    :return:
+    :return: Dictioanry of interpolated values.
     """
     
     data = {
@@ -231,12 +231,29 @@ def interpolate_grids(datasets: dict) -> dict:
     return data
 
 
-def rmse(x, y):
+def rmse(x: numpy.ndarray, y: numpy.ndarray) -> float:
+    """
+    Calculate root-mean-square error (RMSE) given observational data and model output.
+    
+    :param x: Array of observational data.
+    :param y: Array of model output (in same grid as x).
+    :return: Root-mean-square error.
+    """
+    
     squared_residuals = numpy.square(x - y)
     return numpy.sqrt(numpy.nanmean(squared_residuals))
 
 
-def r_squ(x, y):
+def r_squ(x: numpy.ndarray, y: numpy.ndarray) -> float:
+    """
+    Calculate determination coefficient (R^2) given observational data and model output.
+    R^2 is a value from 0 to 1 of the amount of observational variance explained by the model.
+
+    :param x: Array of observational data.
+    :param y: Array of model output (in same grid as x).
+    :return: Determination coefficient.
+    """
+    
     sum_of_squares_of_residuals = numpy.nansum(numpy.square(x - y))
     sum_of_squares_of_variance = numpy.nansum(numpy.square(x - numpy.nanmean(x)))
     return 1 - (sum_of_squares_of_residuals / sum_of_squares_of_variance)
