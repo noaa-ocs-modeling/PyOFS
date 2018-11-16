@@ -17,7 +17,27 @@ WORKSPACE_DIR = os.path.join(DATA_DIR, 'validation')
 UTC_OFFSET = 8
 
 
-def to_netcdf(start_datetime, end_datetime, nc_filenames):
+def to_netcdf(start_datetime: datetime.datetime, end_datetime: datetime.datetime, output_dir: str):
+    """
+    Writes HFR, VIIRS, and WCOFS data to NetCDF files at the given filenames.
+
+    :param start_datetime: Start of time interval.
+    :param end_datetime: End of time interval.
+    :param output_dir: Output directory.
+    """
+    
+    # define filenames for NetCDF
+    nc_filenames = {
+        'hfr': os.path.join(output_dir, 'hfr.nc'),
+        'viirs': os.path.join(output_dir, 'viirs.nc'),
+        'wcofs_sst_noDA': os.path.join(output_dir, 'wcofs_sst_noDA.nc'),
+        'wcofs_sst_DA': os.path.join(output_dir, 'wcofs_sst_DA.nc'),
+        'wcofs_u_noDA': os.path.join(output_dir, 'wcofs_u_noDA.nc'),
+        'wcofs_u_DA': os.path.join(output_dir, 'wcofs_u_DA.nc'),
+        'wcofs_v_noDA': os.path.join(output_dir, 'wcofs_v_noDA.nc'),
+        'wcofs_v_DA': os.path.join(output_dir, 'wcofs_v_DA.nc')
+    }
+    
     # write HFR NetCDF file if it does not exist
     if not os.path.exists(nc_filenames['hfr']):
         from dataset import hfr
@@ -62,15 +82,48 @@ def to_netcdf(start_datetime, end_datetime, nc_filenames):
         wcofs_range.to_netcdf(nc_filenames['wcofs_v_DA'], variables=['v'])
 
 
-def from_netcdf(nc_filenames):
+def from_netcdf(input_dir: str) -> dict:
+    """
+    Read NetCDF files from directory.
+    
+    :param input_dir: Directory with NetCDF files.
+    :return: Dictionary of xarray Dataset objects.
+    """
+    
+    # define filenames for NetCDF
+    nc_filenames = {
+        'hfr': os.path.join(input_dir, 'hfr.nc'),
+        'viirs': os.path.join(input_dir, 'viirs.nc'),
+        'wcofs_sst_noDA': os.path.join(input_dir, 'wcofs_sst_noDA.nc'),
+        'wcofs_sst_DA': os.path.join(input_dir, 'wcofs_sst_DA.nc'),
+        'wcofs_u_noDA': os.path.join(input_dir, 'wcofs_u_noDA.nc'),
+        'wcofs_u_DA': os.path.join(input_dir, 'wcofs_u_DA.nc'),
+        'wcofs_v_noDA': os.path.join(input_dir, 'wcofs_v_noDA.nc'),
+        'wcofs_v_DA': os.path.join(input_dir, 'wcofs_v_DA.nc')
+    }
+    
     # load datasets from local NetCDF files
     return {dataset: xarray.open_dataset(nc_filenames[dataset]) for dataset in nc_filenames}
 
 
-def interpolate_grids(time_deltas):
+def interpolate_grids(datasets: dict) -> dict:
+    """
+    Interpolate model grids onto observational grids.
+    
+    :param datasets: Dictionary of xarray Dataset objects.
+    :return:
+    """
+    
     data = {
         'noDA_model': {'sst': {}, 'u': {}, 'v': {}},
         'DA_model': {'sst': {}, 'u': {}, 'v': {}}
+    }
+    
+    # get dimensions of WCOFS dataset (time delta, eta, rho)
+    wcofs_dimensions = {
+        'sst': list(datasets['wcofs_sst_noDA']['temp'].coords),
+        'u': list(datasets['wcofs_u_noDA']['u'].coords),
+        'v': list(datasets['wcofs_v_DA']['v'].coords)
     }
     
     with futures.ThreadPoolExecutor() as concurrency_pool:
@@ -197,29 +250,10 @@ if __name__ == '__main__':
     day_dir = os.path.join(WORKSPACE_DIR, start_datetime.strftime('%Y%m%d'))
     if not os.path.exists(day_dir):
         os.mkdir(day_dir)
-    
-    # define filenames for NetCDF
-    nc_filenames = {
-        'hfr': os.path.join(day_dir, 'hfr.nc'),
-        'viirs': os.path.join(day_dir, 'viirs.nc'),
-        'wcofs_sst_noDA': os.path.join(day_dir, 'wcofs_sst_noDA.nc'),
-        'wcofs_sst_DA': os.path.join(day_dir, 'wcofs_sst_DA.nc'),
-        'wcofs_u_noDA': os.path.join(day_dir, 'wcofs_u_noDA.nc'),
-        'wcofs_u_DA': os.path.join(day_dir, 'wcofs_u_DA.nc'),
-        'wcofs_v_noDA': os.path.join(day_dir, 'wcofs_v_noDA.nc'),
-        'wcofs_v_DA': os.path.join(day_dir, 'wcofs_v_DA.nc')
-    }
-    
-    to_netcdf(start_datetime, end_datetime, nc_filenames)
-    
-    datasets = from_netcdf(nc_filenames)
-    
-    # get dimensions of WCOFS dataset (time delta, eta, rho)
-    wcofs_dimensions = {
-        'sst': list(datasets['wcofs_sst_noDA']['temp'].coords),
-        'u': list(datasets['wcofs_u_noDA']['u'].coords),
-        'v': list(datasets['wcofs_v_DA']['v'].coords)
-    }
+
+    to_netcdf(start_datetime, end_datetime, day_dir)
+
+    datasets = from_netcdf(day_dir)
     
     # interpolate nearest-neighbor observational data onto WCOFS grid
     data = {'obser': {
@@ -228,10 +262,10 @@ if __name__ == '__main__':
         'v': datasets['hfr']['v'].values}
     }
     
-    time_deltas = datasets['wcofs_sst_noDA'][wcofs_dimensions['sst'][0]].values
-    
     print('interpolating WCOFS data onto observational grids...')
-    data.update(interpolate_grids(time_deltas))
+    data.update(interpolate_grids(datasets))
+
+    time_deltas = data['DA_model']['sst'].keys()
     
     metrics = {}
     
