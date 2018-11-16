@@ -86,7 +86,7 @@ class HFR_Range:
             # define image properties
             west = numpy.min(lon)
             north = numpy.max(lat)
-    
+
             self.mean_x_size = numpy.mean(numpy.diff(lon))
             self.mean_y_size = numpy.mean(numpy.diff(lat))
             
@@ -102,14 +102,14 @@ class HFR_Range:
         :param dop_threshold: Threshold for Dilution of Precision (DOP) above which data should be discarded.
         :return: Array of data.
         """
-    
+
         output_data = self.netcdf_dataset[variable].sel(time).values
-    
+
         if dop_threshold is not None:
             dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=time) <= dop_threshold) | (
                     self.netcdf_dataset['DOPy'].sel(time=time) <= dop_threshold))
             output_data[~dop_mask] = numpy.nan
-    
+
         return output_data
 
     def data_average(self, variable: str, start_datetime: datetime.datetime,
@@ -123,22 +123,22 @@ class HFR_Range:
         :param dop_threshold: Threshold for Dilution of Precision (DOP) above which data should be discarded.
         :return: Array of data.
         """
-    
+
         if start_datetime is None:
             start_datetime = self.start_datetime
-    
+
         if end_datetime is None:
             end_datetime = self.end_datetime
-    
+
         output_data = self.netcdf_dataset[variable].sel(time=slice(start_datetime, end_datetime)).values
-    
+
         if dop_threshold is not None:
             dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold) | (
                     self.netcdf_dataset['DOPy'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold)).values
             output_data[~dop_mask] = numpy.nan
-    
+
         output_data = numpy.nanmean(output_data, axis=0)
-    
+
         return output_data
     
     def bounds(self) -> tuple:
@@ -181,7 +181,7 @@ class HFR_Range:
                     'code': site_code, 'net_code': site_network_code, 'lon': float(lon), 'lat': float(lat)
                 }
             }
-    
+
             layer_records.append(record)
 
         schema = {
@@ -193,80 +193,64 @@ class HFR_Range:
         with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_WGS84) as layer:
             layer.writerecords(layer_records)
 
-    def write_vectors(self, output_filename: str, start_datetime: datetime.datetime = None,
+    def write_vectors(self, output_filename: str, variables: list = None, start_datetime: datetime.datetime = None,
                       end_datetime: datetime.datetime = None, dop_threshold: float = 0.5):
         """
         Write HFR data to a layer of the provided output file for every hour in the given time interval.
 
         :param output_filename: Path to output file.
+        :param variables: List of variable names to use.
         :param start_datetime: Beginning of time interval.
         :param end_datetime: End of time interval.
-        :param dop_threshold: Threshold for dilution of precision above which data is not useable.
+        :param dop_threshold: Threshold for Dilution of Precision (DOP) above which data should be discarded.
         """
 
-        start_datetime = start_datetime if start_datetime is not None else self.start_datetime
-        end_datetime = end_datetime if end_datetime is not None else self.end_datetime
+        if variables is None:
+            variables = DATA_VARIABLES
 
-        # get indices of selected datetimes
-        datetime_indices = self.get_datetime_indices(start_datetime, end_datetime)
+        if start_datetime is None:
+            start_datetime = self.start_datetime
 
-        numpy.warnings.filterwarnings('ignore')
+        if end_datetime is None:
+            end_datetime = self.end_datetime
 
-        dop_mask = ((self.data['DOPx'][datetime_indices, :, :] <= dop_threshold) | (
-                self.data['DOPy'][datetime_indices, :, :] <= dop_threshold))
-
-        numpy.warnings.filterwarnings('default')
-
-        # dataset data
-        hfr_u = self.data['u'][datetime_indices, :, :]
-        hfr_v = self.data['v'][datetime_indices, :, :]
-        hfr_lon = self.coords['lon'][:]
-        hfr_lat = self.coords['lat'][:]
-        hfr_dop_lon = self.data['DOPx'][datetime_indices, :, :]
-        hfr_dop_lat = self.data['DOPy'][datetime_indices, :, :]
-
-        hfr_u[~dop_mask] = numpy.nan
-        hfr_v[~dop_mask] = numpy.nan
-        hfr_dop_lon[~dop_mask] = numpy.nan
-        hfr_dop_lat[~dop_mask] = numpy.nan
-
+        time_interval_selection = self.netcdf_dataset.sel(time=slice(start_datetime, end_datetime))
+        
         # create dict to store features
         layers = {}
 
         # create layer using OGR, then add features using QGIS
-        for datetime_index in range(len(datetime_indices)):
-            vector_datetime = self.datetimes[datetime_indices[datetime_index]]
-
-            layer_name = f'{vector_datetime.astype(datetime.datetime).strftime("%Y%m%dT%H%M%S")}'
-
-            # create QGIS features
+        for hfr_time in time_interval_selection['time']:
+            hfr_datetime = datetime.datetime.utcfromtimestamp(
+                (hfr_time.values - numpy.datetime64('1970-01-01T00:00:00Z')) / numpy.timedelta64(1, 's'))
+            layer_name = f'{hfr_datetime.strftime("%Y%m%dT%H%M%S")}'
+    
+            hfr_data = time_interval_selection.sel(time=hfr_time)
+    
+            # create features
             layer_records = []
-
+    
             feature_index = 1
-
-            for lon_index in range(len(hfr_lon)):
-                for lat_index in range(len(hfr_lat)):
-                    u = hfr_u[datetime_index, lat_index, lon_index]
-
-                    # check if record has values
-                    if not numpy.isnan(u):
-                        v = hfr_v[datetime_index, lat_index, lon_index]
-                        dop_lon = hfr_dop_lon[datetime_index, lat_index, lon_index]
-                        dop_lat = hfr_dop_lat[datetime_index, lat_index, lon_index]
-                        lon = hfr_lon[lon_index]
-                        lat = hfr_lat[lat_index]
-
+    
+            for col in range(len(self.netcdf_dataset['lon'])):
+                for row in range(len(self.netcdf_dataset['lat'])):
+                    data = [float(hfr_data[variable][row, col].values) for variable in variables]
+            
+                    # stop if record has masked values
+                    if not (numpy.isnan(data)).all():
+                        lon = self.netcdf_dataset['lon'][col]
+                        lat = self.netcdf_dataset['lat'][row]
+                        
                         record = {
                             'id': feature_index, 'geometry': {'type': 'Point', 'coordinates': (lon, lat)},
-                            'properties': {
-                                'lon': float(lon), 'lat': float(lat), 'u': float(u), 'v': float(v),
-                                'DOPx': float(dop_lon), 'DOPy': float(dop_lat)
-                            }
+                            'properties': {'lon': float(lon), 'lat': float(lat)}
                         }
-
+                
+                        record['properties'].update(dict(zip(variables, data)))
+                        
                         layer_records.append(record)
                         feature_index += 1
-
+    
             layers[layer_name] = layer_records
 
         # write queued features to their respective layers
@@ -291,7 +275,7 @@ class HFR_Range:
         :param variables: List of variable names to use.
         :param start_datetime: Beginning of time interval.
         :param end_datetime: End of time interval.
-        :param dop_threshold: Threshold for dilution of precision above which data is not useable.
+        :param dop_threshold: Threshold for Dilution of Precision (DOP) above which data should be discarded.
         """
 
         if variables is None:
@@ -317,19 +301,19 @@ class HFR_Range:
         for col in range(len(self.netcdf_dataset['lon'])):
             for row in range(len(self.netcdf_dataset['lat'])):
                 data = [float(variable_means[variable][row, col]) for variable in variables]
-        
+
                 # stop if record has masked values
                 if not (numpy.isnan(data)).all():
                     lon = self.netcdf_dataset['lon'][col]
                     lat = self.netcdf_dataset['lat'][row]
-            
+
                     record = {
                         'id': feature_index, 'geometry': {'type': 'Point', 'coordinates': (lon, lat)},
                         'properties': {'lon': float(lon), 'lat': float(lat)}
                     }
-            
+
                     record['properties'].update(dict(zip(variables, data)))
-            
+
                     layer_records.append(record)
                     feature_index += 1
 
@@ -371,42 +355,42 @@ class HFR_Range:
                 u_data = variable_means['u']
             else:
                 u_data = self.data_average('u', start_datetime, end_datetime, dop_threshold)
-    
+
             if 'v' in variables:
                 v_data = variable_means['v']
             else:
                 v_data = self.data_average('v', start_datetime, end_datetime, dop_threshold)
-    
+
             # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
             variable_means['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (180 / numpy.pi)
             variable_means['mag'] = numpy.sqrt(numpy.square(u_data) + numpy.square(v_data))
 
         for variable, variable_data in variable_means.items():
             raster_data = variable_data.astype(rasterio.float32)
-    
+
             gdal_args = {
                 'height': raster_data.shape[0], 'width': raster_data.shape[1], 'count': 1,
                 'dtype': raster_data.dtype, 'crs': RASTERIO_WGS84, 'transform': self.grid_transform,
                 'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
             }
-    
+
             for driver in drivers:
                 if driver == 'AAIGrid':
                     file_extension = 'asc'
-            
+
                     # interpolate to regular grid in case of ASCII grid
                     mean_cell_length = numpy.min(self.cell_size())
                     west, north, east, south = self.bounds()
-            
+
                     input_lon, input_lat = numpy.meshgrid(self.coords['lon'], self.coords['lat'])
                     output_lon = numpy.arange(west, east, mean_cell_length)[None, :]
                     output_lat = numpy.arange(south, north, mean_cell_length)[:, None]
-            
+
                     raster_data = scipy.interpolate.griddata((input_lon.flatten(), input_lat.flatten()),
                                                              raster_data.flatten(), (output_lon, output_lat),
                                                              method='nearest', fill_value=fill_value).astype(
                         raster_data.dtype)
-            
+
                     gdal_args.update({
                         'height': raster_data.shape[0], 'width': raster_data.shape[1], 'FORCE_CELLSIZE': 'YES',
                         'transform': rasterio.transform.from_origin(numpy.min(output_lon), numpy.max(output_lat),
@@ -417,13 +401,13 @@ class HFR_Range:
                     file_extension = 'tiff'
                 elif driver == 'GPKG':
                     file_extension = 'gpkg'
-        
+
                 output_filename = os.path.join(output_dir,
                                                f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
-        
+
                 if os.path.isfile(output_filename):
                     os.remove(output_filename)
-        
+
                 print(f'Writing {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(numpy.flipud(raster_data), 1)
@@ -493,6 +477,5 @@ if __name__ == '__main__':
 
     # write HFR raster
     hfr_dataset.write_rasters(output_dir)
-    hfr_dataset.write_vector(os.path.join(output_dir, 'hfr.gpkg'))
 
     print('done')
