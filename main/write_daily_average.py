@@ -12,7 +12,7 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
-import dataset._utilities, dataset.hfr, dataset.viirs, dataset.wcofs
+from dataset import _utilities, hfr, viirs, wcofs, rtofs
 
 from main import json_dir_structure, DATA_DIR
 
@@ -48,26 +48,24 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
         end_datetime = model_run_date + datetime.timedelta(days=day_delta + 1)
         
         if day_delta == 0:
-            # print(f'Processing HFR for {start_datetime}')
             try:
-                hfr_range = dataset.hfr.HFR_Range(start_datetime, end_datetime)
+                hfr_range = hfr.HFR_Range(start_datetime, end_datetime)
                 hfr_range.write_rasters(daily_average_dir, filename_suffix=f'{start_datetime.strftime("%Y%m%d")}',
                                         variables=['u', 'v'], vector_components=True, drivers=['AAIGrid'],
                                         fill_value=LEAFLET_NODATA_VALUE)
                 del hfr_range
-            except dataset._utilities.NoDataError as error:
+            except _utilities.NoDataError as error:
                 with open(log_path, 'a') as log_file:
                     log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
                 print(error)
             
-            # print(f'Processing VIIRS for {start_datetime}')
             try:
                 utc_start_datetime = start_datetime + datetime.timedelta(hours=UTC_OFFSET)
                 utc_morning_datetime = start_datetime + datetime.timedelta(hours=6 + UTC_OFFSET)
                 utc_evening_datetime = start_datetime + datetime.timedelta(hours=18 + UTC_OFFSET)
                 utc_end_datetime = end_datetime + datetime.timedelta(hours=UTC_OFFSET)
                 
-                viirs_range = dataset.viirs.VIIRS_Range(utc_start_datetime, utc_end_datetime)
+                viirs_range = viirs.VIIRS_Range(utc_start_datetime, utc_end_datetime)
                 
                 viirs_range.write_raster(daily_average_dir,
                                          filename_suffix=f'{start_datetime.strftime("%Y%m%d")}_morning',
@@ -85,21 +83,30 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
                                          fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=False,
                                          variables=['sst'])
                 del viirs_range
-            except dataset._utilities.NoDataError as error:
+            except _utilities.NoDataError as error:
                 with open(log_path, 'a') as log_file:
                     log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
                 print(error)
-        
-        # print(f'Processing WCOFS for {date}')
+
         try:
-            wcofs_range = dataset.wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg', time_deltas=[day_delta])
+            rtofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
+            rtofs_filename_suffix = os.path.join(daily_average_dir, f'rtofs_{start_datetime.strftime("%Y%m%d")}_{rtofs_direction}_{abs(day_delta)}')
+            rtofs_dataset = rtofs.RTOFS_Dataset(model_run_date, source='2ds', time_interval='daily')
+            rtofs_dataset.write_raster(f'{rtofs_filename_suffix}_sst', variable='temp', time=start_datetime, direction=rtofs_direction)
+        except _utilities.NoDataError as error:
+            with open(log_path, 'a') as log_file:
+                log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
+            print(error)
+        
+        try:
+            wcofs_range = wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg', time_deltas=[day_delta])
             wcofs_range.write_rasters(daily_average_dir, ['temp'], drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
             wcofs_range.write_rasters(daily_average_dir, ['u', 'v'], vector_components=True, drivers=['AAIGrid'],
                                       fill_value=LEAFLET_NODATA_VALUE)
             del wcofs_range
             
-            wcofs_range = dataset.wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg', time_deltas=[day_delta],
-                                                    grid_filename=dataset.wcofs.WCOFS_4KM_GRID_FILENAME,
+            wcofs_range = wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg', time_deltas=[day_delta],
+                                                    grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME,
                                                     source_url=os.path.join(DATA_DIR, 'input/wcofs/avg'),
                                                     wcofs_string='wcofs4')
             wcofs_range.write_rasters(daily_average_dir, ['temp'], filename_suffix='noDA_4km', drivers=['GTiff'],
@@ -121,11 +128,11 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
             # del wcofs_range
             #
             # dataset.wcofs.reset_dataset_grid()
-        except dataset._utilities.NoDataError as error:
+        except _utilities.NoDataError as error:
             with open(log_path, 'a') as log_file:
                 log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
             print(error)
-        
+
         message = f'Wrote files to {daily_average_dir}'
         with open(log_path, 'a') as log_file:
             log_file.write(
