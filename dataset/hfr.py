@@ -224,18 +224,18 @@ class HFR_Range:
             hfr_datetime = datetime.datetime.utcfromtimestamp(
                 (hfr_time.values - numpy.datetime64('1970-01-01T00:00:00Z')) / numpy.timedelta64(1, 's'))
             layer_name = f'{hfr_datetime.strftime("%Y%m%dT%H%M%S")}'
-    
+
             hfr_data = time_interval_selection.sel(time=hfr_time)
-    
+
             # create features
             layer_records = []
-    
+
             feature_index = 1
-    
+
             for col in range(len(self.netcdf_dataset['lon'])):
                 for row in range(len(self.netcdf_dataset['lat'])):
                     data = [float(hfr_data[variable][row, col].values) for variable in variables]
-            
+
                     # stop if record has masked values
                     if not (numpy.isnan(data)).all():
                         lon = self.netcdf_dataset['lon'][col]
@@ -245,12 +245,12 @@ class HFR_Range:
                             'id': feature_index, 'geometry': {'type': 'Point', 'coordinates': (lon, lat)},
                             'properties': {'lon': float(lon), 'lat': float(lat)}
                         }
-                
+
                         record['properties'].update(dict(zip(variables, data)))
                         
                         layer_records.append(record)
                         feature_index += 1
-    
+
             layers[layer_name] = layer_records
 
         # write queued features to their respective layers
@@ -382,7 +382,7 @@ class HFR_Range:
                     mean_cell_length = numpy.min(self.cell_size())
                     west, north, east, south = self.bounds()
 
-                    input_lon, input_lat = numpy.meshgrid(self.coords['lon'], self.coords['lat'])
+                    input_lon, input_lat = numpy.meshgrid(self.netcdf_dataset['lon'], self.netcdf_dataset['lat'])
                     output_lon = numpy.arange(west, east, mean_cell_length)[None, :]
                     output_lat = numpy.arange(south, north, mean_cell_length)[:, None]
 

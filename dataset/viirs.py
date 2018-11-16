@@ -94,21 +94,21 @@ class VIIRS_Dataset:
         
         month_dir = f'{self.granule_datetime.year}/{self.granule_datetime.timetuple().tm_yday:03}'
         filename = f'{self.granule_datetime.strftime("%Y%m%d%H%M%S")}-{self.algorithm}-L3U_GHRSST-SSTsubskin-VIIRS_{satellite.upper()}-ACSPO_V{self.version}-v02.0-fv01.0.nc'
-        
-        for source_format, urls in SOURCES.items():
+
+        for protocol, urls in SOURCES.items():
             for source, source_url in urls.items():
-                if source_format == 'OpenDAP':
+                if protocol == 'OpenDAP':
                     # TODO N20 does not have an OpenDAP archive
                     if satellite.upper() == 'N20':
                         continue
                     
                     if source == 'NESDIS':
-                        url = f'{source_url}/gridS{satellite.upper()}VIIRS{"NRT" if self.near_real_time else "SCIENCE"}L3UWW00/{month_dir}/{filename}'
+                        url = f'{source_url}/grid{"S" if satellite.upper() == "NPP" else ""}{satellite.upper()}VIIRS{"NRT" if self.near_real_time else "SCIENCE"}L3UWW00/{month_dir}/{filename}'
                     elif source == 'JPL':
                         url = f'{source_url}/VIIRS_{satellite.upper()}/{algorithm}/v{self.version}/{month_dir}/{filename}'
                     elif source in 'NODC':
                         url = f'{source_url}/VIIRS_{satellite.upper()}/{algorithm}/{month_dir}/{filename}'
-                elif source_format == 'FTP':
+                elif protocol == 'FTP':
                     print('Error collecting from OpenDAP; falling back to FTP...')
                     
                     host_url, input_dir = source_url.split('/', 1)
@@ -125,9 +125,9 @@ class VIIRS_Dataset:
                         
                         url = f'{host_url}/{ftp_path.lstrip("/")}'
                 try:
-                    if source_format == 'OpenDAP':
+                    if protocol == 'OpenDAP':
                         self.netcdf_dataset = xarray.open_dataset(url)
-                    elif source_format == 'FTP':
+                    elif protocol == 'FTP':
                         if threading_lock is not None:
                             threading_lock.acquire()
                         
@@ -381,8 +381,8 @@ class VIIRS_Range:
         """
         Collect VIIRS datasets within time interval.
 
-        :param start_datetime: Beginning of time interval.
-        :param end_datetime: End of time interval.
+        :param start_datetime: Beginning of time interval (in UTC).
+        :param end_datetime: End of time interval (in UTC).
         :param study_area_polygon_filename: Filename of vector file of study area boundary.
         :param pass_times_filename: Path to text file with pass times.
         :param algorithm: Either 'STAR' or 'OSPO'.
@@ -391,7 +391,10 @@ class VIIRS_Range:
         """
         
         self.start_datetime = start_datetime
-        self.end_datetime = end_datetime if end_datetime < datetime.datetime.utcnow() else datetime.datetime.utcnow()
+        if end_datetime > datetime.datetime.utcnow():
+            self.end_datetime = datetime.datetime.utcnow()
+        else:
+            self.end_datetime = end_datetime
         self.study_area_polygon_filename = study_area_polygon_filename
         self.viirs_pass_times_filename = pass_times_filename
         self.algorithm = algorithm
@@ -407,28 +410,20 @@ class VIIRS_Range:
             self.datasets = {}
             
             threading_lock = threading.Lock()
-            
-            # concurrently populate dictionary with VIIRS dataset object for each pass time in the given time interval
-            with futures.ThreadPoolExecutor() as concurrency_pool:
-                scene_futures = {}
+
+            for pass_time in self.pass_times:
+                print(pass_time)
     
-                for pass_time in self.pass_times:
-                    viirs_future = concurrency_pool.submit(VIIRS_Dataset, granule_datetime=pass_time,
-                                                           study_area_polygon_filename=self.study_area_polygon_filename,
-                                                           algorithm=self.algorithm, version=self.version,
-                                                           threading_lock=threading_lock)
-                    scene_futures[viirs_future] = pass_time
-                
-                # yield results as threads complete
-                for completed_future in futures.as_completed(scene_futures):
-                    if type(completed_future.exception()) is not _utilities.NoDataError:
-                        viirs_dataset = completed_future.result()
-                        scene_datetime = scene_futures[completed_future]
-                        
-                        if not numpy.isnan(viirs_dataset.sst()).all():
-                            self.datasets[scene_datetime] = viirs_dataset
-                    else:
-                        print(completed_future.exception())
+                try:
+                    viirs_dataset = VIIRS_Dataset(granule_datetime=pass_time,
+                                                  study_area_polygon_filename=self.study_area_polygon_filename,
+                                                  algorithm=self.algorithm, version=self.version,
+                                                  threading_lock=threading_lock)
+        
+                    if not numpy.isnan(viirs_dataset.sst()).all():
+                        self.datasets[pass_time] = viirs_dataset
+                except _utilities.NoDataError as error:
+                    print(error)
             
             if len(self.datasets) > 0:
                 VIIRS_Range.study_area_transform = VIIRS_Dataset.study_area_transform
@@ -459,8 +454,8 @@ class VIIRS_Range:
         """
         Get VIIRS data (either overlapped or averaged) from the given time interval.
 
-        :param start_datetime: Beginning of time interval.
-        :param end_datetime: End of time interval.
+        :param start_datetime: Beginning of time interval (in UTC).
+        :param end_datetime: End of time interval (in UTC).
         :param average: Whether to average rasters, otherwise overlap them.
         :param fill_value: Desired fill value of output.
         :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
@@ -552,8 +547,8 @@ class VIIRS_Range:
         :param output_dir: Path to output directory.
         :param filename_prefix: Prefix for output filenames.
         :param filename_suffix: Suffix for output filenames.
-        :param start_datetime: Beginning of time interval.
-        :param end_datetime: End of time interval.
+        :param start_datetime: Beginning of time interval (in UTC).
+        :param end_datetime: End of time interval (in UTC).
         :param average: Whether to average rasters, otherwise overlap them.
         :param fill_value: Desired fill value of output.
         :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
@@ -695,7 +690,7 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
     Compute VIIRS pass times from the given start date along the number of periods specified.
 
     :param study_area_polygon_filename: Path to vector file containing polygon of study area.
-    :param start_datetime: Beginning of given VIIRS period.
+    :param start_datetime: Beginning of given VIIRS period (in UTC).
     :param output_filename: Path to output file.
     :param num_periods: Number of periods to store.
     :param data_source: Either 'STAR' or 'OSPO'.
@@ -767,8 +762,8 @@ def get_pass_times(start_datetime: datetime.datetime, end_datetime: datetime.dat
     """
     Retreive array of datetimes of VIIRS passes within the given time interval, given initial period durations.
 
-    :param start_datetime: Beginning of time interval.
-    :param end_datetime: End of time interval.
+    :param start_datetime: Beginning of time interval (in UTC).
+    :param end_datetime: End of time interval (in UTC).
     :param pass_times_filename: Filename of text file with durations of first VIIRS period.
     :return:
     """

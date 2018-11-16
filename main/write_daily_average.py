@@ -10,6 +10,8 @@ import datetime
 import os
 import sys
 
+import pytz
+
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
 from dataset import _utilities, hfr, viirs, wcofs, rtofs
@@ -21,8 +23,8 @@ LOG_DIR = os.path.join(DATA_DIR, 'log')
 OUTPUT_DIR = os.path.join(DATA_DIR, 'output')
 DAILY_AVERAGES_DIR = os.path.join(OUTPUT_DIR, 'daily_averages')
 
-# UTC offset of study area
-UTC_OFFSET = 8
+# hour offset from UTC of study area
+UTC_OFFSET = datetime.datetime.now(pytz.timezone('US/Pacific')).utcoffset().total_seconds() / 3600
 
 # default nodata value used by leaflet-geotiff renderer
 LEAFLET_NODATA_VALUE = -9999
@@ -38,15 +40,18 @@ def write_observational_data(output_dir: str, observation_date: datetime.datetim
         start_datetime = observation_date.replace(hour=0, minute=0, second=0, microsecond=0)
     else:
         start_datetime = observation_date
-    
-    if start_datetime == datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0):
+
+    end_datetime = start_datetime + datetime.timedelta(days=1)
+
+    if end_datetime > datetime.datetime.now():
         end_datetime = datetime.datetime.now()
-    else:
-        end_datetime = observation_date + datetime.timedelta(days=1)
     
     # write HFR rasters
     try:
-        hfr_range = hfr.HFR_Range(start_datetime, end_datetime)
+        hfr_start_datetime = start_datetime + datetime.timedelta(hours=2)
+        hfr_end_datetime = end_datetime + datetime.timedelta(hours=2)
+    
+        hfr_range = hfr.HFR_Range(hfr_start_datetime, hfr_end_datetime)
         hfr_range.write_rasters(output_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}',
                                 variables=['u', 'v'], vector_components=True, drivers=['AAIGrid'],
                                 fill_value=LEAFLET_NODATA_VALUE)
@@ -58,10 +63,10 @@ def write_observational_data(output_dir: str, observation_date: datetime.datetim
     
     # write VIIRS rasters
     try:
-        utc_start_datetime = start_datetime + datetime.timedelta(hours=UTC_OFFSET)
-        utc_morning_datetime = start_datetime + datetime.timedelta(hours=6 + UTC_OFFSET)
-        utc_evening_datetime = start_datetime + datetime.timedelta(hours=18 + UTC_OFFSET)
-        utc_end_datetime = end_datetime + datetime.timedelta(hours=UTC_OFFSET)
+        utc_start_datetime = start_datetime + datetime.timedelta(hours=-UTC_OFFSET)
+        utc_morning_datetime = start_datetime + datetime.timedelta(hours=6 + -UTC_OFFSET)
+        utc_evening_datetime = start_datetime + datetime.timedelta(hours=18 + -UTC_OFFSET)
+        utc_end_datetime = end_datetime + datetime.timedelta(hours=-UTC_OFFSET)
         
         viirs_range = viirs.VIIRS_Range(utc_start_datetime, utc_end_datetime)
         
