@@ -410,12 +410,14 @@ class VIIRS_Range:
             
             # concurrently populate dictionary with VIIRS dataset object for each pass time in the given time interval
             with futures.ThreadPoolExecutor() as concurrency_pool:
-                scene_futures = {
-                    concurrency_pool.submit(VIIRS_Dataset, granule_datetime=pass_time,
-                                            study_area_polygon_filename=self.study_area_polygon_filename,
-                                            algorithm=self.algorithm, version=self.version,
-                                            threading_lock=threading_lock): pass_time for pass_time in
-                    self.pass_times}
+                scene_futures = {}
+    
+                for pass_time in self.pass_times:
+                    viirs_future = concurrency_pool.submit(VIIRS_Dataset, granule_datetime=pass_time,
+                                                           study_area_polygon_filename=self.study_area_polygon_filename,
+                                                           algorithm=self.algorithm, version=self.version,
+                                                           threading_lock=threading_lock)
+                    scene_futures[viirs_future] = pass_time
                 
                 # yield results as threads complete
                 for completed_future in futures.as_completed(scene_futures):
