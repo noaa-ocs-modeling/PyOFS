@@ -184,7 +184,7 @@ class RTOFS_Dataset:
         else:
             raise ValueError(f'Direction must be one of {list(DATASET_STRUCTURE[self.source].keys())}.')
     
-    def write_raster(self, output_filename: str, variable: str, time: str, direction: str = None,
+    def write_raster(self, output_filename: str, variable: str, time: datetime.datetime, direction: str = None,
                      fill_value=-9999, drivers: list = ['GTiff']):
         """
         Writes interpolated raster of given variable to output path.
