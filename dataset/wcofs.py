@@ -7,22 +7,22 @@ Created on Jun 25, 2018
 @author: zachary.burnett
 """
 
+from concurrent import futures
 import datetime
 import os
 import threading
-from concurrent import futures
 
 import fiona
 import fiona.crs
 import numpy
 import pyproj
 import rasterio.control
+from rasterio.io import MemoryFile
 import rasterio.mask
 import rasterio.warp
+from scipy import interpolate
 import shapely.geometry
 import xarray
-from rasterio.io import MemoryFile
-from scipy import interpolate
 
 from dataset import _utilities
 from main import DATA_DIR
@@ -278,7 +278,6 @@ class WCOFS_Dataset:
                             output_data = numpy.concatenate((output_data, extra_column), axis=1)
                     else:
                         output_data = self.netcdf_datasets[dataset_index][variable][day_index, -1, :, :].values
-
             else:
                 with self.dataset_locks[time_delta]:
                     output_data = self.netcdf_datasets[time_delta][variable][0, :, :].values
