@@ -90,9 +90,12 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
 
         try:
             rtofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
-            rtofs_filename_suffix = os.path.join(daily_average_dir, f'rtofs_{start_datetime.strftime("%Y%m%d")}_{rtofs_direction}_{abs(day_delta)}')
+            rtofs_filename_prefix = f'rtofs'
+            rtofs_filename_suffix = f'{start_datetime.strftime("%Y%m%d")}_{rtofs_direction}_{abs(day_delta)}'
             rtofs_dataset = rtofs.RTOFS_Dataset(model_run_date, source='2ds', time_interval='daily')
-            rtofs_dataset.write_raster(f'{rtofs_filename_suffix}_sst', variable='temp', time=start_datetime, direction=rtofs_direction)
+            rtofs_dataset.write_raster(
+                os.path.join(daily_average_dir, f'{rtofs_filename_prefix}_sst_{rtofs_filename_suffix}'),
+                variable='temp', time=start_datetime, direction=rtofs_direction)
         except _utilities.NoDataError as error:
             with open(log_path, 'a') as log_file:
                 log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s): {error}\n')
@@ -106,9 +109,9 @@ def write_daily_average(output_dir: str, model_run_date: datetime.datetime, day_
             del wcofs_range
             
             wcofs_range = wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg', time_deltas=[day_delta],
-                                                    grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME,
-                                                    source_url=os.path.join(DATA_DIR, 'input/wcofs/avg'),
-                                                    wcofs_string='wcofs4')
+                                            grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME,
+                                            source_url=os.path.join(DATA_DIR, 'input/wcofs/avg'),
+                                            wcofs_string='wcofs4')
             wcofs_range.write_rasters(daily_average_dir, ['temp'], filename_suffix='noDA_4km', drivers=['GTiff'],
                                       fill_value=LEAFLET_NODATA_VALUE)
             wcofs_range.write_rasters(daily_average_dir, ['u', 'v'], filename_suffix='noDA_4km', vector_components=True,
