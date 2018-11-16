@@ -11,7 +11,6 @@ import datetime
 import ftplib
 import os
 
-import main
 from main import DATA_DIR
 
 FTP_URI = 'tidepool.nos.noaa.gov'
@@ -37,10 +36,10 @@ if __name__ == '__main__':
     month_dir = os.path.join(avg_dir, datetime.datetime.now().strftime('%Y%m'))
 
     # create folders if they do not exist
-    for dir in [OUTPUT_DIR, LOG_DIR, wcofs_dir, rtofs_dir, avg_dir, fwd_dir, obs_dir, mod_dir, month_dir]:
-        if not os.path.isdir(dir):
-            os.mkdir(dir)
-
+    for directory in [OUTPUT_DIR, LOG_DIR, wcofs_dir, rtofs_dir, avg_dir, fwd_dir, obs_dir, mod_dir, month_dir]:
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
+    
     # define log filename
     log_path = os.path.join(LOG_DIR, f'{datetime.datetime.now().strftime("%Y%m%d")}_ftp_transfer.log')
 
@@ -76,7 +75,9 @@ if __name__ == '__main__':
                         output_path = os.path.join(mod_dir, filename)
                     else:
                         output_path = os.path.join(month_dir, filename)
-
+                else:
+                    output_path = os.path.join(OUTPUT_DIR, filename)
+                
                 # filter for NetCDF and TAR archives
                 if '.nc' in filename or '.tar' in filename:
                     current_start_time = datetime.datetime.now()
