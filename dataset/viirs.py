@@ -11,7 +11,6 @@ import datetime
 import ftplib
 import math
 import os
-import threading
 from collections import OrderedDict
 from concurrent import futures
 
@@ -53,8 +52,8 @@ class VIIRS_Dataset:
     study_area_geojson = None
 
     def __init__(self, granule_datetime: datetime.datetime,
-                 study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
-                 algorithm: str = 'OSPO', version: str = None, threading_lock: threading.Lock = None):
+                 study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, algorithm: str = 'OSPO',
+                 version: str = None):
         """
         Retrieve VIIRS NetCDF dataset from NOAA with given datetime.
 
@@ -62,7 +61,6 @@ class VIIRS_Dataset:
         :param study_area_polygon_filename: Filename of vector file containing study area boundary.
         :param algorithm: Either 'STAR' or 'OSPO'.
         :param version: ACSPO algorithm version.
-        :param threading_lock: Global lock in case of threaded dataset compilation.
         :raises NoDataError: if dataset does not exist.
         """
 
@@ -128,9 +126,6 @@ class VIIRS_Dataset:
                     if protocol == 'OpenDAP':
                         self.netcdf_dataset = xarray.open_dataset(url)
                     elif protocol == 'FTP':
-                        if threading_lock is not None:
-                            threading_lock.acquire()
-
                         with ftplib.FTP(host_url) as ftp_connection:
                             ftp_connection.login()
                             temp_filename = os.path.join(DATA_DIR, 'tempfile.nc')
@@ -139,9 +134,6 @@ class VIIRS_Dataset:
                                 self.netcdf_dataset = xarray.open_dataset(temp_filename)
 
                             os.remove(temp_filename)
-
-                        if threading_lock is not None:
-                            threading_lock.release()
 
                     self.url = url
                     break
@@ -176,9 +168,6 @@ class VIIRS_Dataset:
 
         lon_pixel_size = self.netcdf_dataset.geospatial_lon_resolution
         lat_pixel_size = self.netcdf_dataset.geospatial_lat_resolution
-
-        if threading_lock is not None:
-            threading_lock.acquire()
 
         if VIIRS_Dataset.study_area_index_bounds is None:
             # print(f'Calculating indices and transform from granule at {self.granule_datetime}...')
@@ -216,9 +205,6 @@ class VIIRS_Dataset:
 
             VIIRS_Dataset.study_area_transform = rasterio.transform.from_origin(study_area_west, study_area_north,
                                                                                 lon_pixel_size, lat_pixel_size)
-
-        if threading_lock is not None:
-            threading_lock.release()
 
     def bounds(self) -> tuple:
         """
