@@ -314,123 +314,199 @@ class WCOFS_Dataset:
 
         return variable_data
 
-    def write_raster(self, output_filename: str, variable: str,
-                     study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, time_deltas: int = None,
-                     input_data: numpy.ndarray = None, x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999,
-                     drivers: list = ['GTiff']):
+    def write_rasters(self, output_dir: str, variables: list = None, filename_suffix: str = None,
+                      time_deltas: list = None, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
+                      vector_components: bool = False, x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999,
+                      drivers: list = ['GTiff']):
         """
-        Writes interpolated raster of given variable to output path.
+        Write averaged raster data of given variables to given output directory.
 
-        :param output_filename: Path of raster file to create.
-        :param variable: Name of variable.
-        :param study_area_polygon_filename: Path to vector file containing study area boundary.
+        :param output_dir: Path to directory.
+        :param variables: Variable names to use.
         :param time_deltas: List of time indices to write.
-        :param input_data: Grid data to interpolate and write.
+        :param filename_suffix: Suffix for filenames.
+        :param study_area_polygon_filename: Path to vector file containing study area boundary.
+        :param vector_components: Whether to write direction and magnitude rasters.
         :param x_size: Cell size of output grid in X direction.
         :param y_size: Cell size of output grid in Y direction.
         :param fill_value: Desired fill value of output.
         :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
         """
 
-        study_area_polygon_filename, layer_name = study_area_polygon_filename.rsplit(':', 1)
-
-        if layer_name == '':
-            layer_name = None
-
-        with fiona.open(study_area_polygon_filename, layer=layer_name) as vector_layer:
-            study_area_geojson = next(iter(vector_layer))['geometry']
-
-        grid_name = WCOFS_Dataset.variable_grids[variable]
-
-        west = WCOFS_Dataset.grid_bounds[grid_name][0]
-        north = WCOFS_Dataset.grid_bounds[grid_name][1]
-        east = WCOFS_Dataset.grid_bounds[grid_name][2]
-        south = WCOFS_Dataset.grid_bounds[grid_name][3]
-
-        x_size = x_size if x_size is not None else self.x_size
-        y_size = y_size if y_size is not None else self.y_size
-
-        output_grid_lon = numpy.arange(west, east, x_size)
-        output_grid_lat = numpy.arange(south, north, y_size)
-
-        grid_transform = WCOFS_Dataset.grid_transforms[grid_name]
-
-        if input_data is None:
-            input_data = self.data_average(variable, time_deltas)
-
-        print(f'Starting {variable} interpolation')
-
-        # interpolate data onto coordinate grid
-        output_data = interpolate_grid(WCOFS_Dataset.data_coordinates[grid_name]['lon'],
-                                       WCOFS_Dataset.data_coordinates[grid_name]['lat'], input_data, output_grid_lon,
-                                       output_grid_lat)
-
-        gdal_args = {
-            'transform': grid_transform, 'height': output_data.shape[0], 'width': output_data.shape[1], 'count': 1,
-            'dtype': rasterio.float32, 'crs': RASTERIO_WGS84,
-            'nodata': numpy.array([fill_value]).astype(output_data.dtype).item()
-        }
-
-        with MemoryFile() as memory_file:
-            with memory_file.open(driver='GTiff', **gdal_args) as memory_raster:
-                memory_raster.write(output_data, 1)
-
-            with memory_file.open() as memory_raster:
-                masked_data, masked_transform = rasterio.mask.mask(memory_raster, [study_area_geojson])
-
-        masked_data = masked_data[0, :, :]
-
-        for driver in drivers:
-            if driver == 'AAIGrid':
-                file_extension = '.asc'
-                gdal_args.update({'FORCE_CELLSIZE': 'YES'})
-            elif driver == 'GTiff':
-                file_extension = '.tiff'
-            elif driver == 'GPKG':
-                file_extension = '.gpkg'
-
-            output_filename = f'{os.path.splitext(output_filename)[0]}{file_extension}'
-
-            if os.path.isfile(output_filename):
-                os.remove(output_filename)
-
-            print(f'Writing {output_filename}')
-            with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
-                output_raster.write(masked_data, 1)
-
-    def write_rasters(self, output_dir: str, variables: list = None, time_deltas: list = None, x_size: float = 0.04,
-                      y_size: float = 0.04, drivers: list = ['GTiff']):
-        """
-        Writes interpolated rasters of given variables to output directory using concurrency.
-
-        :param output_dir: Path to directory.
-        :param variables: Variable names to use.
-        :param time_deltas: List of time indices to write.
-        :param x_size: Cell size of output grid in X direction.
-        :param y_size: Cell size of output grid in Y direction.
-        :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
-        """
-
         if variables is None:
             variables = DATA_VARIABLES['2ds'] if self.source == '2ds' else DATA_VARIABLES['other']
 
-        # concurrently write rasters with data from each variable
+        study_area_polygon_geopackage, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
+
+        if study_area_polygon_layer_name == '':
+            study_area_polygon_layer_name = None
+
+        with fiona.open(study_area_polygon_geopackage, layer=study_area_polygon_layer_name) as vector_layer:
+            study_area_geojson = next(iter(vector_layer))['geometry']
+
+        # if cell sizes are not specified, get maximum coordinate differences between cell points on psi grid
+        if x_size is None:
+            x_size = numpy.max(numpy.diff(self.sample_netcdf_dataset['lon_psi'][:]))
+        if y_size is None:
+            y_size = numpy.max(numpy.diff(self.sample_netcdf_dataset['lat_psi'][:]))
+
+        filename_suffix = f'_{filename_suffix}' if filename_suffix is not None else ''
+
+        if vector_components:
+            self.variable_grids['dir'] = 'rho'
+            self.variable_grids['mag'] = 'rho'
+            grid_variables = variables + ['dir', 'mag']
+        else:
+            grid_variables = variables
+
+        output_grid_coordinates = {}
+
+        for variable in grid_variables:
+            output_grid_coordinates[variable] = {}
+    
+            grid_name = self.variable_grids[variable]
+    
+            west = self.grid_bounds[grid_name][0]
+            north = self.grid_bounds[grid_name][1]
+            east = self.grid_bounds[grid_name][2]
+            south = self.grid_bounds[grid_name][3]
+    
+            # WCOFS grid starts at southwest corner
+            output_grid_coordinates[variable]['lon'] = numpy.arange(west, east, x_size)
+            output_grid_coordinates[variable]['lat'] = numpy.arange(south, north, y_size)
+
+        start_time = datetime.datetime.now()
+
+        variable_means = {}
+
+        # concurrently populate dictionary with averaged data within given time interval for each variable
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            # get data average for each variable
-            variable_mean_futures = {
-                concurrency_pool.submit(self.data_average, variable_name, time_deltas): variable_name for variable_name
-                in variables}
+            variable_futures = {}
+    
+            for variable in variables:
+                wcofs_future = concurrency_pool.submit(self.data_average, variable, time_deltas)
+                variable_futures[wcofs_future] = variable
+    
+            for completed_future in futures.as_completed(variable_futures):
+                variable = variable_futures[completed_future]
+                variable_means[variable] = completed_future.result()
+    
+            del variable_futures
 
-            for completed_future in futures.as_completed(variable_mean_futures):
-                variable_name = variable_mean_futures[completed_future]
+        if vector_components:
+            if self.source == '2ds':
+                u_name = 'u_sur'
+                v_name = 'v_sur'
+            else:
+                u_name = 'u'
+                v_name = 'v'
+    
+            if u_name not in variable_means:
+                variable_means[u_name] = self.data_average(u_name, time_deltas)
+    
+            if v_name not in variable_means:
+                variable_means[v_name] = self.data_average(v_name, time_deltas)
 
-                data = completed_future.result()
+        print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
-                self.write_raster(os.path.join(output_dir, f'wcofs_{variable_name}.tiff'), variable_name,
-                                  input_data=data, x_size=x_size, y_size=y_size, drivers=drivers)
+        start_time = datetime.datetime.now()
 
-            del variable_mean_futures
+        interpolated_data = {}
 
+        # concurrently populate dictionary with interpolated data in given grid for each variable
+        with futures.ThreadPoolExecutor() as concurrency_pool:
+            variable_interpolation_futures = {}
+    
+            for variable, variable_data in variable_means.items():
+                print(f'Starting {variable} interpolation...')
+        
+                grid_lon = output_grid_coordinates[variable]['lon']
+                grid_lat = output_grid_coordinates[variable]['lat']
+        
+                grid_name = self.variable_grids[variable]
+        
+                lon = self.data_coordinates[grid_name]['lon']
+                lat = self.data_coordinates[grid_name]['lat']
+        
+                if len(grid_lon) > 0:
+                    future = concurrency_pool.submit(interpolate_grid, lon, lat, variable_data, grid_lon, grid_lat)
+                    variable_interpolation_futures[future] = variable
+    
+            for completed_future in futures.as_completed(variable_interpolation_futures):
+                variable = variable_interpolation_futures[completed_future]
+                interpolated_data[variable] = completed_future.result()
+    
+            del variable_interpolation_futures
+
+        if vector_components:
+            interpolated_data['dir'] = {}
+            interpolated_data['mag'] = {}
+    
+            u_data = interpolated_data[u_name]
+            v_data = interpolated_data[v_name]
+    
+            # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
+            interpolated_data['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (180 / numpy.pi)
+            interpolated_data['mag'] = numpy.sqrt(numpy.square(u_data) + numpy.square(v_data))
+    
+            if u_name not in variables:
+                del interpolated_data[u_name]
+    
+            if v_name not in variables:
+                del interpolated_data[v_name]
+
+        print(f'parallel grid interpolation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+
+        # write interpolated grids to raster files
+        for variable, variable_data in interpolated_data.items():
+            west = numpy.min(output_grid_coordinates[variable]['lon'])
+            north = numpy.max(output_grid_coordinates[variable]['lat'])
+    
+            # WCOFS grid starts from southwest corner, but we'll be flipping the data in a moment so lets use the northwest point
+            # TODO NOTE: You cannot use a negative (northward) y_size here, otherwise GDALSetGeoTransform will break at line 1253 of rasterio/_io.pyx
+            if x_size is not None and y_size is not None:
+                grid_transform = rasterio.transform.from_origin(west, north, x_size, y_size)
+            else:
+                grid_name = self.variable_grids[variable]
+                grid_transform = self.grid_transforms[grid_name]
+    
+            # flip the data to ensure northward y_size (see comment above)
+            raster_data = numpy.flip(variable_data.astype(rasterio.float32), axis=0)
+    
+            gdal_args = {
+                'width': raster_data.shape[1], 'height': raster_data.shape[0], 'count': 1,
+                'crs': RASTERIO_WGS84, 'transform': grid_transform, 'dtype': raster_data.dtype,
+                'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
+            }
+    
+            with MemoryFile() as memory_file:
+                with memory_file.open(driver='GTiff', **gdal_args) as memory_raster:
+                    memory_raster.write(raster_data, 1)
+        
+                with memory_file.open() as memory_raster:
+                    masked_data, masked_transform = rasterio.mask.mask(memory_raster, [study_area_geojson])
+    
+            masked_data = masked_data[0, :, :]
+    
+            for driver in drivers:
+                if driver == 'AAIGrid':
+                    file_extension = 'asc'
+                    gdal_args.update({'FORCE_CELLSIZE': 'YES'})
+                elif driver == 'GTiff':
+                    file_extension = 'tiff'
+                elif driver == 'GPKG':
+                    file_extension = 'gpkg'
+        
+                output_filename = os.path.join(output_dir,
+                                               f'wcofs_{variable}_{self.model_datetime.strftime("%Y%m%d")}{filename_suffix}.{file_extension}')
+        
+                if os.path.isfile(output_filename):
+                    os.remove(output_filename)
+        
+                print(f'Writing to {output_filename}')
+                with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
+                    output_raster.write(masked_data, 1)
+    
     def write_vector(self, output_filename: str, layer_name: str = None, time_deltas: list = None):
         """
         Write average of surface velocity vector data for all hours in the given time interval to the provided output file.

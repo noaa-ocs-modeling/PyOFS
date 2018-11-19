@@ -7,12 +7,12 @@ Created on Jun 13, 2018
 @author: zachary.burnett
 """
 
+from collections import OrderedDict
+from concurrent import futures
 import datetime
 import ftplib
 import math
 import os
-from collections import OrderedDict
-from concurrent import futures
 
 import fiona
 import numpy
@@ -101,7 +101,7 @@ class VIIRS_Dataset:
                         continue
 
                     if source == 'NESDIS':
-                        url = f'{source_url}/swath{satellite.upper()}VIIRS{"NRT" if self.near_real_time else "SCIENCE"}L3UWW00/{month_dir}/{filename}'
+                        url = f'{source_url}/grid{satellite.upper()}VIIRS{"NRT" if self.near_real_time else "SCIENCE"}L3UWW00/{month_dir}/{filename}'
                     elif source == 'JPL':
                         url = f'{source_url}/VIIRS_{satellite.upper()}/{algorithm}/v{self.version}/{month_dir}/{filename}'
                     elif source in 'NODC':
@@ -143,8 +143,8 @@ class VIIRS_Dataset:
             if self.url is not None:
                 break
         else:
-            raise _utilities.NoDataError(f'{self.granule_datetime}: No VIIRS dataset found.')
-
+            raise _utilities.NoDataError(f'No VIIRS dataset found at {self.granule_datetime} UTC.')
+        
         # construct rectangular polygon of granule extent
         if 'geospatial_bounds' in self.netcdf_dataset.attrs:
             self.data_extent = shapely.wkt.loads(self.netcdf_dataset.geospatial_bounds)
@@ -164,45 +164,45 @@ class VIIRS_Dataset:
                     shapely.geometry.Polygon(
                         [(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
         else:
-            print(f'{self.granule_datetime}: Dataset has no stored bounds...')
-
+            print(f'{self.granule_datetime} UTC: Dataset has no stored bounds...')
+        
         lon_pixel_size = self.netcdf_dataset.geospatial_lon_resolution
         lat_pixel_size = self.netcdf_dataset.geospatial_lat_resolution
 
         if VIIRS_Dataset.study_area_index_bounds is None:
-            # print(f'Calculating indices and transform from granule at {self.granule_datetime}...')
-
+            # print(f'Calculating indices and transform from granule at {self.granule_datetime} UTC...')
+            
             # get first record in layer
             with fiona.open(self.study_area_polygon_filename, layer=study_area_polygon_layer_name) as vector_layer:
                 VIIRS_Dataset.study_area_geojson = next(iter(vector_layer))['geometry']
-
+    
             global_west = numpy.min(self.netcdf_dataset['lon'])
             global_north = numpy.max(self.netcdf_dataset['lat'])
-
+    
             global_grid_transform = rasterio.transform.from_origin(global_west, global_north, lon_pixel_size,
                                                                    lat_pixel_size)
-
+    
             # create array mask of data extent within study area, with the overall shape of the global VIIRS grid
             raster_mask = rasterio.features.rasterize([VIIRS_Dataset.study_area_geojson], out_shape=(
                 self.netcdf_dataset['lat'].shape[0], self.netcdf_dataset['lon'].shape[0]),
                                                       transform=global_grid_transform)
-
+    
             # get indices of rows and columns within the data where the polygon mask exists
             mask_row_indices, mask_col_indices = numpy.where(raster_mask == 1)
-
+    
             west_index = numpy.min(mask_col_indices)
             north_index = numpy.min(mask_row_indices)
             east_index = numpy.max(mask_col_indices)
             south_index = numpy.max(mask_row_indices)
-
+    
             # create variable for the index bounds of the mask within the greater VIIRS global grid (west, north, east, south)
             VIIRS_Dataset.study_area_index_bounds = (west_index, north_index, east_index, south_index)
             VIIRS_Dataset.study_area_coordinates = {'lon': self.netcdf_dataset['lon'][west_index:east_index],
                                                     'lat': self.netcdf_dataset['lat'][north_index:south_index]}
-
+    
             study_area_west = self.netcdf_dataset['lon'][west_index]
             study_area_north = self.netcdf_dataset['lat'][north_index]
-
+    
             VIIRS_Dataset.study_area_transform = rasterio.transform.from_origin(study_area_west, study_area_north,
                                                                                 lon_pixel_size, lat_pixel_size)
 
@@ -254,8 +254,8 @@ class VIIRS_Dataset:
                     mismatch_percentage = mismatched_records / total_records * 100
 
                     if mismatch_percentage > 0:
-                        print(f'{self.granule_datetime}: SSES extent mismatch at {mismatch_percentage:.1f}%')
-
+                        print(f'{self.granule_datetime} UTC: SSES extent mismatch at {mismatch_percentage:.1f}%')
+                    
                     output_sst_data -= sses
 
                 # convert from Kelvin to Celsius (subtract 273.15)
@@ -396,11 +396,14 @@ class VIIRS_Range:
             self.datasets = {}
 
             for pass_time in self.pass_times:
-                viirs_dataset = VIIRS_Dataset(granule_datetime=pass_time,
-                                              study_area_polygon_filename=self.study_area_polygon_filename,
-                                              algorithm=self.algorithm, version=self.version)
-                self.datasets[pass_time] = viirs_dataset
-
+                try:
+                    viirs_dataset = VIIRS_Dataset(granule_datetime=pass_time,
+                                                  study_area_polygon_filename=self.study_area_polygon_filename,
+                                                  algorithm=self.algorithm, version=self.version)
+                    self.datasets[pass_time] = viirs_dataset
+                except _utilities.NoDataError as error:
+                    print(error)
+            
             if len(self.datasets) > 0:
                 VIIRS_Range.study_area_transform = VIIRS_Dataset.study_area_transform
                 VIIRS_Range.study_area_index_bounds = VIIRS_Dataset.study_area_index_bounds
@@ -534,6 +537,12 @@ class VIIRS_Range:
 
         variable_data = self.data(start_datetime, end_datetime, average, sses_correction, variables)
 
+        if start_datetime is None:
+            start_datetime = self.start_datetime
+
+        if end_datetime is None:
+            end_datetime = self.end_datetime
+        
         for variable, output_data in variable_data.items():
             if output_data is not None:
                 output_data[numpy.isnan(output_data)] = fill_value
@@ -789,6 +798,6 @@ if __name__ == '__main__':
 
     viirs_range = VIIRS_Range(start_datetime, end_datetime)
 
-    ds = viirs_range.to_xarray()
-
+    viirs_range.write_raster(output_dir)
+    
     print('done')

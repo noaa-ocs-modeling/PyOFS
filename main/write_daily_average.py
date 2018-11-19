@@ -23,8 +23,10 @@ LOG_DIR = os.path.join(DATA_DIR, 'log')
 OUTPUT_DIR = os.path.join(DATA_DIR, 'output')
 DAILY_AVERAGES_DIR = os.path.join(OUTPUT_DIR, 'daily_averages')
 
-# hour offset from UTC of study area
-UTC_OFFSET = datetime.datetime.now(pytz.timezone('US/Pacific')).utcoffset().total_seconds() / 3600
+# offset from study area to UTC
+STUDY_AREA_TIMEZONE = 'US/Pacific'
+STUDY_AREA_TO_UTC = datetime.timedelta(
+    hours=-datetime.datetime.now(pytz.timezone(STUDY_AREA_TIMEZONE)).utcoffset().total_seconds() / 3600)
 
 # default nodata value used by leaflet-geotiff renderer
 LEAFLET_NODATA_VALUE = -9999
@@ -50,23 +52,23 @@ def write_observational_data(output_dir: str, observation_date: datetime.datetim
     try:
         hfr_start_datetime = start_datetime + datetime.timedelta(hours=2)
         hfr_end_datetime = end_datetime + datetime.timedelta(hours=2)
-    
+
         hfr_range = hfr.HFR_Range(hfr_start_datetime, hfr_end_datetime)
         hfr_range.write_rasters(output_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}',
                                 variables=['u', 'v'], vector_components=True, drivers=['AAIGrid'],
                                 fill_value=LEAFLET_NODATA_VALUE)
         del hfr_range
     except _utilities.NoDataError as error:
+        print(error)
         with open(log_path, 'a') as log_file:
             log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) HFR: {error}\n')
-        print(error)
     
     # write VIIRS rasters
     try:
-        utc_start_datetime = start_datetime + datetime.timedelta(hours=-UTC_OFFSET)
-        utc_morning_datetime = start_datetime + datetime.timedelta(hours=6 + -UTC_OFFSET)
-        utc_evening_datetime = start_datetime + datetime.timedelta(hours=18 + -UTC_OFFSET)
-        utc_end_datetime = end_datetime + datetime.timedelta(hours=-UTC_OFFSET)
+        utc_start_datetime = start_datetime + STUDY_AREA_TO_UTC
+        utc_morning_datetime = start_datetime + datetime.timedelta(hours=6) + STUDY_AREA_TO_UTC
+        utc_evening_datetime = start_datetime + datetime.timedelta(hours=18) + STUDY_AREA_TO_UTC
+        utc_end_datetime = start_datetime + datetime.timedelta(hours=24) + STUDY_AREA_TO_UTC
         
         viirs_range = viirs.VIIRS_Range(utc_start_datetime, utc_end_datetime)
         
@@ -87,9 +89,9 @@ def write_observational_data(output_dir: str, observation_date: datetime.datetim
                                  variables=['sst'])
         del viirs_range
     except _utilities.NoDataError as error:
+        print(error)
         with open(log_path, 'a') as log_file:
             log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) VIIRS: {error}\n')
-        print(error)
 
 
 def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_deltas: list, log_path: str):
@@ -113,60 +115,96 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
         for day_delta, daily_average_dir in output_dirs.items():
             if day_delta in MODEL_DAY_DELTAS['RTOFS']:
                 start_datetime = model_run_date + datetime.timedelta(days=day_delta)
-                
-                rtofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
                 rtofs_filename_prefix = f'rtofs'
-                rtofs_filename_suffix = f'{start_datetime.strftime("%Y%m%d")}_{rtofs_direction[0]}{abs(day_delta) if rtofs_direction == "forecast" else abs(day_delta) + 1:03}'
+                rtofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
+                time_delta_string = f'{rtofs_direction[0]}{abs(day_delta) + 1 if rtofs_direction == "forecast" else abs(day_delta):03}'
+                rtofs_filename_suffix = f'{start_datetime.strftime("%Y%m%d")}_{time_delta_string}'
+                
                 rtofs_dataset.write_raster(
                     os.path.join(daily_average_dir, f'{rtofs_filename_prefix}_sst_{rtofs_filename_suffix}'),
                     variable='temp', time=start_datetime, direction=rtofs_direction)
+
+                # RTOFS has a same-day nowcast
+                if day_delta == 0:
+                    rtofs_direction = 'nowcast'
+                    time_delta_string = f'{rtofs_direction[0]}{abs(day_delta) + 1 if rtofs_direction == "forecast" else abs(day_delta):03}'
+                    rtofs_filename_suffix = f'{start_datetime.strftime("%Y%m%d")}_{time_delta_string}'
+    
+                    rtofs_dataset.write_raster(
+                        os.path.join(daily_average_dir, f'{rtofs_filename_prefix}_sst_{rtofs_filename_suffix}'),
+                        variable='temp', time=start_datetime, direction=rtofs_direction)
     except _utilities.NoDataError as error:
+        print(error)
         with open(log_path, 'a') as log_file:
             log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) RTOFS: {error}\n')
-        print(error)
     
     # write WCOFS rasters
-    for day_delta, daily_average_dir in output_dirs.items():
-        if day_delta in MODEL_DAY_DELTAS['WCOFS']:
-            start_datetime = model_run_date + datetime.timedelta(days=day_delta)
-            end_datetime = start_datetime + datetime.timedelta(days=1)
+    try:
+        wcofs_dataset = wcofs.WCOFS_Dataset(model_run_date, source='avg')
+    
+        for day_delta, daily_average_dir in output_dirs.items():
+            if day_delta in MODEL_DAY_DELTAS['WCOFS']:
+                wcofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
+                time_delta_string = f'{wcofs_direction[0]}{abs(day_delta) + 1 if wcofs_direction == "forecast" else abs(day_delta):03}'
+                wcofs_filename_suffix = f'{time_delta_string}'
             
-            try:
-                wcofs_range = wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg', time_deltas=[day_delta])
-                wcofs_range.write_rasters(daily_average_dir, ['temp'], drivers=['GTiff'],
-                                          fill_value=LEAFLET_NODATA_VALUE)
-                wcofs_range.write_rasters(daily_average_dir, ['u', 'v'], vector_components=True, drivers=['AAIGrid'],
-                                          fill_value=LEAFLET_NODATA_VALUE)
-                del wcofs_range
-                
-                wcofs_range = wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg', time_deltas=[day_delta],
+                wcofs_dataset.write_rasters(daily_average_dir, ['temp'], filename_suffix=wcofs_filename_suffix,
+                                            time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'])
+                wcofs_dataset.write_rasters(daily_average_dir, ['u', 'v'], filename_suffix=wcofs_filename_suffix,
+                                            time_deltas=[day_delta], vector_components=True,
+                                            fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
+    except _utilities.NoDataError as error:
+        print(error)
+        with open(log_path, 'a') as log_file:
+            log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) WCOFS: {error}\n')
+
+    try:
+        wcofs_4km_dataset = wcofs.WCOFS_Dataset(model_run_date, source='avg',
                                                 grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME,
                                                 source_url=os.path.join(DATA_DIR, 'input/wcofs/avg'),
                                                 wcofs_string='wcofs4')
-                wcofs_range.write_rasters(daily_average_dir, ['temp'], filename_suffix='noDA_4km', drivers=['GTiff'],
-                                          fill_value=LEAFLET_NODATA_VALUE)
-                wcofs_range.write_rasters(daily_average_dir, ['u', 'v'], filename_suffix='noDA_4km',
-                                          vector_components=True,
-                                          drivers=['AAIGrid'], fill_value=LEAFLET_NODATA_VALUE)
-                del wcofs_range
-                
-                # dataset.wcofs.reset_dataset_grid()
-                #
-                # wcofs_range = dataset.wcofs.WCOFS_Range(start_datetime, end_datetime, source='avg', time_deltas=[day_delta],
-                #                                         grid_filename=dataset.wcofs.WCOFS_2KM_GRID_FILENAME,
-                #                                         source_url=os.path.join(DATA_DIR, 'input/wcofs/avg'),
-                #                                         wcofs_string='wcofs2')
-                # wcofs_range.write_rasters(daily_average_dir, ['temp'], filename_suffix='noDA_2km', x_size=0.02, y_size=0.02,
-                #                           drivers=['GTiff'], fill_value=LEAFLET_NODATA_VALUE)
-                # wcofs_range.write_rasters(daily_average_dir, ['u', 'v'], filename_suffix='noDA_2km', vector_components=True,
-                #                           x_size=0.02, y_size=0.02, drivers=['AAIGrid'], fill_value=LEAFLET_NODATA_VALUE)
-                # del wcofs_range
-                #
-                # dataset.wcofs.reset_dataset_grid()
-            except _utilities.NoDataError as error:
-                with open(log_path, 'a') as log_file:
-                    log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) WCOFS: {error}\n')
-                print(error)
+    
+        for day_delta, daily_average_dir in output_dirs.items():
+            if day_delta in MODEL_DAY_DELTAS['WCOFS']:
+                wcofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
+                time_delta_string = f'{wcofs_direction[0]}{abs(day_delta) + 1 if wcofs_direction == "forecast" else abs(day_delta):03}'
+                wcofs_filename_suffix = f'{time_delta_string}_noDA_4km'
+            
+                wcofs_4km_dataset.write_rasters(daily_average_dir, ['temp'], filename_suffix=wcofs_filename_suffix,
+                                                time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
+                                                drivers=['GTiff'])
+                wcofs_4km_dataset.write_rasters(daily_average_dir, ['u', 'v'], filename_suffix=wcofs_filename_suffix,
+                                                time_deltas=[day_delta], vector_components=True,
+                                                fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
+    except _utilities.NoDataError as error:
+        print(error)
+        with open(log_path, 'a') as log_file:
+            log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) WCOFS: {error}\n')
+
+    # wcofs.reset_dataset_grid()
+    #
+    # try:
+    #     wcofs_2km_dataset = wcofs.WCOFS_Dataset(model_run_date, source='avg',
+    #                                             grid_filename=wcofs.WCOFS_2KM_GRID_FILENAME,
+    #                                             source_url=os.path.join(DATA_DIR, 'input/wcofs/avg'),
+    #                                             wcofs_string='wcofs2')
+    #
+    #     for day_delta, daily_average_dir in output_dirs.items():
+    #         if day_delta in MODEL_DAY_DELTAS['WCOFS']:
+    #             wcofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
+    #             time_delta_string = f'{wcofs_direction[0]}{abs(day_delta) + 1 if wcofs_direction == "forecast" else abs(day_delta):03}'
+    #             wcofs_filename_suffix = f'{time_delta_string}_noDA_2km'
+    #
+    #             wcofs_2km_dataset.write_rasters(daily_average_dir, ['temp'], filename_suffix=wcofs_filename_suffix,
+    #                                             time_deltas=[day_delta], x_size=0.02, y_size=0.02,
+    #                                             fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'])
+    #             wcofs_2km_dataset.write_rasters(daily_average_dir, ['u', 'v'], filename_suffix=wcofs_filename_suffix,
+    #                                             time_deltas=[day_delta], vector_components=True, x_size=0.02,
+    #                                             y_size=0.02, fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
+    # except _utilities.NoDataError as error:
+    #     print(error)
+    #     with open(log_path, 'a') as log_file:
+    #         log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) WCOFS: {error}\n')
 
 
 def write_daily_average(output_dir: str, output_date: datetime.datetime, day_deltas: list, log_path: str):
