@@ -259,7 +259,7 @@ if __name__ == '__main__':
     print(message)
     
     # define dates over which to collect data (dates after today are for WCOFS forecast)
-    day_deltas = [-1, 0, 1, 2]
+    day_deltas = MODEL_DAY_DELTAS['WCOFS']
 
     # model_run_dates = _utilities.range_daily(datetime.datetime(2018, 11, 18), datetime.datetime(2018, 11, 20))
     # for model_run_date in model_run_dates:
