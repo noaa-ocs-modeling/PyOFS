@@ -101,7 +101,7 @@ class VIIRS_Dataset:
                         continue
 
                     if source == 'NESDIS':
-                        url = f'{source_url}/grid{satellite.upper()}VIIRS{"NRT" if self.near_real_time else "SCIENCE"}L3UWW00/{month_dir}/{filename}'
+                        url = f'{source_url}/grid{"" if self.near_real_time else "S"}{satellite.upper()}VIIRS{"NRT" if self.near_real_time else "SCIENCE"}L3UWW00/{month_dir}/{filename}'
                     elif source == 'JPL':
                         url = f'{source_url}/VIIRS_{satellite.upper()}/{algorithm}/v{self.version}/{month_dir}/{filename}'
                     elif source in 'NODC':
@@ -138,8 +138,8 @@ class VIIRS_Dataset:
                     self.url = url
                     break
                 except Exception as error:
-                    print(f'Error collecting dataset from {source} at {url}: {error}')
-
+                    print(f'Error collecting dataset from {source}: {error}')
+            
             if self.url is not None:
                 break
         else:
@@ -175,34 +175,34 @@ class VIIRS_Dataset:
             # get first record in layer
             with fiona.open(self.study_area_polygon_filename, layer=study_area_polygon_layer_name) as vector_layer:
                 VIIRS_Dataset.study_area_geojson = next(iter(vector_layer))['geometry']
-    
+
             global_west = numpy.min(self.netcdf_dataset['lon'])
             global_north = numpy.max(self.netcdf_dataset['lat'])
-    
+
             global_grid_transform = rasterio.transform.from_origin(global_west, global_north, lon_pixel_size,
                                                                    lat_pixel_size)
-    
+
             # create array mask of data extent within study area, with the overall shape of the global VIIRS grid
             raster_mask = rasterio.features.rasterize([VIIRS_Dataset.study_area_geojson], out_shape=(
                 self.netcdf_dataset['lat'].shape[0], self.netcdf_dataset['lon'].shape[0]),
                                                       transform=global_grid_transform)
-    
+
             # get indices of rows and columns within the data where the polygon mask exists
             mask_row_indices, mask_col_indices = numpy.where(raster_mask == 1)
-    
+
             west_index = numpy.min(mask_col_indices)
             north_index = numpy.min(mask_row_indices)
             east_index = numpy.max(mask_col_indices)
             south_index = numpy.max(mask_row_indices)
-    
+
             # create variable for the index bounds of the mask within the greater VIIRS global grid (west, north, east, south)
             VIIRS_Dataset.study_area_index_bounds = (west_index, north_index, east_index, south_index)
             VIIRS_Dataset.study_area_coordinates = {'lon': self.netcdf_dataset['lon'][west_index:east_index],
                                                     'lat': self.netcdf_dataset['lat'][north_index:south_index]}
-    
+
             study_area_west = self.netcdf_dataset['lon'][west_index]
             study_area_north = self.netcdf_dataset['lat'][north_index]
-    
+
             VIIRS_Dataset.study_area_transform = rasterio.transform.from_origin(study_area_west, study_area_north,
                                                                                 lon_pixel_size, lat_pixel_size)
 
@@ -395,14 +395,24 @@ class VIIRS_Range:
             # create dictionary to store scenes
             self.datasets = {}
 
-            for pass_time in self.pass_times:
-                try:
-                    viirs_dataset = VIIRS_Dataset(granule_datetime=pass_time,
-                                                  study_area_polygon_filename=self.study_area_polygon_filename,
-                                                  algorithm=self.algorithm, version=self.version)
-                    self.datasets[pass_time] = viirs_dataset
-                except _utilities.NoDataError as error:
-                    print(error)
+            with futures.ThreadPoolExecutor() as concurrency_pool:
+                running_futures = {}
+    
+                for pass_time in self.pass_times:
+                    running_future = concurrency_pool.submit(VIIRS_Dataset, granule_datetime=pass_time,
+                                                             study_area_polygon_filename=self.study_area_polygon_filename,
+                                                             algorithm=self.algorithm, version=self.version)
+                    running_futures[running_future] = pass_time
+    
+                for completed_future in futures.as_completed(running_futures):
+                    if completed_future.exception() is None:
+                        pass_time = running_futures[completed_future]
+                        viirs_dataset = completed_future.result()
+                        self.datasets[pass_time] = viirs_dataset
+                    else:
+                        print(completed_future.exception())
+    
+                del running_futures
             
             if len(self.datasets) > 0:
                 VIIRS_Range.study_area_transform = VIIRS_Dataset.study_area_transform
@@ -544,7 +554,7 @@ class VIIRS_Range:
             end_datetime = self.end_datetime
         
         for variable, output_data in variable_data.items():
-            if output_data is not None:
+            if output_data is not None and not numpy.isnan(output_data).all():
                 output_data[numpy.isnan(output_data)] = fill_value
 
                 # define arguments to GDAL driver
@@ -602,9 +612,6 @@ class VIIRS_Range:
 
                     output_filename = os.path.join(output_dir,
                                                    f'{current_filename_prefix}_{current_filename_suffix}.{file_extension}')
-
-                    if os.path.isfile(output_filename):
-                        os.remove(output_filename)
 
                     print(f'Writing {output_filename}')
                     with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
