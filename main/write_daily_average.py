@@ -121,17 +121,6 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                 rtofs_dataset.write_raster(output_filename, variable='temp', time=day_of_forecast,
                                            direction=rtofs_direction)
                 
-                # RTOFS has a same-day nowcast
-                if day_delta == 0:
-                    rtofs_direction = 'nowcast'
-                    time_delta_string = f'{rtofs_direction[0]}{abs(day_delta) + 1 if rtofs_direction == "forecast" else abs(day_delta):03}'
-                    rtofs_filename_suffix = f'{model_run_date.strftime("%Y%m%d")}_{time_delta_string}'
-                    output_filename = os.path.join(daily_average_dir,
-                                                   f'{rtofs_filename_prefix}_sst_{rtofs_filename_suffix}')
-
-                    rtofs_dataset.write_raster(output_filename, variable='temp', time=day_of_forecast,
-                                               direction=rtofs_direction)
-        
         del rtofs_dataset
     except _utilities.NoDataError as error:
         print(error)
