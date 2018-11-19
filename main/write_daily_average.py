@@ -278,8 +278,10 @@ if __name__ == '__main__':
     
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = [-1, 0, 1, 2]
-    
-    # model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 10, 2), datetime.datetime(2018, 9, 1))
+
+    # model_run_dates = _utilities.range_daily(
+    #     datetime.datetime.today().replace(hour=0, minute=0, second=0, microsecond=0),
+    #     datetime.datetime(2018, 9, 1))
     # for model_run_date in model_run_dates:
     #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path)
     
