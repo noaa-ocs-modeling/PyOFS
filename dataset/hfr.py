@@ -58,7 +58,7 @@ class HFR_Range:
             self.end_datetime = datetime.datetime.utcnow() - NRT_DELAY
         else:
             self.end_datetime = end_datetime
-            
+
         self.resolution = resolution
 
         # get NDBC dataset if input time is within 4 days, otherwise get UCSD dataset
