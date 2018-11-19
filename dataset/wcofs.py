@@ -89,14 +89,14 @@ class WCOFS_Dataset:
         self.source = source
 
         # 'avg' is daily average datasets
-        if time_deltas is not None:
-            self.time_deltas = time_deltas
-        else:
+        if time_deltas is None:
             if self.source == 'avg':
                 self.time_deltas = [-1, 0, 1, 2]
             else:
                 self.time_deltas = list(range(WCOFS_MODEL_HOURS['n'], WCOFS_MODEL_HOURS['f'] + 1))
-
+        else:
+            self.time_deltas = time_deltas
+        
         if source_url is None:
             source_url = WCOFS_COOPS_URL
 
@@ -228,8 +228,8 @@ class WCOFS_Dataset:
 
         else:
             raise _utilities.NoDataError(
-                f'No WCOFS datasets found for {self.model_datetime} at the given time indices ({time_deltas}).')
-
+                f'No WCOFS datasets found for {self.model_datetime} at the given time deltas ({self.time_deltas}).')
+    
     def bounds(self, variable: str = 'psi') -> tuple:
         """
         Returns bounds of grid of given variable.
@@ -363,14 +363,14 @@ class WCOFS_Dataset:
 
         for variable in grid_variables:
             output_grid_coordinates[variable] = {}
-    
+
             grid_name = self.variable_grids[variable]
-    
+
             west = self.grid_bounds[grid_name][0]
             north = self.grid_bounds[grid_name][1]
             east = self.grid_bounds[grid_name][2]
             south = self.grid_bounds[grid_name][3]
-    
+
             # WCOFS grid starts at southwest corner
             output_grid_coordinates[variable]['lon'] = numpy.arange(west, east, x_size)
             output_grid_coordinates[variable]['lat'] = numpy.arange(south, north, y_size)
@@ -382,15 +382,15 @@ class WCOFS_Dataset:
         # concurrently populate dictionary with averaged data within given time interval for each variable
         with futures.ThreadPoolExecutor() as concurrency_pool:
             variable_futures = {}
-    
+
             for variable in variables:
                 wcofs_future = concurrency_pool.submit(self.data_average, variable, time_deltas)
                 variable_futures[wcofs_future] = variable
-    
+
             for completed_future in futures.as_completed(variable_futures):
                 variable = variable_futures[completed_future]
                 variable_means[variable] = completed_future.result()
-    
+
             del variable_futures
 
         if vector_components:
@@ -400,10 +400,10 @@ class WCOFS_Dataset:
             else:
                 u_name = 'u'
                 v_name = 'v'
-    
+
             if u_name not in variable_means:
                 variable_means[u_name] = self.data_average(u_name, time_deltas)
-    
+
             if v_name not in variable_means:
                 variable_means[v_name] = self.data_average(v_name, time_deltas)
 
@@ -416,42 +416,42 @@ class WCOFS_Dataset:
         # concurrently populate dictionary with interpolated data in given grid for each variable
         with futures.ThreadPoolExecutor() as concurrency_pool:
             variable_interpolation_futures = {}
-    
+
             for variable, variable_data in variable_means.items():
                 print(f'Starting {variable} interpolation...')
-        
+
                 grid_lon = output_grid_coordinates[variable]['lon']
                 grid_lat = output_grid_coordinates[variable]['lat']
-        
+
                 grid_name = self.variable_grids[variable]
-        
+
                 lon = self.data_coordinates[grid_name]['lon']
                 lat = self.data_coordinates[grid_name]['lat']
-        
+
                 if len(grid_lon) > 0:
                     future = concurrency_pool.submit(interpolate_grid, lon, lat, variable_data, grid_lon, grid_lat)
                     variable_interpolation_futures[future] = variable
-    
+
             for completed_future in futures.as_completed(variable_interpolation_futures):
                 variable = variable_interpolation_futures[completed_future]
                 interpolated_data[variable] = completed_future.result()
-    
+
             del variable_interpolation_futures
 
         if vector_components:
             interpolated_data['dir'] = {}
             interpolated_data['mag'] = {}
-    
+
             u_data = interpolated_data[u_name]
             v_data = interpolated_data[v_name]
-    
+
             # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
             interpolated_data['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (180 / numpy.pi)
             interpolated_data['mag'] = numpy.sqrt(numpy.square(u_data) + numpy.square(v_data))
-    
+
             if u_name not in variables:
                 del interpolated_data[u_name]
-    
+
             if v_name not in variables:
                 del interpolated_data[v_name]
 
@@ -461,7 +461,7 @@ class WCOFS_Dataset:
         for variable, variable_data in interpolated_data.items():
             west = numpy.min(output_grid_coordinates[variable]['lon'])
             north = numpy.max(output_grid_coordinates[variable]['lat'])
-    
+
             # WCOFS grid starts from southwest corner, but we'll be flipping the data in a moment so lets use the northwest point
             # TODO NOTE: You cannot use a negative (northward) y_size here, otherwise GDALSetGeoTransform will break at line 1253 of rasterio/_io.pyx
             if x_size is not None and y_size is not None:
@@ -469,25 +469,25 @@ class WCOFS_Dataset:
             else:
                 grid_name = self.variable_grids[variable]
                 grid_transform = self.grid_transforms[grid_name]
-    
+
             # flip the data to ensure northward y_size (see comment above)
             raster_data = numpy.flip(variable_data.astype(rasterio.float32), axis=0)
-    
+
             gdal_args = {
                 'width': raster_data.shape[1], 'height': raster_data.shape[0], 'count': 1,
                 'crs': RASTERIO_WGS84, 'transform': grid_transform, 'dtype': raster_data.dtype,
                 'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
             }
-    
+
             with MemoryFile() as memory_file:
                 with memory_file.open(driver='GTiff', **gdal_args) as memory_raster:
                     memory_raster.write(raster_data, 1)
-        
+
                 with memory_file.open() as memory_raster:
                     masked_data, masked_transform = rasterio.mask.mask(memory_raster, [study_area_geojson])
-    
+
             masked_data = masked_data[0, :, :]
-    
+
             for driver in drivers:
                 if driver == 'AAIGrid':
                     file_extension = 'asc'
@@ -496,13 +496,13 @@ class WCOFS_Dataset:
                     file_extension = 'tiff'
                 elif driver == 'GPKG':
                     file_extension = 'gpkg'
-        
+
                 output_filename = os.path.join(output_dir,
                                                f'wcofs_{variable}_{self.model_datetime.strftime("%Y%m%d")}{filename_suffix}.{file_extension}')
-        
+
                 if os.path.isfile(output_filename):
                     os.remove(output_filename)
-        
+
                 print(f'Writing to {output_filename}')
                 with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
                     output_raster.write(masked_data, 1)
