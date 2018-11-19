@@ -45,9 +45,6 @@ def write_observational_data(output_dir: str, observation_date: datetime.datetim
 
     end_of_day = start_of_day + datetime.timedelta(days=1)
 
-    if end_of_day > datetime.datetime.now():
-        end_of_day = datetime.datetime.now()
-    
     # write HFR rasters
     try:
         start_of_day_hfr_time = start_of_day + datetime.timedelta(hours=2)
@@ -71,14 +68,12 @@ def write_observational_data(output_dir: str, observation_date: datetime.datetim
         end_of_day_in_utc = start_of_day + datetime.timedelta(hours=24) + STUDY_AREA_TO_UTC
     
         viirs_range = viirs.VIIRS_Range(start_of_day_in_utc, end_of_day_in_utc)
-        
-        viirs_range.write_raster(output_dir,
-                                 filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_morning',
+
+        viirs_range.write_raster(output_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_morning',
                                  start_datetime=start_of_day_in_utc, end_datetime=noon_in_utc,
                                  fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=False,
                                  variables=['sst'])
-        viirs_range.write_raster(output_dir,
-                                 filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_night',
+        viirs_range.write_raster(output_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_night',
                                  start_datetime=noon_in_utc, end_datetime=end_of_day_in_utc,
                                  fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=False,
                                  variables=['sst'])

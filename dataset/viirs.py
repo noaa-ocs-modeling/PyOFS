@@ -378,9 +378,11 @@ class VIIRS_Range:
 
         self.start_datetime = start_datetime
         if end_datetime > datetime.datetime.utcnow():
-            self.end_datetime = datetime.datetime.utcnow()
+            # VIIRS near real time delay is 2 hours behind UTC
+            self.end_datetime = datetime.datetime.utcnow() - datetime.timedelta(hours=2)
         else:
             self.end_datetime = end_datetime
+
         self.study_area_polygon_filename = study_area_polygon_filename
         self.viirs_pass_times_filename = pass_times_filename
         self.algorithm = algorithm
@@ -397,13 +399,13 @@ class VIIRS_Range:
 
             with futures.ThreadPoolExecutor() as concurrency_pool:
                 running_futures = {}
-    
+
                 for pass_time in self.pass_times:
                     running_future = concurrency_pool.submit(VIIRS_Dataset, granule_datetime=pass_time,
                                                              study_area_polygon_filename=self.study_area_polygon_filename,
                                                              algorithm=self.algorithm, version=self.version)
                     running_futures[running_future] = pass_time
-    
+
                 for completed_future in futures.as_completed(running_futures):
                     if completed_future.exception() is None:
                         pass_time = running_futures[completed_future]
@@ -411,7 +413,7 @@ class VIIRS_Range:
                         self.datasets[pass_time] = viirs_dataset
                     else:
                         print(completed_future.exception())
-    
+
                 del running_futures
             
             if len(self.datasets) > 0:
@@ -423,11 +425,11 @@ class VIIRS_Range:
                 print(f'VIIRS data was found in {len(self.datasets)} passes.')
             else:
                 raise _utilities.NoDataError(
-                    f'No VIIRS datasets found between {self.start_datetime} and {self.end_datetime}.')
+                    f'No VIIRS datasets found between {self.start_datetime} UTC and {self.end_datetime} UTC.')
         else:
             raise _utilities.NoDataError(
-                f'There are no VIIRS passes between {self.start_datetime} and {self.end_datetime}.')
-
+                f'There are no VIIRS passes between {self.start_datetime} and {self.end_datetime} UTC.')
+    
     def cell_size(self) -> tuple:
         """
         Get cell sizes of dataset.
