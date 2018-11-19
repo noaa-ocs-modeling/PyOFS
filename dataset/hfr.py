@@ -77,7 +77,7 @@ class HFR_Range:
         self.netcdf_dataset = self.netcdf_dataset.sel(time=slice(self.start_datetime, self.end_datetime))
         
         print(
-            f'Collecting HFR velocity from {self.source} between {self.netcdf_dataset["time"].min().values} and {self.netcdf_dataset["time"].max().values}...')
+            f'Collecting HFR velocity from {self.source} between {str(self.netcdf_dataset["time"].min().values)[:19]} and {str(self.netcdf_dataset["time"].max().values)[:19]}...')
         
         if HFR_Range.grid_transform is None:
             lon = self.netcdf_dataset['lon'].values

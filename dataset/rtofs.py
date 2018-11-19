@@ -180,7 +180,7 @@ class RTOFS_Dataset:
                 else:
                     raise ValueError(f'Variable must be one of {list(DATA_VARIABLES.keys())}.')
             else:
-                print(f'{direction} does not exist in RTOFS datasets.')
+                print(f'{direction} does not exist in RTOFS dataset for {self.model_datetime.strftime("%Y%m%d")}.')
         else:
             raise ValueError(f'Direction must be one of {list(DATASET_STRUCTURE[self.source].keys())}.')
     
