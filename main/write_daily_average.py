@@ -14,7 +14,7 @@ import pytz
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
-from dataset import _utilities, hfr, viirs, wcofs, rtofs
+from dataset import _utilities, hfr, viirs, rtofs, wcofs
 
 from main import json_dir_structure, DATA_DIR
 
@@ -37,27 +37,27 @@ MODEL_DAY_DELTAS = {'WCOFS': range(-1, 2 + 1), 'RTOFS': range(-3, 8 + 1)}
 
 def write_observational_data(output_dir: str, observation_date: datetime.datetime, log_path: str):
     if 'datetime.date' in str(type(observation_date)):
-        start_datetime = datetime.datetime.combine(observation_date, datetime.datetime.min.time())
+        start_of_day = datetime.datetime.combine(observation_date, datetime.datetime.min.time())
     elif 'datetime.datetime' in str(type(observation_date)):
-        start_datetime = observation_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_of_day = observation_date.replace(hour=0, minute=0, second=0, microsecond=0)
     else:
-        start_datetime = observation_date
+        start_of_day = observation_date
 
-    end_datetime = start_datetime + datetime.timedelta(days=1)
+    end_of_day = start_of_day + datetime.timedelta(days=1)
 
-    if end_datetime > datetime.datetime.now():
-        end_datetime = datetime.datetime.now()
+    if end_of_day > datetime.datetime.now():
+        end_of_day = datetime.datetime.now()
     
     # write HFR rasters
     try:
-        hfr_start_datetime = start_datetime + datetime.timedelta(hours=2)
-        hfr_end_datetime = end_datetime + datetime.timedelta(hours=2)
-
-        hfr_range = hfr.HFR_Range(hfr_start_datetime, hfr_end_datetime)
+        start_of_day_hfr_time = start_of_day + datetime.timedelta(hours=2)
+        end_of_day_hfr_time = end_of_day + datetime.timedelta(hours=2)
+    
+        hfr_range = hfr.HFR_Range(start_of_day_hfr_time, end_of_day_hfr_time)
         hfr_range.write_rasters(output_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}',
                                 variables=['u', 'v'], vector_components=True, drivers=['AAIGrid'],
                                 fill_value=LEAFLET_NODATA_VALUE)
-
+    
         del hfr_range
     except _utilities.NoDataError as error:
         print(error)
@@ -66,29 +66,23 @@ def write_observational_data(output_dir: str, observation_date: datetime.datetim
     
     # write VIIRS rasters
     try:
-        utc_start_datetime = start_datetime + STUDY_AREA_TO_UTC
-        utc_morning_datetime = start_datetime + datetime.timedelta(hours=6) + STUDY_AREA_TO_UTC
-        utc_evening_datetime = start_datetime + datetime.timedelta(hours=18) + STUDY_AREA_TO_UTC
-        utc_end_datetime = start_datetime + datetime.timedelta(hours=24) + STUDY_AREA_TO_UTC
+        start_of_day_in_utc = start_of_day + STUDY_AREA_TO_UTC
+        noon_in_utc = start_of_day + datetime.timedelta(hours=12) + STUDY_AREA_TO_UTC
+        end_of_day_in_utc = start_of_day + datetime.timedelta(hours=24) + STUDY_AREA_TO_UTC
+    
+        viirs_range = viirs.VIIRS_Range(start_of_day_in_utc, end_of_day_in_utc)
         
-        viirs_range = viirs.VIIRS_Range(utc_start_datetime, utc_end_datetime)
-        
         viirs_range.write_raster(output_dir,
-                                 filename_suffix=f'{start_datetime.strftime("%Y%m%d")}_morning',
-                                 start_datetime=utc_start_datetime, end_datetime=utc_morning_datetime,
+                                 filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_morning',
+                                 start_datetime=start_of_day_in_utc, end_datetime=noon_in_utc,
                                  fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=False,
                                  variables=['sst'])
         viirs_range.write_raster(output_dir,
-                                 filename_suffix=f'{start_datetime.strftime("%Y%m%d")}_daytime',
-                                 start_datetime=utc_morning_datetime, end_datetime=utc_evening_datetime,
+                                 filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_night',
+                                 start_datetime=noon_in_utc, end_datetime=end_of_day_in_utc,
                                  fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=False,
                                  variables=['sst'])
-        viirs_range.write_raster(output_dir,
-                                 filename_suffix=f'{start_datetime.strftime("%Y%m%d")}_evening',
-                                 start_datetime=utc_evening_datetime, end_datetime=utc_end_datetime,
-                                 fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=False,
-                                 variables=['sst'])
-
+    
         del viirs_range
     except _utilities.NoDataError as error:
         print(error)
@@ -116,26 +110,28 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
         
         for day_delta, daily_average_dir in output_dirs.items():
             if day_delta in MODEL_DAY_DELTAS['RTOFS']:
-                start_datetime = model_run_date + datetime.timedelta(days=day_delta)
+                day_of_forecast = model_run_date + datetime.timedelta(days=day_delta)
                 rtofs_filename_prefix = f'rtofs'
                 rtofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
                 time_delta_string = f'{rtofs_direction[0]}{abs(day_delta) + 1 if rtofs_direction == "forecast" else abs(day_delta):03}'
-                rtofs_filename_suffix = f'{start_datetime.strftime("%Y%m%d")}_{time_delta_string}'
+                rtofs_filename_suffix = f'{model_run_date.strftime("%Y%m%d")}_{time_delta_string}'
+                output_filename = os.path.join(daily_average_dir,
+                                               f'{rtofs_filename_prefix}_sst_{rtofs_filename_suffix}')
+    
+                rtofs_dataset.write_raster(output_filename, variable='temp', time=day_of_forecast,
+                                           direction=rtofs_direction)
                 
-                rtofs_dataset.write_raster(
-                    os.path.join(daily_average_dir, f'{rtofs_filename_prefix}_sst_{rtofs_filename_suffix}'),
-                    variable='temp', time=start_datetime, direction=rtofs_direction)
-
                 # RTOFS has a same-day nowcast
                 if day_delta == 0:
                     rtofs_direction = 'nowcast'
                     time_delta_string = f'{rtofs_direction[0]}{abs(day_delta) + 1 if rtofs_direction == "forecast" else abs(day_delta):03}'
-                    rtofs_filename_suffix = f'{start_datetime.strftime("%Y%m%d")}_{time_delta_string}'
+                    rtofs_filename_suffix = f'{model_run_date.strftime("%Y%m%d")}_{time_delta_string}'
+                    output_filename = os.path.join(daily_average_dir,
+                                                   f'{rtofs_filename_prefix}_sst_{rtofs_filename_suffix}')
 
-                    rtofs_dataset.write_raster(
-                        os.path.join(daily_average_dir, f'{rtofs_filename_prefix}_sst_{rtofs_filename_suffix}'),
-                        variable='temp', time=start_datetime, direction=rtofs_direction)
-
+                    rtofs_dataset.write_raster(output_filename, variable='temp', time=day_of_forecast,
+                                               direction=rtofs_direction)
+        
         del rtofs_dataset
     except _utilities.NoDataError as error:
         print(error)
@@ -279,9 +275,7 @@ if __name__ == '__main__':
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = [-1, 0, 1, 2]
 
-    # model_run_dates = _utilities.range_daily(
-    #     datetime.datetime.today().replace(hour=0, minute=0, second=0, microsecond=0),
-    #     datetime.datetime(2018, 9, 1))
+    # model_run_dates = _utilities.range_daily(datetime.datetime(2018, 11, 18), datetime.datetime(2018, 11, 20))
     # for model_run_date in model_run_dates:
     #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path)
     

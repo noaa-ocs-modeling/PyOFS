@@ -11,7 +11,7 @@ import functools
 import json
 import os
 
-from main import DATA_DIR
+DATA_DIR = os.environ['OFS_DATA']
 
 def get_directory_structure(rootdir):
     """

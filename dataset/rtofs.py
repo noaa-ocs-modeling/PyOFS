@@ -111,11 +111,14 @@ class RTOFS_Dataset:
                         self.netcdf_datasets[forecast_direction][dataset_name] = dataset
                         self.dataset_locks[forecast_direction][dataset_name] = threading.Lock()
                     except OSError as error:
-                        print(f'Error collecting RTOFS from {url}')
-        
-        if len(self.netcdf_datasets) > 0:
-            sample_dataset = next(iter(self.netcdf_datasets['nowcast'].values()))
-    
+                        print(f'Error collecting RTOFS: {error}')
+
+        if (len(self.netcdf_datasets['nowcast']) + len(self.netcdf_datasets['forecast'])) > 0:
+            if len(self.netcdf_datasets['nowcast']) > 0:
+                sample_dataset = next(iter(self.netcdf_datasets['nowcast'].values()))
+            else:
+                sample_dataset = next(iter(self.netcdf_datasets['forecast'].values()))
+            
             # for some reason RTOFS has longitude values shifted by 360
             self.raw_lon = sample_dataset['lon'].values
             self.lon = self.raw_lon - 180 - numpy.min(self.raw_lon)
@@ -164,17 +167,17 @@ class RTOFS_Dataset:
                 if variable in DATA_VARIABLES:
                     datasets = DATA_VARIABLES[variable][self.source]
                     dataset_name, variable_name = next(iter(datasets.items()))
-            
+
                     with self.dataset_locks[direction][dataset_name]:
                         variable = self.netcdf_datasets[direction][dataset_name][variable_name]
-                
+
                         if crop:
                             selection = variable.sel(time=time,
                                                      lon=slice(self.study_area_west + 360, self.study_area_east + 360),
                                                      lat=slice(self.study_area_south, self.study_area_north))
                         else:
                             selection = variable.sel(time=time)
-                
+
                         selection = numpy.flipud(numpy.squeeze(selection.values))
                         return selection
                 else:
@@ -205,7 +208,7 @@ class RTOFS_Dataset:
                 'count': 1, 'dtype': rasterio.float32, 'crs': RASTERIO_WGS84,
                 'nodata': numpy.array([fill_value]).astype(output_data.dtype).item()
             }
-    
+
             for driver in drivers:
                 if driver == 'AAIGrid':
                     file_extension = '.asc'
@@ -214,9 +217,9 @@ class RTOFS_Dataset:
                     file_extension = '.tiff'
                 elif driver == 'GPKG':
                     file_extension = '.gpkg'
-        
+
                 output_filename = f'{os.path.splitext(output_filename)[0]}{file_extension}'
-        
+
                 print(f'Writing {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(output_data, 1)
