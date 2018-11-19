@@ -25,6 +25,8 @@ DATA_VARIABLES = ['u', 'v', 'DOPx', 'DOPy']
 FIONA_WGS84 = fiona.crs.from_epsg(4326)
 RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
 
+NRT_DELAY = datetime.timedelta(hours=1)
+
 SOURCE_URLS = {
     'NDBC': 'https://dods.ndbc.noaa.gov/thredds/dodsC',
     'UCSD': 'http://hfrnet-tds.ucsd.edu/thredds/dodsC/HFR/USWC'
@@ -53,7 +55,7 @@ class HFR_Range:
         self.start_datetime = start_datetime
         if end_datetime > datetime.datetime.utcnow():
             # HFR near real time delay is 1 hour behind UTC
-            self.end_datetime = datetime.datetime.utcnow() - datetime.timedelta(hours=1)
+            self.end_datetime = datetime.datetime.utcnow() - NRT_DELAY
         else:
             self.end_datetime = end_datetime
             

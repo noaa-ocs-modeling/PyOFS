@@ -9,6 +9,7 @@ Created on Aug 21, 2018
 import datetime
 import os
 import sys
+import typing
 
 import pytz
 
@@ -35,9 +36,10 @@ LEAFLET_NODATA_VALUE = -9999
 MODEL_DAY_DELTAS = {'WCOFS': range(-1, 2 + 1), 'RTOFS': range(-3, 8 + 1)}
 
 
-def write_observational_data(output_dir: str, observation_date: datetime.datetime, log_path: str):
+def write_observational_data(output_dir: str, observation_date: typing.Union[datetime.date, datetime.datetime],
+                             log_path: str):
     if 'datetime.date' in str(type(observation_date)):
-        start_of_day = datetime.datetime.combine(observation_date, datetime.datetime.min.time())
+        start_of_day = datetime.datetime.combine(observation_date, datetime.time.min)
     elif 'datetime.datetime' in str(type(observation_date)):
         start_of_day = observation_date.replace(hour=0, minute=0, second=0, microsecond=0)
     else:
@@ -49,12 +51,12 @@ def write_observational_data(output_dir: str, observation_date: datetime.datetim
     try:
         start_of_day_hfr_time = start_of_day + datetime.timedelta(hours=2)
         end_of_day_hfr_time = end_of_day + datetime.timedelta(hours=2)
-    
+
         hfr_range = hfr.HFR_Range(start_of_day_hfr_time, end_of_day_hfr_time)
         hfr_range.write_rasters(output_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}',
                                 variables=['u', 'v'], vector_components=True, drivers=['AAIGrid'],
                                 fill_value=LEAFLET_NODATA_VALUE)
-    
+
         del hfr_range
     except _utilities.NoDataError as error:
         print(error)
@@ -66,7 +68,7 @@ def write_observational_data(output_dir: str, observation_date: datetime.datetim
         start_of_day_in_utc = start_of_day + STUDY_AREA_TO_UTC
         noon_in_utc = start_of_day + datetime.timedelta(hours=12) + STUDY_AREA_TO_UTC
         end_of_day_in_utc = start_of_day + datetime.timedelta(hours=24) + STUDY_AREA_TO_UTC
-    
+
         viirs_range = viirs.VIIRS_Range(start_of_day_in_utc, end_of_day_in_utc)
 
         viirs_range.write_raster(output_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_morning',
@@ -77,7 +79,7 @@ def write_observational_data(output_dir: str, observation_date: datetime.datetim
                                  start_datetime=noon_in_utc, end_datetime=end_of_day_in_utc,
                                  fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=False,
                                  variables=['sst'])
-    
+
         del viirs_range
     except _utilities.NoDataError as error:
         print(error)
@@ -112,10 +114,10 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                 rtofs_filename_suffix = f'{model_run_date.strftime("%Y%m%d")}_{time_delta_string}'
                 output_filename = os.path.join(daily_average_dir,
                                                f'{rtofs_filename_prefix}_sst_{rtofs_filename_suffix}')
-    
+
                 rtofs_dataset.write_raster(output_filename, variable='temp', time=day_of_forecast,
                                            direction=rtofs_direction)
-                
+
         del rtofs_dataset
     except _utilities.NoDataError as error:
         print(error)
