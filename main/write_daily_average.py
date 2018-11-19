@@ -57,6 +57,7 @@ def write_observational_data(output_dir: str, observation_date: datetime.datetim
         hfr_range.write_rasters(output_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}',
                                 variables=['u', 'v'], vector_components=True, drivers=['AAIGrid'],
                                 fill_value=LEAFLET_NODATA_VALUE)
+
         del hfr_range
     except _utilities.NoDataError as error:
         print(error)
@@ -87,6 +88,7 @@ def write_observational_data(output_dir: str, observation_date: datetime.datetim
                                  start_datetime=utc_evening_datetime, end_datetime=utc_end_datetime,
                                  fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=False,
                                  variables=['sst'])
+
         del viirs_range
     except _utilities.NoDataError as error:
         print(error)
@@ -133,6 +135,8 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                     rtofs_dataset.write_raster(
                         os.path.join(daily_average_dir, f'{rtofs_filename_prefix}_sst_{rtofs_filename_suffix}'),
                         variable='temp', time=start_datetime, direction=rtofs_direction)
+
+        del rtofs_dataset
     except _utilities.NoDataError as error:
         print(error)
         with open(log_path, 'a') as log_file:
@@ -153,6 +157,8 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                 wcofs_dataset.write_rasters(daily_average_dir, ['u', 'v'], filename_suffix=wcofs_filename_suffix,
                                             time_deltas=[day_delta], vector_components=True,
                                             fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
+
+        del wcofs_dataset
     except _utilities.NoDataError as error:
         print(error)
         with open(log_path, 'a') as log_file:
@@ -176,6 +182,8 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                 wcofs_4km_dataset.write_rasters(daily_average_dir, ['u', 'v'], filename_suffix=wcofs_filename_suffix,
                                                 time_deltas=[day_delta], vector_components=True,
                                                 fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
+
+        del wcofs_4km_dataset
     except _utilities.NoDataError as error:
         print(error)
         with open(log_path, 'a') as log_file:
@@ -201,6 +209,8 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
     #             wcofs_2km_dataset.write_rasters(daily_average_dir, ['u', 'v'], filename_suffix=wcofs_filename_suffix,
     #                                             time_deltas=[day_delta], vector_components=True, x_size=0.02,
     #                                             y_size=0.02, fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
+    #
+    #     del wcofs_2km_dataset
     # except _utilities.NoDataError as error:
     #     print(error)
     #     with open(log_path, 'a') as log_file:
