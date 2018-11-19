@@ -131,7 +131,7 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                     rtofs_direction = 'nowcast'
                     time_delta_string = f'{rtofs_direction[0]}{abs(day_delta) + 1 if rtofs_direction == "forecast" else abs(day_delta):03}'
                     rtofs_filename_suffix = f'{start_datetime.strftime("%Y%m%d")}_{time_delta_string}'
-    
+
                     rtofs_dataset.write_raster(
                         os.path.join(daily_average_dir, f'{rtofs_filename_prefix}_sst_{rtofs_filename_suffix}'),
                         variable='temp', time=start_datetime, direction=rtofs_direction)
@@ -145,19 +145,19 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
     # write WCOFS rasters
     try:
         wcofs_dataset = wcofs.WCOFS_Dataset(model_run_date, source='avg')
-    
+
         for day_delta, daily_average_dir in output_dirs.items():
             if day_delta in MODEL_DAY_DELTAS['WCOFS']:
                 wcofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
                 time_delta_string = f'{wcofs_direction[0]}{abs(day_delta) + 1 if wcofs_direction == "forecast" else abs(day_delta):03}'
                 wcofs_filename_suffix = f'{time_delta_string}'
-            
+
                 wcofs_dataset.write_rasters(daily_average_dir, ['temp'], filename_suffix=wcofs_filename_suffix,
                                             time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'])
                 wcofs_dataset.write_rasters(daily_average_dir, ['u', 'v'], filename_suffix=wcofs_filename_suffix,
                                             time_deltas=[day_delta], vector_components=True,
                                             fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
-    
+
         del wcofs_dataset
     except _utilities.NoDataError as error:
         print(error)
@@ -169,20 +169,20 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                                                 grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME,
                                                 source_url=os.path.join(DATA_DIR, 'input/wcofs/avg'),
                                                 wcofs_string='wcofs4')
-    
+
         for day_delta, daily_average_dir in output_dirs.items():
             if day_delta in MODEL_DAY_DELTAS['WCOFS']:
                 wcofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
                 time_delta_string = f'{wcofs_direction[0]}{abs(day_delta) + 1 if wcofs_direction == "forecast" else abs(day_delta):03}'
                 wcofs_filename_suffix = f'{time_delta_string}_noDA_4km'
-            
+
                 wcofs_4km_dataset.write_rasters(daily_average_dir, ['temp'], filename_suffix=wcofs_filename_suffix,
                                                 time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
                                                 drivers=['GTiff'])
                 wcofs_4km_dataset.write_rasters(daily_average_dir, ['u', 'v'], filename_suffix=wcofs_filename_suffix,
                                                 time_deltas=[day_delta], vector_components=True,
                                                 fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
-    
+
         del wcofs_4km_dataset
     except _utilities.NoDataError as error:
         print(error)
@@ -278,8 +278,10 @@ if __name__ == '__main__':
     
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = [-1, 0, 1, 2]
-    
-    # model_run_dates = dataset._utilities.day_range(datetime.datetime(2018, 10, 2), datetime.datetime(2018, 9, 1))
+
+    # model_run_dates = _utilities.range_daily(
+    #     datetime.datetime.today().replace(hour=0, minute=0, second=0, microsecond=0),
+    #     datetime.datetime(2018, 9, 1))
     # for model_run_date in model_run_dates:
     #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path)
     
