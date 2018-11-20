@@ -417,9 +417,6 @@ class HFR_Range:
                 output_filename = os.path.join(output_dir,
                                                f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
 
-                if os.path.isfile(output_filename):
-                    os.remove(output_filename)
-
                 print(f'Writing {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(numpy.flipud(raster_data), 1)

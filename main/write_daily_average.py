@@ -108,16 +108,12 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
         for day_delta, daily_average_dir in output_dirs.items():
             if day_delta in MODEL_DAY_DELTAS['RTOFS']:
                 day_of_forecast = model_run_date + datetime.timedelta(days=day_delta)
-                rtofs_filename_prefix = f'rtofs'
-                rtofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
-                time_delta_string = f'{rtofs_direction[0]}{abs(day_delta) + 1 if rtofs_direction == "forecast" else abs(day_delta):03}'
-                rtofs_filename_suffix = f'{model_run_date.strftime("%Y%m%d")}_{time_delta_string}'
-                output_filename = os.path.join(daily_average_dir,
-                                               f'{rtofs_filename_prefix}_sst_{rtofs_filename_suffix}')
 
-                rtofs_dataset.write_raster(output_filename, variable='temp', time=day_of_forecast,
-                                           direction=rtofs_direction)
-
+                rtofs_dataset.write_rasters(daily_average_dir, variables=['temp'], time=day_of_forecast,
+                                            drivers=['GTiff'])
+                rtofs_dataset.write_rasters(daily_average_dir, variables=['u', 'v'], time=day_of_forecast,
+                                            vector_components=True, drivers=['AAIGrid'])
+        
         del rtofs_dataset
     except _utilities.NoDataError as error:
         print(error)
@@ -264,8 +260,8 @@ if __name__ == '__main__':
     # model_run_dates = _utilities.range_daily(datetime.datetime(2018, 11, 18), datetime.datetime(2018, 11, 20))
     # for model_run_date in model_run_dates:
     #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path)
-    
-    model_run_date = datetime.date.today()
+
+    model_run_date = datetime.date.today() - datetime.timedelta(days=1)
     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path)
     
     message = f'Finished writing files. Total time: {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds'
