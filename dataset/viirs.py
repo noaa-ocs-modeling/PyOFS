@@ -34,6 +34,8 @@ STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:stud
 
 RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
 
+NRT_DELAY = datetime.timedelta(hours=2)
+
 SOURCES = OrderedDict({
     'OpenDAP': OrderedDict({
         'NESDIS': 'https://www.star.nesdis.noaa.gov/thredds/dodsC',
@@ -379,7 +381,7 @@ class VIIRS_Range:
         self.start_datetime = start_datetime
         if end_datetime > datetime.datetime.utcnow():
             # VIIRS near real time delay is 2 hours behind UTC
-            self.end_datetime = datetime.datetime.utcnow() - datetime.timedelta(hours=2)
+            self.end_datetime = datetime.datetime.utcnow() - NRT_DELAY
         else:
             self.end_datetime = end_datetime
 

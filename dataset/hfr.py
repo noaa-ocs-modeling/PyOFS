@@ -25,7 +25,9 @@ DATA_VARIABLES = ['u', 'v', 'DOPx', 'DOPy']
 FIONA_WGS84 = fiona.crs.from_epsg(4326)
 RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
 
-SOURCE_URLS = {
+NRT_DELAY = datetime.timedelta(hours=1)
+
+SOURCES = {
     'NDBC': 'https://dods.ndbc.noaa.gov/thredds/dodsC',
     'UCSD': 'http://hfrnet-tds.ucsd.edu/thredds/dodsC/HFR/USWC'
 }
@@ -53,10 +55,10 @@ class HFR_Range:
         self.start_datetime = start_datetime
         if end_datetime > datetime.datetime.utcnow():
             # HFR near real time delay is 1 hour behind UTC
-            self.end_datetime = datetime.datetime.utcnow() - datetime.timedelta(hours=1)
+            self.end_datetime = datetime.datetime.utcnow() - NRT_DELAY
         else:
             self.end_datetime = end_datetime
-            
+
         self.resolution = resolution
 
         # get NDBC dataset if input time is within 4 days, otherwise get UCSD dataset
@@ -69,9 +71,9 @@ class HFR_Range:
 
         # get URL
         if self.source == 'NDBC':
-            self.url = f'{SOURCE_URLS["NDBC"]}/hfradar_uswc_{self.resolution}km'
+            self.url = f'{SOURCES["NDBC"]}/hfradar_uswc_{self.resolution}km'
         elif self.source == 'UCSD':
-            self.url = f'{SOURCE_URLS["UCSD"]}/{self.resolution}km/hourly/RTV/HFRADAR_US_West_Coast_{self.resolution}km_Resolution_Hourly_RTV_best.ncd'
+            self.url = f'{SOURCES["UCSD"]}/{self.resolution}km/hourly/RTV/HFRADAR_US_West_Coast_{self.resolution}km_Resolution_Hourly_RTV_best.ncd'
         
         try:
             self.netcdf_dataset = xarray.open_dataset(self.url)
@@ -414,9 +416,6 @@ class HFR_Range:
 
                 output_filename = os.path.join(output_dir,
                                                f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
-
-                if os.path.isfile(output_filename):
-                    os.remove(output_filename)
 
                 print(f'Writing {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
