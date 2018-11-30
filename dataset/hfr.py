@@ -481,10 +481,7 @@ if __name__ == '__main__':
     start_datetime = datetime.datetime(2018, 11, 15)
     end_datetime = start_datetime + datetime.timedelta(days=1)
 
-    # get dataset from source
-    hfr_dataset = HFR_Range(start_datetime, end_datetime)
-
-    # write HFR raster
-    hfr_dataset.write_rasters(output_dir)
+    hfr_range = HFR_Range(start_datetime, end_datetime)
+    hfr_range.write_rasters(output_dir)
 
     print('done')

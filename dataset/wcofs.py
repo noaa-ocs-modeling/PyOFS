@@ -131,22 +131,23 @@ class WCOFS_Dataset:
                 running_futures = {}
                 
                 for hour in self.time_deltas:
-                    url = f'{self.source_url}/{month_string}/nos.{self.wcofs_string}.{self.location}.{"n" if hour <= 0 else "f"}{abs(hour):03}.{date_string}.t{self.cycle:02}z.nc'
-
+                    url = f'{self.source_url}/{month_string}/nos.{self.wcofs_string}.{self.location}.{"n" if hour <= 0 else "f"}' + \
+                          f'{abs(hour):03}.{date_string}.t{self.cycle:02}z.nc'
+                    
                     future = concurrency_pool.submit(xarray.open_dataset, url, decode_times=False)
                     running_futures[future] = hour
-    
+
                 for completed_future in futures.as_completed(running_futures):
                     try:
                         hour = running_futures[completed_future]
                         result = completed_future.result()
-    
+
                         if result is not None:
                             self.netcdf_datasets[hour] = result
                     except OSError:
                         # print(f'No WCOFS dataset found at {url}')
                         pass
-    
+
                 del running_futures
         
         if len(self.netcdf_datasets) > 0:
@@ -277,7 +278,11 @@ class WCOFS_Dataset:
                             extra_column[:] = numpy.nan
                             output_data = numpy.concatenate((output_data, extra_column), axis=1)
                     else:
-                        output_data = self.netcdf_datasets[dataset_index][variable][day_index, -1, :, :].values
+                        data_variable = self.netcdf_datasets[dataset_index][variable]
+                        if len(data_variable.shape) == 3:
+                            output_data = data_variable[day_index, :, :].values
+                        if len(data_variable.shape) == 4:
+                            output_data = data_variable[day_index, -1, :, :].values
             else:
                 with self.dataset_locks[time_delta]:
                     output_data = self.netcdf_datasets[time_delta][variable][0, :, :].values
@@ -304,10 +309,10 @@ class WCOFS_Dataset:
         with futures.ThreadPoolExecutor() as concurrency_pool:
             running_futures = {concurrency_pool.submit(self.data, variable, time_delta): time_delta for time_delta in
                                time_deltas}
-    
+
             for completed_future in futures.as_completed(running_futures):
                 variable_data.append(completed_future.result())
-    
+
             del running_futures
         
         variable_data = numpy.mean(numpy.stack(variable_data), axis=0)
@@ -386,11 +391,11 @@ class WCOFS_Dataset:
             for variable in variables:
                 wcofs_future = concurrency_pool.submit(self.data_average, variable, time_deltas)
                 running_futures[wcofs_future] = variable
-    
+
             for completed_future in futures.as_completed(running_futures):
                 variable = running_futures[completed_future]
                 variable_means[variable] = completed_future.result()
-    
+
             del running_futures
         
         if vector_components:
@@ -431,11 +436,11 @@ class WCOFS_Dataset:
                 if len(grid_lon) > 0:
                     future = concurrency_pool.submit(interpolate_grid, lon, lat, variable_data, grid_lon, grid_lat)
                     running_futures[future] = variable
-    
+
             for completed_future in futures.as_completed(running_futures):
                 variable = running_futures[completed_future]
                 interpolated_data[variable] = completed_future.result()
-    
+
             del running_futures
         
         if vector_components:
@@ -498,126 +503,130 @@ class WCOFS_Dataset:
                     file_extension = 'gpkg'
 
                 output_filename = os.path.join(output_dir,
-                                               f'wcofs_{variable}_{self.model_datetime.strftime("%Y%m%d")}{filename_suffix}.{file_extension}')
+                                               f'wcofs_{variable}_{self.model_datetime.strftime("%Y%m%d")}' + \
+                                               f'{filename_suffix}.{file_extension}')
 
-                if os.path.isfile(output_filename):
-                    os.remove(output_filename)
+            if os.path.isfile(output_filename):
+                os.remove(output_filename)
 
-                print(f'Writing to {output_filename}')
-                with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
-                    output_raster.write(masked_data, 1)
+            print(f'Writing to {output_filename}')
+            with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
+                output_raster.write(masked_data, 1)
+
+
+def write_vector(self, output_filename: str, layer_name: str = None, time_deltas: list = None):
+    """
+    Write average of surface velocity vector data for all hours in the given time interval to the provided output file.
+
+    :param output_filename: Path to output file.
+    :param layer_name: Name of layer to write.
+    :param time_deltas: List of integers of hours to use in average.
+    """
     
-    def write_vector(self, output_filename: str, layer_name: str = None, time_deltas: list = None):
-        """
-        Write average of surface velocity vector data for all hours in the given time interval to the provided output file.
-
-        :param output_filename: Path to output file.
-        :param layer_name: Name of layer to write.
-        :param time_deltas: List of integers of hours to use in average.
-        """
-
-        variables = DATA_VARIABLES['2ds'] if self.source == '2ds' else DATA_VARIABLES['other']
-
-        start_time = datetime.datetime.now()
-
-        variable_means = {}
-
-        # concurrently populate dictionary with averaged data within given time interval for each variable
-        with futures.ThreadPoolExecutor() as concurrency_pool:
-            running_futures = {concurrency_pool.submit(self.data_average, variable, time_deltas): variable for variable
-                               in variables}
+    variables = DATA_VARIABLES['2ds'] if self.source == '2ds' else DATA_VARIABLES['other']
     
-            for completed_future in futures.as_completed(running_futures):
-                variable = running_futures[completed_future]
-                variable_means[variable] = completed_future.result()
+    start_time = datetime.datetime.now()
     
-            del running_futures
+    variable_means = {}
+    
+    # concurrently populate dictionary with averaged data within given time interval for each variable
+    with futures.ThreadPoolExecutor() as concurrency_pool:
+        running_futures = {concurrency_pool.submit(self.data_average, variable, time_deltas): variable for variable
+                           in variables}
         
-        print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
-
-        schema = {
-            'geometry': 'Point', 'properties': {
-                'row': 'int', 'col': 'int', 'rho_lon': 'float', 'rho_lat': 'float'
-            }
+        for completed_future in futures.as_completed(running_futures):
+            variable = running_futures[completed_future]
+            variable_means[variable] = completed_future.result()
+        
+        del running_futures
+    
+    print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+    
+    schema = {
+        'geometry': 'Point', 'properties': {
+            'row': 'int', 'col': 'int', 'rho_lon': 'float', 'rho_lat': 'float'
         }
-
-        for variable in variables:
-            schema['properties'][variable] = 'float'
-
-        start_time = datetime.datetime.now()
-
-        print('Creating records...')
-
-        # create features
-        layer_records = []
-
-        grid_height, grid_width = WCOFS_Dataset.data_coordinates['psi']['lon'].shape
-
-        with futures.ThreadPoolExecutor() as concurrency_pool:
-            feature_index = 1
-            running_futures = []
+    }
+    
+    for variable in variables:
+        schema['properties'][variable] = 'float'
+    
+    start_time = datetime.datetime.now()
+    
+    print('Creating records...')
+    
+    # create features
+    layer_records = []
+    
+    grid_height, grid_width = WCOFS_Dataset.data_coordinates['psi']['lon'].shape
+    
+    with futures.ThreadPoolExecutor() as concurrency_pool:
+        feature_index = 1
+        running_futures = []
+        
+        for col in range(grid_width):
+            for row in range(grid_height):
+                if WCOFS_Dataset.masks['psi'][row, col] == 0:
+                    # check if current record is unmasked
+                    running_futures.append(
+                        concurrency_pool.submit(self._create_fiona_record, variable_means, row, col,
+                                                feature_index))
+                    feature_index += 1
+        
+        for completed_future in futures.as_completed(running_futures):
+            result = completed_future.result()
             
-            for col in range(grid_width):
-                for row in range(grid_height):
-                    if WCOFS_Dataset.masks['psi'][row, col] == 0:
-                        # check if current record is unmasked
-                        running_futures.append(
-                            concurrency_pool.submit(self._create_fiona_record, variable_means, row, col,
-                                                    feature_index))
-                        feature_index += 1
+            if result is not None:
+                layer_records.append(result)
+    
+    print(f'creating records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+    
+    start_time = datetime.datetime.now()
+    
+    print(f'Writing {output_filename}:{layer_name}')
+    
+    # create layer
+    with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_WGS84,
+                    layer=layer_name) as output_vector_file:
+        output_vector_file.writerecords(layer_records)
+    
+    print(f'writing records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
-            for completed_future in futures.as_completed(running_futures):
-                result = completed_future.result()
 
-                if result is not None:
-                    layer_records.append(result)
-
-        print(f'creating records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
-
-        start_time = datetime.datetime.now()
-
-        print(f'Writing {output_filename}:{layer_name}')
-
-        # create layer
-        with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_WGS84,
-                        layer=layer_name) as output_vector_file:
-            output_vector_file.writerecords(layer_records)
-
-        print(f'writing records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
-
-    def _create_fiona_record(self, variable_means, row, col, feature_index):
-        # get coordinates of cell center
-        rho_lon = WCOFS_Dataset.data_coordinates['rho']['lon'][row, col]
-        rho_lat = WCOFS_Dataset.data_coordinates['rho']['lat'][row, col]
-
-        record = {
-            'geometry': {
-                'id': feature_index, 'type': 'Point', 'coordinates': (float(rho_lon), float(rho_lat))
-            }, 'properties': {
-                'row': row, 'col': col, 'rho_lon': float(rho_lon), 'rho_lat': float(rho_lat)
-            }
+def _create_fiona_record(self, variable_means, row, col, feature_index):
+    # get coordinates of cell center
+    rho_lon = WCOFS_Dataset.data_coordinates['rho']['lon'][row, col]
+    rho_lat = WCOFS_Dataset.data_coordinates['rho']['lat'][row, col]
+    
+    record = {
+        'geometry': {
+            'id': feature_index, 'type': 'Point', 'coordinates': (float(rho_lon), float(rho_lat))
+        }, 'properties': {
+            'row': row, 'col': col, 'rho_lon': float(rho_lon), 'rho_lat': float(rho_lat)
         }
+    }
+    
+    for variable in variable_means.keys():
+        record['properties'][variable] = float(variable_means[variable][row, col])
+    
+    return record
 
-        for variable in variable_means.keys():
-            record['properties'][variable] = float(variable_means[variable][row, col])
 
-        return record
-
-    def __repr__(self):
-        used_params = [self.model_datetime.__repr__()]
-        optional_params = [self.source, self.time_deltas, self.x_size, self.y_size, self.grid_filename, self.source_url,
-                           self.wcofs_string]
-
-        for param in optional_params:
-            if param is not None:
-                if 'str' in str(type(param)):
-                    param = f'"{param}"'
-                else:
-                    param = str(param)
-
-                used_params.append(param)
-
-        return f'{self.__class__.__name__}({str(", ".join(used_params))})'
+def __repr__(self):
+    used_params = [self.model_datetime.__repr__()]
+    optional_params = [self.source, self.time_deltas, self.x_size, self.y_size, self.grid_filename, self.source_url,
+                       self.wcofs_string]
+    
+    for param in optional_params:
+        if param is not None:
+            if 'str' in str(type(param)):
+                param = f'"{param}"'
+            else:
+                param = str(param)
+            
+            used_params.append(param)
+    
+    return f'{self.__class__.__name__}({str(", ".join(used_params))})'
 
 
 class WCOFS_Range:
@@ -738,14 +747,14 @@ class WCOFS_Range:
                                                      source_url=self.source_url, wcofs_string=self.wcofs_string)
 
                     running_futures[future] = model_date
-    
+
             for completed_future in futures.as_completed(running_futures):
                 model_date = running_futures[completed_future]
                 
                 if type(completed_future.exception()) is not _utilities.NoDataError:
                     result = completed_future.result()
                     self.datasets[model_date] = result
-    
+
             del running_futures
         
         if len(self.datasets) > 0:
@@ -790,13 +799,13 @@ class WCOFS_Range:
             for day, dataset in self.datasets.items():
                 if self.source == 'avg':
                     # get current day index
-                    timedelta = input_datetime - day
-                    time_delta = round(timedelta.total_seconds() / (60 * 60 * 24))
+                    time_difference = input_datetime - day
+                    time_delta = round(time_difference.total_seconds() / (60 * 60 * 24))
                 else:
                     # get current hour index
-                    timedelta = input_datetime - day.replace(hour=3, minute=0, second=0)
-                    time_delta = round(timedelta.total_seconds() / (60 * 60))
-
+                    time_difference = input_datetime - day.replace(hour=3, minute=0, second=0)
+                    time_delta = round(time_difference.total_seconds() / (60 * 60))
+                
                 if time_delta in dataset.time_deltas:
                     future = concurrency_pool.submit(dataset.data, variable, time_delta)
                     if time_delta < 0:
@@ -805,14 +814,14 @@ class WCOFS_Range:
                         time_delta_string = f'f{abs(time_delta) + 1:03}'
 
                     running_futures[future] = f'{day.strftime("%Y%m%d")}_{time_delta_string}'
-    
+
             for completed_future in futures.as_completed(running_futures):
                 model_string = running_futures[completed_future]
                 result = completed_future.result()
-        
+
                 if result is not None and len(result) > 0:
                     output_data[model_string] = result
-    
+
             del running_futures
         return output_data
 
@@ -845,14 +854,14 @@ class WCOFS_Range:
         with futures.ThreadPoolExecutor() as concurrency_pool:
             running_futures = {concurrency_pool.submit(self.data_stack, variable, data_datetime): data_datetime for
                                data_datetime in time_range}
-    
+
             for completed_future in futures.as_completed(running_futures):
                 data_datetime = running_futures[completed_future]
                 result = completed_future.result()
-        
+
                 if len(result) > 0:
                     output_data[data_datetime] = result
-    
+
             del running_futures
         
         return output_data
@@ -893,11 +902,11 @@ class WCOFS_Range:
                     running_futures[future] = model_datetime
                 else:
                     output_data[model_datetime] = stacked_array
-    
+
             for completed_future in futures.as_completed(running_futures):
                 model_datetime = running_futures[completed_future]
                 output_data[model_datetime] = completed_future.result()
-    
+
             del running_futures
         return output_data
 
@@ -973,11 +982,11 @@ class WCOFS_Range:
             running_futures = {
                 concurrency_pool.submit(self.data_averages, variable, start_datetime, end_datetime): variable for
                 variable in variables}
-    
+
             for completed_future in futures.as_completed(running_futures):
                 variable = running_futures[completed_future]
                 variable_data_stack_averages[variable] = completed_future.result()
-    
+
             del running_futures
         
         if vector_components:
@@ -1022,14 +1031,14 @@ class WCOFS_Range:
                         future = concurrency_pool.submit(interpolate_grid, lon, lat, model_data, grid_lon, grid_lat)
 
                         running_futures[variable][future] = model_string
-    
+
             for variable, interpolation_futures in running_futures.items():
                 interpolated_data[variable] = {}
 
                 for completed_future in futures.as_completed(interpolation_futures):
                     model_string = interpolation_futures[completed_future]
                     interpolated_data[variable][model_string] = completed_future.result()
-    
+
             del running_futures
         
         if vector_components:
@@ -1130,11 +1139,11 @@ class WCOFS_Range:
             running_futures = {
                 concurrency_pool.submit(self.data_averages, variable, start_datetime, end_datetime): variable for
                 variable in variables}
-    
+
             for completed_future in futures.as_completed(running_futures):
                 variable = running_futures[completed_future]
                 variable_data_stack_averages[variable] = completed_future.result()
-    
+
             del running_futures
         
         print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
@@ -1393,9 +1402,6 @@ if __name__ == '__main__':
     end_datetime = start_datetime + datetime.timedelta(days=1)
 
     wcofs_range = WCOFS_Range(start_datetime, end_datetime, source='avg')
-
-    ds = wcofs_range.to_xarray(variables=['u', 'v', 'temp'])
-    # wcofs_range.write_rasters(output_dir, variables=['salt', 'temp', 'u', 'v', 'zeta'])
-    # wcofs_range.write_vector(os.path.join(output_dir, 'wcofs.gpkg'))
-
+    wcofs_range.write_rasters(output_dir, variables=['salt', 'temp', 'u', 'v', 'zeta'])
+    
     print('done')

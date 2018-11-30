@@ -238,9 +238,9 @@ def write_daily_average(output_dir: str, output_date: datetime.datetime, day_del
 
 if __name__ == '__main__':
     # create folders if they do not exist
-    for daily_average_dir in [OUTPUT_DIR, DAILY_AVERAGES_DIR, LOG_DIR]:
-        if not os.path.isdir(daily_average_dir):
-            os.mkdir(daily_average_dir)
+    for dir_path in [OUTPUT_DIR, DAILY_AVERAGES_DIR, LOG_DIR]:
+        if not os.path.isdir(dir_path):
+            os.mkdir(dir_path)
     
     start_time = datetime.datetime.now()
     

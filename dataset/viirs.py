@@ -808,7 +808,6 @@ if __name__ == '__main__':
     end_datetime = start_datetime + datetime.timedelta(days=1)
 
     viirs_range = VIIRS_Range(start_datetime, end_datetime)
-
     viirs_range.write_raster(output_dir)
     
     print('done')
