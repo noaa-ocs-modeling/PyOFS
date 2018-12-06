@@ -180,7 +180,7 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                                                 time_deltas=[day_delta], vector_components=True,
                                                 fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
 
-                del wcofs_4km_dataset
+        del wcofs_4km_dataset
     
     except _utilities.NoDataError as error:
         print(error)
@@ -283,7 +283,7 @@ if __name__ == '__main__':
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = MODEL_DAY_DELTAS['WCOFS']
 
-    # model_run_dates = _utilities.range_daily(datetime.datetime(2018, 2, 18), datetime.datetime(2018, 11, 20))
+    # model_run_dates = _utilities.range_daily(datetime.datetime(2018, 12, 2), datetime.datetime(2018, 12, 4))
     # for model_run_date in model_run_dates:
     #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path)
 
