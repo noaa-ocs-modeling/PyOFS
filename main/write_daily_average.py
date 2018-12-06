@@ -184,8 +184,9 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
     
     except _utilities.NoDataError as error:
         print(error)
-    with open(log_path, 'a') as log_file:
-        log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) WCOFS: {error}\n')
+
+        with open(log_path, 'a') as log_file:
+            log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) WCOFS: {error}\n')
     
     # wcofs.reset_dataset_grid()
     #
@@ -282,7 +283,7 @@ if __name__ == '__main__':
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = MODEL_DAY_DELTAS['WCOFS']
 
-    # model_run_dates = _utilities.range_daily(datetime.datetime(2018, 11, 18), datetime.datetime(2018, 11, 20))
+    # model_run_dates = _utilities.range_daily(datetime.datetime(2018, 2, 18), datetime.datetime(2018, 11, 20))
     # for model_run_date in model_run_dates:
     #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path)
 

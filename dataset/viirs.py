@@ -100,30 +100,30 @@ class VIIRS_Dataset:
             # TODO N20 does not have an OpenDAP archive
             if satellite.upper() == 'N20':
                 continue
-    
+
             if source == 'NESDIS':
                 url = f'{source_url}/grid{"" if self.near_real_time else "S"}{satellite.upper()}VIIRS{"NRT" if self.near_real_time else "SCIENCE"}L3UWW00/{month_dir}/{filename}'
             elif source == 'JPL':
                 url = f'{source_url}/VIIRS_{satellite.upper()}/{algorithm}/v{self.version}/{month_dir}/{filename}'
             elif source in 'NODC':
                 url = f'{source_url}/VIIRS_{satellite.upper()}/{algorithm}/{month_dir}/{filename}'
-    
+
             try:
                 self.netcdf_dataset = xarray.open_dataset(url)
                 self.url = url
                 break
             except Exception as error:
                 print(f'Error collecting dataset from {source}: {error}')
-    
+
             if self.url is not None:
                 break
 
         if self.url is None:
+            print('Error collecting from OpenDAP; falling back to FTP...')
+            
             for source, source_url in SOURCES['FTP'].items():
-                print('Error collecting from OpenDAP; falling back to FTP...')
-        
                 host_url, input_dir = source_url.split('/', 1)
-        
+
                 if source == 'NESDIS':
                     if self.near_real_time:
                         ftp_path = f'/{input_dir}/nrt/viirs/{satellite.lower()}/l3u/{month_dir}/{filename}'
@@ -131,16 +131,16 @@ class VIIRS_Dataset:
                         # TODO N20 does not have a reanalysis archive
                         if satellite.upper() == 'N20':
                             continue
-                
+
                         ftp_path = f'/{input_dir}/ran/viirs/{"S" if satellite.upper() == "NPP" else ""}{satellite.lower()}/l3u/{month_dir}/{filename}'
-            
+
                     url = f'{host_url}/{ftp_path.lstrip("/")}'
                 
                 try:
                     with ftplib.FTP(host_url) as ftp_connection:
                         ftp_connection.login()
                         temp_filename = os.path.join(DATA_DIR, 'tempfile.nc')
-        
+
                         try:
                             with open(temp_filename, 'wb') as temp_file:
                                 ftp_connection.retrbinary(f'RETR {ftp_path}', temp_file.write)
@@ -149,12 +149,12 @@ class VIIRS_Dataset:
                             raise error
                         finally:
                             os.remove(temp_filename)
-    
+
                     self.url = url
                     break
                 except Exception as error:
                     print(f'Error collecting dataset from {source}: {error}')
-        
+
                 if self.url is not None:
                     break
 
@@ -345,9 +345,6 @@ class VIIRS_Dataset:
                         file_extension = 'gpkg'
 
                     output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
-
-                    if os.path.isfile(output_filename):
-                        os.remove(output_filename)
 
                     # use rasterio to write to raster with GDAL args
                     print(f'Writing to {output_filename}')

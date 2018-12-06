@@ -229,7 +229,7 @@ class WCOFS_Dataset:
 
         else:
             raise _utilities.NoDataError(
-                f'No WCOFS datasets found for {self.model_datetime} at the given time deltas ({self.time_deltas}).')
+                f'No WCOFS datasets found for {self.model_datetime} from {self.source_url} at the given time deltas ({self.time_deltas}).')
     
     def bounds(self, variable: str = 'psi') -> tuple:
         """
@@ -251,6 +251,8 @@ class WCOFS_Dataset:
         :return: Array of data.
         """
 
+        output_data = None
+        
         if time_delta in self.time_deltas:
             if self.source == 'avg':
                 if time_delta >= 0:
@@ -260,35 +262,33 @@ class WCOFS_Dataset:
                     dataset_index = -1
                     day_index = 0
 
-                with self.dataset_locks[dataset_index]:
-                    # get surface layer; the last layer (of 40) at dimension 1
-                    if variable in ['u', 'v']:
-                        raw_u = self.netcdf_datasets[dataset_index]['u'][day_index, -1, :-1, :].values
-                        raw_v = self.netcdf_datasets[dataset_index]['v'][day_index, -1, :, :-1].values
-                        theta = WCOFS_Dataset.angle[:-1, :-1]
-
-                        if variable == 'u':
-                            output_data = raw_u * numpy.cos(theta) - raw_v * numpy.sin(theta)
-                            extra_row = numpy.empty((1, output_data.shape[1]), dtype=output_data.dtype)
-                            extra_row[:] = numpy.nan
-                            output_data = numpy.concatenate((output_data, extra_row), axis=0)
-                        elif variable == 'v':
-                            output_data = raw_u * numpy.sin(theta) + raw_v * numpy.cos(theta)
-                            extra_column = numpy.empty((output_data.shape[0], 1), dtype=output_data.dtype)
-                            extra_column[:] = numpy.nan
-                            output_data = numpy.concatenate((output_data, extra_column), axis=1)
-                    else:
-                        data_variable = self.netcdf_datasets[dataset_index][variable]
-                        if len(data_variable.shape) == 3:
-                            output_data = data_variable[day_index, :, :].values
-                        if len(data_variable.shape) == 4:
-                            output_data = data_variable[day_index, -1, :, :].values
+                if dataset_index in self.dataset_locks:
+                    with self.dataset_locks[dataset_index]:
+                        # get surface layer; the last layer (of 40) at dimension 1
+                        if variable in ['u', 'v']:
+                            raw_u = self.netcdf_datasets[dataset_index]['u'][day_index, -1, :-1, :].values
+                            raw_v = self.netcdf_datasets[dataset_index]['v'][day_index, -1, :, :-1].values
+                            theta = WCOFS_Dataset.angle[:-1, :-1]
+            
+                            if variable == 'u':
+                                output_data = raw_u * numpy.cos(theta) - raw_v * numpy.sin(theta)
+                                extra_row = numpy.empty((1, output_data.shape[1]), dtype=output_data.dtype)
+                                extra_row[:] = numpy.nan
+                                output_data = numpy.concatenate((output_data, extra_row), axis=0)
+                            elif variable == 'v':
+                                output_data = raw_u * numpy.sin(theta) + raw_v * numpy.cos(theta)
+                                extra_column = numpy.empty((output_data.shape[0], 1), dtype=output_data.dtype)
+                                extra_column[:] = numpy.nan
+                                output_data = numpy.concatenate((output_data, extra_column), axis=1)
+                        else:
+                            data_variable = self.netcdf_datasets[dataset_index][variable]
+                            if len(data_variable.shape) == 3:
+                                output_data = data_variable[day_index, :, :].values
+                            if len(data_variable.shape) == 4:
+                                output_data = data_variable[day_index, -1, :, :].values
             else:
                 with self.dataset_locks[time_delta]:
                     output_data = self.netcdf_datasets[time_delta][variable][0, :, :].values
-        else:
-            output_data = numpy.empty(WCOFS_Dataset.grid_shapes[WCOFS_Dataset.variable_grids[variable]])
-            output_data[:] = numpy.nan
 
         return output_data
 
@@ -311,12 +311,18 @@ class WCOFS_Dataset:
                                time_deltas}
 
             for completed_future in futures.as_completed(running_futures):
-                variable_data.append(completed_future.result())
-
+                result = completed_future.result()
+    
+                if result is not None:
+                    variable_data.append(result)
+            
             del running_futures
-        
-        variable_data = numpy.mean(numpy.stack(variable_data), axis=0)
 
+        if len(variable_data) > 0:
+            variable_data = numpy.mean(numpy.stack(variable_data), axis=0)
+        else:
+            variable_data = None
+        
         return variable_data
 
     def write_rasters(self, output_dir: str, variables: list = None, filename_suffix: str = None,
@@ -394,8 +400,11 @@ class WCOFS_Dataset:
 
             for completed_future in futures.as_completed(running_futures):
                 variable = running_futures[completed_future]
-                variable_means[variable] = completed_future.result()
+                result = completed_future.result()
 
+                if result is not None:
+                    variable_means[variable] = result
+            
             del running_futures
         
         if vector_components:
@@ -407,61 +416,76 @@ class WCOFS_Dataset:
                 v_name = 'v'
 
             if u_name not in variable_means:
-                variable_means[u_name] = self.data_average(u_name, time_deltas)
-
+                u_data = self.data_average(u_name, time_deltas)
+    
+                if u_data is not None:
+                    variable_means[u_name] = u_data
+            
             if v_name not in variable_means:
-                variable_means[v_name] = self.data_average(v_name, time_deltas)
-
+                v_data = self.data_average(v_name, time_deltas)
+    
+                if v_data is not None:
+                    variable_means[v_name] = v_data
+        
         print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
         start_time = datetime.datetime.now()
 
         interpolated_data = {}
 
-        # concurrently populate dictionary with interpolated data in given grid for each variable
-        with futures.ThreadPoolExecutor() as concurrency_pool:
-            running_futures = {}
-            
-            for variable, variable_data in variable_means.items():
-                print(f'Starting {variable} interpolation...')
-
-                grid_lon = output_grid_coordinates[variable]['lon']
-                grid_lat = output_grid_coordinates[variable]['lat']
-
-                grid_name = self.variable_grids[variable]
-
-                lon = self.data_coordinates[grid_name]['lon']
-                lat = self.data_coordinates[grid_name]['lat']
-
-                if len(grid_lon) > 0:
-                    future = concurrency_pool.submit(interpolate_grid, lon, lat, variable_data, grid_lon, grid_lat)
-                    running_futures[future] = variable
-
-            for completed_future in futures.as_completed(running_futures):
-                variable = running_futures[completed_future]
-                interpolated_data[variable] = completed_future.result()
-
-            del running_futures
+        if len(variable_means) > 0:
+            # concurrently populate dictionary with interpolated data in given grid for each variable
+            with futures.ThreadPoolExecutor() as concurrency_pool:
+                running_futures = {}
         
-        if vector_components:
-            interpolated_data['dir'] = {}
-            interpolated_data['mag'] = {}
-
-            u_data = interpolated_data[u_name]
-            v_data = interpolated_data[v_name]
-
-            # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
-            interpolated_data['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (180 / numpy.pi)
-            interpolated_data['mag'] = numpy.sqrt(numpy.square(u_data) + numpy.square(v_data))
-
-            if u_name not in variables:
-                del interpolated_data[u_name]
-
-            if v_name not in variables:
-                del interpolated_data[v_name]
-
-        print(f'parallel grid interpolation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
-
+                for variable, variable_data in variable_means.items():
+                    if variable_data is not None:
+                        print(f'Starting {variable} interpolation...')
+                
+                        grid_lon = output_grid_coordinates[variable]['lon']
+                        grid_lat = output_grid_coordinates[variable]['lat']
+                
+                        grid_name = self.variable_grids[variable]
+                
+                        lon = self.data_coordinates[grid_name]['lon']
+                        lat = self.data_coordinates[grid_name]['lat']
+                
+                        if len(grid_lon) > 0:
+                            running_future = concurrency_pool.submit(interpolate_grid, lon, lat, variable_data,
+                                                                     grid_lon,
+                                                                     grid_lat)
+                            running_futures[running_future] = variable
+        
+                for completed_future in futures.as_completed(running_futures):
+                    variable = running_futures[completed_future]
+                    result = completed_future.result()
+            
+                    if result is not None:
+                        interpolated_data[variable] = result
+        
+                del running_futures
+    
+            if vector_components:
+                if 'u' in interpolated_data and 'v' in interpolated_data:
+                    interpolated_data['dir'] = {}
+                    interpolated_data['mag'] = {}
+            
+                    u_data = interpolated_data[u_name]
+                    v_data = interpolated_data[v_name]
+            
+                    # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
+                    interpolated_data['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (180 / numpy.pi)
+                    interpolated_data['mag'] = numpy.sqrt(numpy.square(u_data) + numpy.square(v_data))
+            
+                    if u_name not in variables:
+                        del interpolated_data[u_name]
+            
+                    if v_name not in variables:
+                        del interpolated_data[v_name]
+    
+            print(f'parallel grid interpolation took ' + \
+                  f'{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+        
         # write interpolated grids to raster files
         for variable, variable_data in interpolated_data.items():
             west = numpy.min(output_grid_coordinates[variable]['lon'])
