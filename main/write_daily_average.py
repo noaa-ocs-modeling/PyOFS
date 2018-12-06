@@ -38,15 +38,23 @@ MODEL_DAY_DELTAS = {'WCOFS': range(-1, 2 + 1), 'RTOFS': range(-3, 8 + 1)}
 
 def write_observational_data(output_dir: str, observation_date: typing.Union[datetime.date, datetime.datetime],
                              log_path: str):
+    """
+    Writes daily average of observational data on given date.
+    
+    :param output_dir: Output directory to write files.
+    :param observation_date: Date of observation.
+    :param log_path: Path to log file.
+    """
+    
     if 'datetime.date' in str(type(observation_date)):
         start_of_day = datetime.datetime.combine(observation_date, datetime.time.min)
     elif 'datetime.datetime' in str(type(observation_date)):
         start_of_day = observation_date.replace(hour=0, minute=0, second=0, microsecond=0)
     else:
         start_of_day = observation_date
-
+    
     end_of_day = start_of_day + datetime.timedelta(days=1)
-
+    
     # write HFR rasters
     try:
         start_of_day_hfr_time = start_of_day + datetime.timedelta(hours=2)
@@ -88,6 +96,15 @@ def write_observational_data(output_dir: str, observation_date: typing.Union[dat
 
 
 def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_deltas: list, log_path: str):
+    """
+    Writes daily average of model output on given date.
+
+    :param output_dir: Output directory to write files.
+    :param model_run_date: Date of model run.
+    :param day_deltas: Time deltas for which to write model output.
+    :param log_path: Path to log file.
+    """
+    
     if 'datetime.date' in str(type(model_run_date)):
         model_run_date = datetime.datetime.combine(model_run_date, datetime.datetime.min.time())
     
@@ -127,7 +144,8 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
         for day_delta, daily_average_dir in output_dirs.items():
             if day_delta in MODEL_DAY_DELTAS['WCOFS']:
                 wcofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
-                time_delta_string = f'{wcofs_direction[0]}{abs(day_delta) + 1 if wcofs_direction == "forecast" else abs(day_delta):03}'
+                time_delta_string = f'{wcofs_direction[0]}' + \
+                                    f'{abs(day_delta) + 1 if wcofs_direction == "forecast" else abs(day_delta):03}'
                 wcofs_filename_suffix = f'{time_delta_string}'
 
                 wcofs_dataset.write_rasters(daily_average_dir, ['temp'], filename_suffix=wcofs_filename_suffix,
@@ -141,7 +159,7 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
         print(error)
         with open(log_path, 'a') as log_file:
             log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) WCOFS: {error}\n')
-
+    
     try:
         wcofs_4km_dataset = wcofs.WCOFS_Dataset(model_run_date, source='avg',
                                                 grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME,
@@ -151,7 +169,8 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
         for day_delta, daily_average_dir in output_dirs.items():
             if day_delta in MODEL_DAY_DELTAS['WCOFS']:
                 wcofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
-                time_delta_string = f'{wcofs_direction[0]}{abs(day_delta) + 1 if wcofs_direction == "forecast" else abs(day_delta):03}'
+                time_delta_string = f'{wcofs_direction[0]}' + \
+                                    f'{abs(day_delta) + 1 if wcofs_direction == "forecast" else abs(day_delta):03}'
                 wcofs_filename_suffix = f'{time_delta_string}_noDA_4km'
 
                 wcofs_4km_dataset.write_rasters(daily_average_dir, ['temp'], filename_suffix=wcofs_filename_suffix,
@@ -164,9 +183,10 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
         del wcofs_4km_dataset
     except _utilities.NoDataError as error:
         print(error)
+
         with open(log_path, 'a') as log_file:
             log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) WCOFS: {error}\n')
-
+    
     # wcofs.reset_dataset_grid()
     #
     # try:
@@ -196,51 +216,55 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
 
 
 def write_daily_average(output_dir: str, output_date: datetime.datetime, day_deltas: list, log_path: str):
-    # get time for log
-    start_time = datetime.datetime.now()
+    """
+    Writes daily average of observational data and model output on given date.
     
-    # write observational data to directory for specified date
-    observation_dir = os.path.join(output_dir, output_date.strftime("%Y%m%d"))
-    if not os.path.isdir(observation_dir):
-        os.mkdir(observation_dir)
-    write_observational_data(observation_dir, output_date, log_path)
-    
-    # write to log
-    message = f'Wrote observational data to {observation_dir}'
-    with open(log_path, 'a') as log_file:
-        log_file.write(
-            f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ({(datetime.datetime.now() - start_time).total_seconds():.2f}s): {message}\n')
-    print(message)
-    
-    # write models to directories
-    write_model_output(output_dir, output_date, day_deltas, log_path)
-    
-    # write to log
-    message = f'Wrote model output.'
-    with open(log_path, 'a') as log_file:
-        log_file.write(
-            f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ({(datetime.datetime.now() - start_time).total_seconds():.2f}s): {message}\n')
-    print(message)
+    :param output_dir: Output directory to write files.
+    :param output_date: Date of data run.
+    :param day_deltas: Time deltas for which to write model output.
+    :param log_path: Path to log file.
+    """
     
     # get time for log
     start_time = datetime.datetime.now()
     
-    # populate JSON file with new directory structure so that JavaScript application can see it
-    json_dir_structure.populate_json(OUTPUT_DIR, JSON_PATH)
-    
-    # write to log
-    message = f'Updated directory structure at {JSON_PATH}'
     with open(log_path, 'a') as log_file:
+        # write observational data to directory for specified date
+        observation_dir = os.path.join(output_dir, output_date.strftime("%Y%m%d"))
+        if not os.path.isdir(observation_dir):
+            os.mkdir(observation_dir)
+        
+        write_observational_data(observation_dir, output_date, log_path)
+        
+        # populate JSON file with new directory structure so that JavaScript application can see it
+        json_dir_structure.populate_json(OUTPUT_DIR, JSON_PATH)
+        
+        # write to log
+        message = f'Wrote observational data to {output_dir}'
         log_file.write(
-            f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ({(datetime.datetime.now() - start_time).total_seconds():.2f}s): {message}\n')
-    print(message)
+            f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ' + \
+            f'({(datetime.datetime.now() - start_time).total_seconds(): .2f}s): {message}\n')
+        print(message)
+        
+        # write models to directories
+        write_model_output(output_dir, output_date, day_deltas, log_path)
+        
+        # populate JSON file with new directory structure so that JavaScript application can see it
+        json_dir_structure.populate_json(OUTPUT_DIR, JSON_PATH)
+        
+        # write to log
+        message = f'Wrote model output to {output_dir}.'
+        log_file.write(
+            f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ' + \
+            f'({(datetime.datetime.now() - start_time).total_seconds(): .2f}s): {message}\n')
+        print(message)
 
 
 if __name__ == '__main__':
     # create folders if they do not exist
-    for daily_average_dir in [OUTPUT_DIR, DAILY_AVERAGES_DIR, LOG_DIR]:
-        if not os.path.isdir(daily_average_dir):
-            os.mkdir(daily_average_dir)
+    for dir_path in [OUTPUT_DIR, DAILY_AVERAGES_DIR, LOG_DIR]:
+        if not os.path.isdir(dir_path):
+            os.mkdir(dir_path)
     
     start_time = datetime.datetime.now()
     
@@ -251,20 +275,22 @@ if __name__ == '__main__':
     message = f'Starting file conversion...'
     with open(log_path, 'a') as log_file:
         log_file.write(
-            f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ({(datetime.datetime.now() - start_time).total_seconds():.2f}s): {message}\n')
+            f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ' + \
+            f'({(datetime.datetime.now() - start_time).total_seconds(): .2f}s): {message}\n')
     print(message)
     
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = MODEL_DAY_DELTAS['WCOFS']
 
-    # model_run_dates = _utilities.range_daily(datetime.datetime(2018, 11, 18), datetime.datetime(2018, 11, 20))
+    # model_run_dates = _utilities.range_daily(datetime.datetime(2018, 12, 2), datetime.datetime(2018, 12, 4))
     # for model_run_date in model_run_dates:
     #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path)
 
     model_run_date = datetime.date.today()
-    write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path)
-    
-    message = f'Finished writing files. Total time: {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds'
+    write_daily_average(DAILY_AVERAGES_DIR, model_run_date, day_deltas, log_path)
+
+    message = f'Finished writing files. Total time: ' + \
+              f'{(datetime.datetime.now() - start_time).total_seconds(): .2f} seconds'
     with open(log_path, 'a') as log_file:
         log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")}(0.00s): {message}\n')
     print(message)

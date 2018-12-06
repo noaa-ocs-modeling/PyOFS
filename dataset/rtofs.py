@@ -31,10 +31,14 @@ COORDINATE_VARIABLES = ['time', 'lev', 'lat', 'lon']
 
 DATASET_STRUCTURE = {
     '2ds': {
-        'nowcast': {'prog': ['sss', 'sst', 'u_velocity', 'v_velocity'],
-                    'diag': ['ssh', 'ice_coverage', 'ice_thickness']},
-        'forecast': {'prog': ['sss', 'sst', 'u_velocity', 'v_velocity'],
-                     'diag': ['ssh', 'ice_coverage', 'ice_thickness']}
+        'nowcast': {
+            'prog': ['sss', 'sst', 'u_velocity', 'v_velocity'],
+            'diag': ['ssh', 'ice_coverage', 'ice_thickness']
+        },
+        'forecast': {
+            'prog': ['sss', 'sst', 'u_velocity', 'v_velocity'],
+            'diag': ['ssh', 'ice_coverage', 'ice_thickness']
+        }
     },
     '3dz': {
         'nowcast': {'salt': ['salinity'], 'temp': ['temperature'], 'uvel': ['u'], 'vvel': ['v']},
@@ -169,14 +173,23 @@ class RTOFS_Dataset:
                     with self.dataset_locks[direction][dataset_name]:
                         variable = self.netcdf_datasets[direction][dataset_name][variable_name]
 
+                        # TODO study areas that cross over longitude +74.16 may have problems here
                         if crop:
                             selection = variable.sel(time=time,
                                                      lon=slice(self.study_area_west + 360, self.study_area_east + 360),
                                                      lat=slice(self.study_area_south, self.study_area_north))
+                            selection = numpy.squeeze(selection).values
                         else:
-                            selection = variable.sel(time=time)
+                            western_selection = variable.sel(time=time,
+                                                             lon=slice(180, numpy.max(self.raw_lon)),
+                                                             lat=slice(numpy.min(self.lat), numpy.max(self.lat)))
+                            eastern_selection = variable.sel(time=time,
+                                                             lon=slice(numpy.min(self.raw_lon), 180),
+                                                             lat=slice(numpy.min(self.lat), numpy.max(self.lat)))
+                            selection = numpy.concatenate((numpy.squeeze(western_selection),
+                                                           numpy.squeeze(eastern_selection)), axis=1)
 
-                        selection = numpy.flipud(numpy.squeeze(selection.values))
+                        selection = numpy.flipud(selection)
                         return selection
                 else:
                     raise ValueError(f'Variable must be one of {list(DATA_VARIABLES.keys())}.')
@@ -187,69 +200,76 @@ class RTOFS_Dataset:
 
     def write_rasters(self, output_dir: str, variables: list, time: datetime.datetime, filename_prefix: str = None,
                       filename_suffix: str = None, vector_components: bool = False, fill_value=-9999,
-                      drivers: list = ['GTiff']):
+                      drivers: list = ['GTiff'], crop: bool = True):
         """
         Write averaged raster data of given variables to given output directory.
 
         :param output_dir: Path to directory.
         :param variables: Variable names to use.
         :param time: Time from which to retrieve data.
-        :para, filename_prefix: Prefix for filenames.
+        :param filename_prefix: Prefix for filenames.
         :param filename_suffix: Suffix for filenames.
         :param vector_components: Whether to write direction and magnitude rasters.
         :param fill_value: Desired fill value of output.
         :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
+        :param crop: Whether to crop to study area extent.
         """
-    
+
         if variables is None:
             variables = DATA_VARIABLES[self.source]
-    
+
         if filename_prefix is None:
             filename_prefix = 'rtofs'
         filename_suffix = f'_{filename_suffix}' if filename_suffix is not None else ''
-    
+
         if self.time_interval == 'daily':
             time = time.replace(hour=0, minute=0, second=0, microsecond=0)
-    
+
         time_delta = int((time - self.model_datetime).total_seconds() / (24 * 60 * 60))
         direction = 'forecast' if time_delta >= 0 else 'nowcast'
         time_delta_string = f'{direction[0]}{abs(time_delta) + 1 if direction == "forecast" else abs(time_delta):03}'
-    
+
         variable_means = {}
-    
+
         for variable in variables:
-            variable_means[variable] = self.data(variable, time)
-    
+            variable_means[variable] = self.data(variable, time, crop)
+        
         if vector_components:
             u_name = 'u'
             v_name = 'v'
-        
+
             if u_name not in variable_means:
-                u_data = self.data(u_name, time)
+                u_data = self.data(u_name, time, crop)
             else:
                 u_data = variable_means[u_name]
-        
+
             if v_name not in variable_means:
-                v_data = self.data(v_name, time)
+                v_data = self.data(v_name, time, crop)
             else:
                 v_data = variable_means[v_name]
-        
+
             if u_data is not None and v_data is not None:
                 variable_means['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (180 / numpy.pi)
                 variable_means['mag'] = numpy.sqrt(numpy.square(u_data) + numpy.square(v_data))
-    
+
         # write interpolated grids to raster files
         for variable, variable_mean in variable_means.items():
             if variable_mean is not None:
+                if crop:
+                    transform = self.study_area_transform
+                else:
+                    transform = self.global_grid_transform
+                
                 gdal_args = {
-                    'transform': self.study_area_transform, 'height': variable_mean.shape[0],
+                    'transform': transform, 'height': variable_mean.shape[0],
                     'width': variable_mean.shape[1], 'count': 1, 'dtype': rasterio.float32, 'crs': RASTERIO_WGS84,
                     'nodata': numpy.array([fill_value]).astype(variable_mean.dtype).item()
                 }
-            
-                output_filename = f'{filename_prefix}_{variable}_{self.model_datetime.strftime("%Y%m%d")}_{time_delta_string}{filename_suffix}'
+    
+                output_filename = f'{filename_prefix}_{variable}_{self.model_datetime.strftime("%Y%m%d")}' + \
+                                  f'_{time_delta_string}{filename_suffix}'
                 output_filename = os.path.join(output_dir, output_filename)
-            
+    
                 for driver in drivers:
                     if driver == 'AAIGrid':
                         file_extension = '.asc'
@@ -258,15 +278,15 @@ class RTOFS_Dataset:
                         file_extension = '.tiff'
                     elif driver == 'GPKG':
                         file_extension = '.gpkg'
-                
+
                     output_filename = f'{os.path.splitext(output_filename)[0]}{file_extension}'
-                
+
                     print(f'Writing {output_filename}')
                     with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                         output_raster.write(variable_mean, 1)
 
     def write_raster(self, output_filename: str, variable: str, time: datetime.datetime, fill_value=-9999,
-                     drivers: list = ['GTiff']):
+                     drivers: list = ['GTiff'], crop: bool = True):
         """
         Writes interpolated raster of given variable to output path.
 
@@ -275,13 +295,19 @@ class RTOFS_Dataset:
         :param time: Time from which to retrieve data.
         :param fill_value: Desired fill value of output.
         :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
+        :param crop: Whether to crop to study area extent.
         """
 
-        output_data = self.data(variable, time)
+        output_data = self.data(variable, time, crop)
         
         if output_data is not None:
+            if crop:
+                transform = self.study_area_transform
+            else:
+                transform = self.global_grid_transform
+            
             gdal_args = {
-                'transform': self.study_area_transform, 'height': output_data.shape[0], 'width': output_data.shape[1],
+                'transform': transform, 'height': output_data.shape[0], 'width': output_data.shape[1],
                 'count': 1, 'dtype': rasterio.float32, 'crs': RASTERIO_WGS84,
                 'nodata': numpy.array([fill_value]).astype(output_data.dtype).item()
             }
@@ -321,6 +347,6 @@ if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIR, r'output\test')
     
     rtofs_dataset = RTOFS_Dataset(datetime.datetime.now())
-    rtofs_dataset.write_raster(os.path.join(output_dir, 'test.tif'), 'temp', datetime.datetime.now())
+    rtofs_dataset.write_raster(os.path.join(output_dir, 'rtofs_ssh.tiff'), 'ssh', datetime.datetime.now())
     
     print('done')

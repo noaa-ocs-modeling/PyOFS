@@ -21,8 +21,8 @@ import shapely
 import shapely.geometry
 import xarray
 
-from main import DATA_DIR
 from dataset import _utilities
+from main import DATA_DIR
 
 MEASUREMENT_VARIABLES = ['water_temperature', 'conductivity', 'salinity', 'o2_saturation', 'dissolved_oxygen',
                          'chlorophyll_concentration', 'turbidity', 'water_ph', 'water_eh']
@@ -121,16 +121,18 @@ class NDBC_Range:
         
         # concurrently populate dictionary with datasets for each station within given time interval
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            station_futures = {concurrency_pool.submit(NDBC_Station, station_name): station_name for station_name in
+            running_futures = {concurrency_pool.submit(NDBC_Station, station_name): station_name for station_name in
                                self.station_names}
-            
-            for completed_future in futures.as_completed(station_futures):
-                station_name = station_futures[completed_future]
+    
+            for completed_future in futures.as_completed(running_futures):
+                station_name = running_futures[completed_future]
                 
                 if type(completed_future.exception()) is not _utilities.NoDataError:
                     result = completed_future.result()
                     print(f'Collecting NDBC data from station {station_name}...')
                     self.stations[station_name] = result
+    
+            del running_futures
         
         if len(self.stations) == 0:
             raise _utilities.NoDataError(
@@ -154,14 +156,14 @@ class NDBC_Range:
         
         # concurrently populate dictionary with data for each station within given time interval
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            data_futures = {concurrency_pool.submit(station.data, start_datetime, end_datetime): station_name for
-                            station_name, station in self.stations.items()}
-            
-            for completed_future in futures.as_completed(data_futures):
+            running_futures = {concurrency_pool.submit(station.data, start_datetime, end_datetime): station_name for
+                               station_name, station in self.stations.items()}
+    
+            for completed_future in futures.as_completed(running_futures):
                 result = completed_future.result()
                 
                 if result is not None:
-                    station_name = data_futures[completed_future]
+                    station_name = running_futures[completed_future]
                     station_data[station_name] = result
         
         schema = {
@@ -183,24 +185,18 @@ class NDBC_Range:
                 longitude = float(station.longitude)
                 latitude = float(station.latitude)
                 
-                water_temperature = float(numpy.ma.mean(station_data['water_temperature']))
-                conductivity = float(numpy.ma.mean(station_data['conductivity']))
-                salinity = float(numpy.ma.mean(station_data['salinity']))
-                o2_saturation = float(numpy.ma.mean(station_data['o2_saturation']))
-                dissolved_oxygen = float(numpy.ma.mean(station_data['dissolved_oxygen']))
-                chlorophyll_concentration = float(numpy.ma.mean(station_data['chlorophyll_concentration']))
-                turbidity = float(numpy.ma.mean(station_data['turbidity']))
-                water_ph = float(numpy.ma.mean(station_data['water_ph']))
-                water_eh = float(numpy.ma.mean(station_data['water_eh']))
-                
                 record = {
                     'geometry': {'type': 'Point', 'coordinates': (longitude, latitude)}, 'properties': {
                         'name': station_name, 'longitude': longitude, 'latitude': latitude,
-                        'water_temperature': water_temperature, 'conductivity': conductivity,
-                        'salinity': salinity, 'o2_saturation': o2_saturation,
-                        'dissolved_oxygen': dissolved_oxygen,
-                        'chlorophyll_concentration': chlorophyll_concentration, 'turbidity': turbidity,
-                        'water_ph': water_ph, 'water_eh': water_eh
+                        'water_temperature': float(numpy.ma.mean(station_data['water_temperature'])),
+                        'conductivity': float(numpy.ma.mean(station_data['conductivity'])),
+                        'salinity': float(numpy.ma.mean(station_data['salinity'])), 'o2_saturation': float(
+                            numpy.ma.mean(station_data['o2_saturation'])),
+                        'dissolved_oxygen': float(numpy.ma.mean(station_data['dissolved_oxygen'])),
+                        'chlorophyll_concentration': float(numpy.ma.mean(station_data['chlorophyll_concentration'])),
+                        'turbidity': float(numpy.ma.mean(station_data['turbidity'])),
+                        'water_ph': float(numpy.ma.mean(station_data['water_ph'])), 'water_eh': float(
+                            numpy.ma.mean(station_data['water_eh']))
                     }
                 }
                 
@@ -253,18 +249,13 @@ def check_station(dataset: xarray.Dataset, study_area_polygon_filename: str) -> 
 
 if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIR, r'output\test')
+    wcofs_stations = list(numpy.genfromtxt(WCOFS_NDBC_STATIONS_FILENAME, dtype='str'))
     
     start_datetime = datetime.datetime(2018, 7, 14)
     end_datetime = datetime.datetime.now()
-    
-    wcofs_stations = list(numpy.genfromtxt(WCOFS_NDBC_STATIONS_FILENAME, dtype='str'))
-    
-    # get dataset from source
-    ndbc_dataset = NDBC_Range(start_datetime, end_datetime, stations=wcofs_stations)
-    
     date_interval_string = f'{start_datetime.strftime("%m%d%H")}_{end_datetime.strftime("%m%d%H")}'
-    
-    # write average vector
-    ndbc_dataset.write_vector(os.path.join(output_dir, 'ndbc.gpkg'), f'NDBC_{date_interval_string}')
+
+    ndbc_range = NDBC_Range(start_datetime, end_datetime, stations=wcofs_stations)
+    ndbc_range.write_vector(os.path.join(output_dir, 'ndbc.gpkg'), f'NDBC_{date_interval_string}')
     
     print('done')
