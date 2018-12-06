@@ -181,7 +181,6 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                                                 fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
 
         del wcofs_4km_dataset
-    
     except _utilities.NoDataError as error:
         print(error)
 
