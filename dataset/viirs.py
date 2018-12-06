@@ -93,58 +93,72 @@ class VIIRS_Dataset:
         satellite = 'NPP'
 
         month_dir = f'{self.granule_datetime.year}/{self.granule_datetime.timetuple().tm_yday:03}'
-        filename = f'{self.granule_datetime.strftime("%Y%m%d%H%M%S")}-{self.algorithm}-L3U_GHRSST-SSTsubskin-VIIRS_{satellite.upper()}-ACSPO_V{self.version}-v02.0-fv01.0.nc'
+        filename = f'{self.granule_datetime.strftime("%Y%m%d%H%M%S")}-' + \
+                   f'{self.algorithm}-L3U_GHRSST-SSTsubskin-VIIRS_{satellite.upper()}-ACSPO_V{self.version}-v02.0-fv01.0.nc'
 
-        for protocol, urls in SOURCES.items():
-            for source, source_url in urls.items():
-                if protocol == 'OpenDAP':
-                    # TODO N20 does not have an OpenDAP archive
-                    if satellite.upper() == 'N20':
-                        continue
+        for source, source_url in SOURCES['OpenDAP'].items():
+            # TODO N20 does not have an OpenDAP archive
+            if satellite.upper() == 'N20':
+                continue
+    
+            if source == 'NESDIS':
+                url = f'{source_url}/grid{"" if self.near_real_time else "S"}{satellite.upper()}VIIRS{"NRT" if self.near_real_time else "SCIENCE"}L3UWW00/{month_dir}/{filename}'
+            elif source == 'JPL':
+                url = f'{source_url}/VIIRS_{satellite.upper()}/{algorithm}/v{self.version}/{month_dir}/{filename}'
+            elif source in 'NODC':
+                url = f'{source_url}/VIIRS_{satellite.upper()}/{algorithm}/{month_dir}/{filename}'
+    
+            try:
+                self.netcdf_dataset = xarray.open_dataset(url)
+                self.url = url
+                break
+            except Exception as error:
+                print(f'Error collecting dataset from {source}: {error}')
+    
+            if self.url is not None:
+                break
 
-                    if source == 'NESDIS':
-                        url = f'{source_url}/grid{"" if self.near_real_time else "S"}{satellite.upper()}VIIRS{"NRT" if self.near_real_time else "SCIENCE"}L3UWW00/{month_dir}/{filename}'
-                    elif source == 'JPL':
-                        url = f'{source_url}/VIIRS_{satellite.upper()}/{algorithm}/v{self.version}/{month_dir}/{filename}'
-                    elif source in 'NODC':
-                        url = f'{source_url}/VIIRS_{satellite.upper()}/{algorithm}/{month_dir}/{filename}'
-                elif protocol == 'FTP':
-                    print('Error collecting from OpenDAP; falling back to FTP...')
-
-                    host_url, input_dir = source_url.split('/', 1)
-
-                    if source == 'NESDIS':
-                        if self.near_real_time:
-                            ftp_path = f'/{input_dir}/nrt/viirs/{satellite.lower()}/l3u/{month_dir}/{filename}'
-                        else:
-                            # TODO N20 does not have a reanalysis archive
-                            if satellite.upper() == 'N20':
-                                continue
-
-                            ftp_path = f'/{input_dir}/ran/viirs/{"S" if satellite.upper() == "NPP" else ""}{satellite.lower()}/l3u/{month_dir}/{filename}'
-
-                        url = f'{host_url}/{ftp_path.lstrip("/")}'
+        if self.url is None:
+            for source, source_url in SOURCES['FTP'].items():
+                print('Error collecting from OpenDAP; falling back to FTP...')
+        
+                host_url, input_dir = source_url.split('/', 1)
+        
+                if source == 'NESDIS':
+                    if self.near_real_time:
+                        ftp_path = f'/{input_dir}/nrt/viirs/{satellite.lower()}/l3u/{month_dir}/{filename}'
+                    else:
+                        # TODO N20 does not have a reanalysis archive
+                        if satellite.upper() == 'N20':
+                            continue
+                
+                        ftp_path = f'/{input_dir}/ran/viirs/{"S" if satellite.upper() == "NPP" else ""}{satellite.lower()}/l3u/{month_dir}/{filename}'
+            
+                    url = f'{host_url}/{ftp_path.lstrip("/")}'
+                
                 try:
-                    if protocol == 'OpenDAP':
-                        self.netcdf_dataset = xarray.open_dataset(url)
-                    elif protocol == 'FTP':
-                        with ftplib.FTP(host_url) as ftp_connection:
-                            ftp_connection.login()
-                            temp_filename = os.path.join(DATA_DIR, 'tempfile.nc')
+                    with ftplib.FTP(host_url) as ftp_connection:
+                        ftp_connection.login()
+                        temp_filename = os.path.join(DATA_DIR, 'tempfile.nc')
+        
+                        try:
                             with open(temp_filename, 'wb') as temp_file:
                                 ftp_connection.retrbinary(f'RETR {ftp_path}', temp_file.write)
                                 self.netcdf_dataset = xarray.open_dataset(temp_filename)
-
+                        except Exception as error:
+                            raise error
+                        finally:
                             os.remove(temp_filename)
-
+    
                     self.url = url
                     break
                 except Exception as error:
                     print(f'Error collecting dataset from {source}: {error}')
-            
-            if self.url is not None:
-                break
-        else:
+        
+                if self.url is not None:
+                    break
+
+        if self.url is None:
             raise _utilities.NoDataError(f'No VIIRS dataset found at {self.granule_datetime} UTC.')
         
         # construct rectangular polygon of granule extent
@@ -199,9 +213,11 @@ class VIIRS_Dataset:
 
             # create variable for the index bounds of the mask within the greater VIIRS global grid (west, north, east, south)
             VIIRS_Dataset.study_area_index_bounds = (west_index, north_index, east_index, south_index)
-            VIIRS_Dataset.study_area_coordinates = {'lon': self.netcdf_dataset['lon'][west_index:east_index],
-                                                    'lat': self.netcdf_dataset['lat'][north_index:south_index]}
-
+            VIIRS_Dataset.study_area_coordinates = {
+                'lon': self.netcdf_dataset['lon'][west_index:east_index],
+                'lat': self.netcdf_dataset['lat'][north_index:south_index]
+            }
+            
             study_area_west = self.netcdf_dataset['lon'][west_index]
             study_area_north = self.netcdf_dataset['lat'][north_index]
 
@@ -394,8 +410,9 @@ class VIIRS_Range:
 
         if len(self.pass_times) > 0:
             print(
-                f'Collecting VIIRS data from {len(self.pass_times)} passes between UTC {numpy.min(self.pass_times)} and UTC {numpy.max(self.pass_times)}...')
-
+                f'Collecting VIIRS data from {len(self.pass_times)} passes between ' + \
+                f'UTC {numpy.min(self.pass_times)} and UTC{numpy.max(self.pass_times)}...')
+            
             # create dictionary to store scenes
             self.datasets = {}
 
@@ -428,6 +445,7 @@ class VIIRS_Range:
             else:
                 raise _utilities.NoDataError(
                     f'No VIIRS datasets found between {self.start_datetime} UTC and {self.end_datetime} UTC.')
+
         else:
             raise _utilities.NoDataError(
                 f'There are no VIIRS passes between {self.start_datetime} and {self.end_datetime} UTC.')
@@ -435,7 +453,7 @@ class VIIRS_Range:
     def cell_size(self) -> tuple:
         """
         Get cell sizes of dataset.
-
+    
         :return: Tuple of cell sizes (x_size, y_size)
         """
 
@@ -446,7 +464,7 @@ class VIIRS_Range:
              average: bool = False, sses_correction: bool = False, variables: list = ['sst']) -> dict:
         """
         Get VIIRS data (either overlapped or averaged) from the given time interval.
-
+    
         :param start_datetime: Beginning of time interval (in UTC).
         :param end_datetime: End of time interval (in UTC).
         :param average: Whether to average rasters, otherwise overlap them.
@@ -514,7 +532,7 @@ class VIIRS_Range:
                       fill_value: float = None, drivers: list = ['GTiff'], sses_correction: bool = False):
         """
         Write individual VIIRS rasters to directory.
-
+    
         :param output_dir: Path to output directory.
         :param variables: List of variable names to write.
         :param filename_prefix: Prefix for output filenames.
@@ -527,16 +545,18 @@ class VIIRS_Range:
         with futures.ThreadPoolExecutor() as concurrency_pool:
             for dataset_datetime, dataset in self.datasets.items():
                 concurrency_pool.submit(dataset.write_rasters, output_dir, variables=variables,
-                                        filename_prefix=f'{filename_prefix}_{dataset_datetime.strftime("%Y%m%d%H%M%S")}',
+                                        filename_prefix=f'{filename_prefix}_' + \
+                                                        f'{dataset_datetime.strftime("%Y%m%d%H%M%S")}',
                                         fill_value=fill_value, drivers=drivers, sses_correction=sses_correction)
 
     def write_raster(self, output_dir: str, filename_prefix: str = None, filename_suffix: str = None,
                      start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
                      average: bool = False, fill_value: float = -9999, drivers: list = ['GTiff'],
                      sses_correction: bool = False, variables: list = ['sst']):
+    
         """
         Write VIIRS raster of SST data (either overlapped or averaged) from the given time interval.
-
+    
         :param output_dir: Path to output directory.
         :param filename_prefix: Prefix for output filenames.
         :param filename_suffix: Suffix for output filenames.
@@ -548,12 +568,12 @@ class VIIRS_Range:
         :param sses_correction: Whether to subtract SSES bias from L3 sea surface temperature data.
         :param variables: List of variables to write (either 'sst' or 'sses').
         """
-
+    
         variable_data = self.data(start_datetime, end_datetime, average, sses_correction, variables)
-
+    
         if start_datetime is None:
             start_datetime = self.start_datetime
-
+    
         if end_datetime is None:
             end_datetime = self.end_datetime
         
@@ -626,7 +646,7 @@ class VIIRS_Range:
     def to_xarray(self, variables: list = ['sst'], mean: bool = True, sses_correction: bool = False) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
-
+    
         :param variables: List of variables to use.
         :param mean: Whether to average all time indices.
         :param sses_correction: Whether to subtract SSES bias from L3 sea surface temperature data.
@@ -638,8 +658,10 @@ class VIIRS_Range:
         variable_data = self.data(average=mean, sses_correction=sses_correction, variables=variables)
 
         for variable, data in variable_data.items():
-            data_arrays[variable] = xarray.DataArray(data, coords={'lon': VIIRS_Dataset.study_area_coordinates['lon'],
-                                                                   'lat': VIIRS_Dataset.study_area_coordinates['lat']},
+            data_arrays[variable] = xarray.DataArray(data, coords={
+                'lon': VIIRS_Dataset.study_area_coordinates['lon'],
+                'lat': VIIRS_Dataset.study_area_coordinates['lat']
+            },
                                                      dims=('lat', 'lon'))
 
         output_dataset = xarray.Dataset(data_vars=data_arrays)
@@ -651,7 +673,7 @@ class VIIRS_Range:
     def to_netcdf(self, output_file: str, variables: list = None, mean: bool = True, sses_correction: bool = False):
         """
         Writes to NetCDF file.
-
+    
         :param output_file: Output file to write.
         :param variables: List of variables to use.
         :param mean: Whether to average all time indices.
@@ -698,8 +720,9 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
     end_datetime = _utilities.round_to_ten_minutes(start_datetime + (VIIRS_PERIOD * num_periods))
 
     print(
-        f'Getting pass times between {start_datetime.strftime("%Y-%m-%d %H:%M:%S")} and {end_datetime.strftime("%Y-%m-%d %H:%M:%S")}')
-
+        f'Getting pass times between {start_datetime.strftime("%Y-%m-%d %H:%M:%S")} and ' + \
+        f'{end_datetime.strftime("%Y-%m-%d %H:%M:%S")}')
+    
     datetime_range = _utilities.ten_minute_range(start_datetime, end_datetime)
 
     study_area_polygon_geopackage, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
@@ -736,7 +759,8 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
                     cycle_duration = cycle_datetime - (start_datetime + cycle_offset)
 
                     print(
-                        f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")} {cycle_duration.total_seconds()}: valid scene (checked {cycle_index + 1} cycle(s))')
+                        f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")} {cycle_duration.total_seconds()}: ' + \
+                        f'valid scene (checked {cycle_index + 1} cycle(s))')
                     lines.append(f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")},{cycle_duration.total_seconds()}')
 
                 # if we get to here, break and continue to the next datetime
@@ -746,11 +770,11 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
         else:
             print(f'{datetime.strftime("%Y%m%dT%H%M%S")}: missing dataset across all cycles')
 
-    # write lines to file
-    with open(output_filename, 'w') as output_file:
-        output_file.write('\n'.join(lines))
+        # write lines to file
+        with open(output_filename, 'w') as output_file:
+            output_file.write('\n'.join(lines))
 
-    print('Wrote data to file')
+        print('Wrote data to file')
 
 
 def get_pass_times(start_datetime: datetime.datetime, end_datetime: datetime.datetime,

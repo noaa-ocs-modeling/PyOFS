@@ -123,7 +123,7 @@ class NDBC_Range:
         with futures.ThreadPoolExecutor() as concurrency_pool:
             running_futures = {concurrency_pool.submit(NDBC_Station, station_name): station_name for station_name in
                                self.station_names}
-    
+
             for completed_future in futures.as_completed(running_futures):
                 station_name = running_futures[completed_future]
                 
@@ -131,7 +131,7 @@ class NDBC_Range:
                     result = completed_future.result()
                     print(f'Collecting NDBC data from station {station_name}...')
                     self.stations[station_name] = result
-    
+
             del running_futures
         
         if len(self.stations) == 0:
@@ -157,8 +157,8 @@ class NDBC_Range:
         # concurrently populate dictionary with data for each station within given time interval
         with futures.ThreadPoolExecutor() as concurrency_pool:
             running_futures = {concurrency_pool.submit(station.data, start_datetime, end_datetime): station_name for
-                            station_name, station in self.stations.items()}
-    
+                               station_name, station in self.stations.items()}
+            
             for completed_future in futures.as_completed(running_futures):
                 result = completed_future.result()
                 

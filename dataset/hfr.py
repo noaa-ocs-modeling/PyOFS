@@ -73,7 +73,8 @@ class HFR_Range:
         if self.source == 'NDBC':
             self.url = f'{SOURCES["NDBC"]}/hfradar_uswc_{self.resolution}km'
         elif self.source == 'UCSD':
-            self.url = f'{SOURCES["UCSD"]}/{self.resolution}km/hourly/RTV/HFRADAR_US_West_Coast_{self.resolution}km_Resolution_Hourly_RTV_best.ncd'
+            self.url = f'{SOURCES["UCSD"]}/{self.resolution}km/hourly/RTV/' + \
+                       f'HFRADAR_US_West_Coast_{self.resolution}km_Resolution_Hourly_RTV_best.ncd'
         
         try:
             self.netcdf_dataset = xarray.open_dataset(self.url)
@@ -89,7 +90,8 @@ class HFR_Range:
         self.netcdf_dataset = self.netcdf_dataset.sel(time=slice(self.start_datetime, self.end_datetime))
         
         print(
-            f'Collecting HFR velocity from {self.source} between {str(self.netcdf_dataset["time"].min().values)[:19]} and {str(self.netcdf_dataset["time"].max().values)[:19]}...')
+            f'Collecting HFR velocity from {self.source} between {str(self.netcdf_dataset["time"].min().values)[:19]}' + \
+            f' and {str(self.netcdf_dataset["time"].max().values)[:19]}...')
         
         if HFR_Range.grid_transform is None:
             lon = self.netcdf_dataset['lon'].values

@@ -45,7 +45,7 @@ WCOFS_2KM_GRID_FILENAME = os.path.join(DATA_DIR, 'reference', 'wcofs_2km_grid.nc
 
 GLOBAL_LOCK = threading.Lock()
 
-WCOFS_COOPS_URL = 'https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS'
+SOURCE_URL = 'https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS'
 
 
 class WCOFS_Dataset:
@@ -98,8 +98,8 @@ class WCOFS_Dataset:
             self.time_deltas = time_deltas
         
         if source_url is None:
-            source_url = WCOFS_COOPS_URL
-
+            source_url = SOURCE_URL
+        
         # set start time to WCOFS model run time (0300 UTC)
         self.model_datetime = model_date.replace(hour=3, minute=0, second=0, microsecond=0)
         self.x_size = x_size
@@ -1221,13 +1221,15 @@ class WCOFS_Range:
                     [time_delta_data for time_delta, time_delta_data in sorted(data.items(), reverse=True)], 0)
 
                 data_array = xarray.DataArray(data_stack,
-                                              coords={'time_delta': sorted(data.keys(), reverse=True),
-                                                      'lon': (
-                                                          (f'{grid}_eta', f'{grid}_xi'),
-                                                          self.data_coordinates[grid]['lon']),
-                                                      'lat': (
-                                                          (f'{grid}_eta', f'{grid}_xi'),
-                                                          self.data_coordinates[grid]['lat'])},
+                                              coords={
+                                                  'time_delta': sorted(data.keys(), reverse=True),
+                                                  'lon': (
+                                                      (f'{grid}_eta', f'{grid}_xi'),
+                                                      self.data_coordinates[grid]['lon']),
+                                                  'lat': (
+                                                      (f'{grid}_eta', f'{grid}_xi'),
+                                                      self.data_coordinates[grid]['lat'])
+                                              },
                                               dims=('time_delta', f'{grid}_eta', f'{grid}_xi'))
 
                 data_array.attrs['grid'] = grid
@@ -1258,12 +1260,14 @@ class WCOFS_Range:
                 data_stack = numpy.stack([time_delta_data for time_delta, time_delta_data in sorted(data.items())], 0)
 
                 data_array = xarray.DataArray(data_stack,
-                                              coords={'time': sorted(data.keys()),
-                                                      'time_delta': time_deltas,
-                                                      'lon': ((f'{grid}_eta', f'{grid}_xi'),
-                                                              self.data_coordinates[grid]['lon']),
-                                                      'lat': ((f'{grid}_eta', f'{grid}_xi'),
-                                                              self.data_coordinates[grid]['lat'])},
+                                              coords={
+                                                  'time': sorted(data.keys()),
+                                                  'time_delta': time_deltas,
+                                                  'lon': ((f'{grid}_eta', f'{grid}_xi'),
+                                                          self.data_coordinates[grid]['lon']),
+                                                  'lat': ((f'{grid}_eta', f'{grid}_xi'),
+                                                          self.data_coordinates[grid]['lat'])
+                                              },
                                               dims=('time', 'time_delta', f'{grid}_eta', f'{grid}_xi'))
 
                 data_array.attrs['grid'] = grid

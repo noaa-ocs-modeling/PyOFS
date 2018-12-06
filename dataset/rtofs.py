@@ -173,6 +173,7 @@ class RTOFS_Dataset:
                     with self.dataset_locks[direction][dataset_name]:
                         variable = self.netcdf_datasets[direction][dataset_name][variable_name]
 
+                        # TODO study areas that cross over longitude +74.16 may have problems here
                         if crop:
                             selection = variable.sel(time=time,
                                                      lon=slice(self.study_area_west + 360, self.study_area_east + 360),
@@ -264,11 +265,11 @@ class RTOFS_Dataset:
                     'width': variable_mean.shape[1], 'count': 1, 'dtype': rasterio.float32, 'crs': RASTERIO_WGS84,
                     'nodata': numpy.array([fill_value]).astype(variable_mean.dtype).item()
                 }
-    
+
                 output_filename = f'{filename_prefix}_{variable}_{self.model_datetime.strftime("%Y%m%d")}' + \
                                   f'_{time_delta_string}{filename_suffix}'
                 output_filename = os.path.join(output_dir, output_filename)
-    
+
                 for driver in drivers:
                     if driver == 'AAIGrid':
                         file_extension = '.asc'
@@ -310,7 +311,7 @@ class RTOFS_Dataset:
                 'count': 1, 'dtype': rasterio.float32, 'crs': RASTERIO_WGS84,
                 'nodata': numpy.array([fill_value]).astype(output_data.dtype).item()
             }
-    
+
             for driver in drivers:
                 if driver == 'AAIGrid':
                     file_extension = '.asc'
@@ -346,6 +347,6 @@ if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIR, r'output\test')
     
     rtofs_dataset = RTOFS_Dataset(datetime.datetime.now())
-    rtofs_dataset.write_raster(os.path.join(output_dir, 'test.tiff'), 'temp', datetime.datetime.now(), crop=False)
+    rtofs_dataset.write_raster(os.path.join(output_dir, 'rtofs_ssh.tiff'), 'ssh', datetime.datetime.now())
     
     print('done')
