@@ -220,8 +220,8 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
         with open(log_path, 'a') as log_file:
             log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) WCOFS: {error}\n')
 
-    wcofs.reset_dataset_grid()
-
+    # wcofs.reset_dataset_grid()
+    #
     # try:
     #     wcofs_2km_dataset = wcofs.WCOFS_Dataset(model_run_date, source='avg',
     #                                             grid_filename=wcofs.WCOFS_2KM_GRID_FILENAME,
