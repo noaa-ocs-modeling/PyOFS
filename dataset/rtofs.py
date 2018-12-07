@@ -265,11 +265,11 @@ class RTOFS_Dataset:
                     'width': variable_mean.shape[1], 'count': 1, 'dtype': rasterio.float32, 'crs': RASTERIO_WGS84,
                     'nodata': numpy.array([fill_value]).astype(variable_mean.dtype).item()
                 }
-    
+
                 output_filename = f'{filename_prefix}_{variable}_{self.model_datetime.strftime("%Y%m%d")}' + \
                                   f'_{time_delta_string}{filename_suffix}'
                 output_filename = os.path.join(output_dir, output_filename)
-    
+
                 for driver in drivers:
                     if driver == 'AAIGrid':
                         file_extension = '.asc'
