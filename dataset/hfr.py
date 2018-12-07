@@ -27,7 +27,7 @@ RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
 
 NRT_DELAY = datetime.timedelta(hours=1)
 
-SOURCES = {
+SOURCE_URLS = {
     'NDBC': 'https://dods.ndbc.noaa.gov/thredds/dodsC',
     'UCSD': 'http://hfrnet-tds.ucsd.edu/thredds/dodsC/HFR/USWC'
 }
@@ -71,9 +71,9 @@ class HFR_Range:
 
         # get URL
         if self.source == 'NDBC':
-            self.url = f'{SOURCES["NDBC"]}/hfradar_uswc_{self.resolution}km'
+            self.url = f'{SOURCE_URLS["NDBC"]}/hfradar_uswc_{self.resolution}km'
         elif self.source == 'UCSD':
-            self.url = f'{SOURCES["UCSD"]}/{self.resolution}km/hourly/RTV/' + \
+            self.url = f'{SOURCE_URLS["UCSD"]}/{self.resolution}km/hourly/RTV/' + \
                        f'HFRADAR_US_West_Coast_{self.resolution}km_Resolution_Hourly_RTV_best.ncd'
         
         try:

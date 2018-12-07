@@ -45,8 +45,8 @@ WCOFS_2KM_GRID_FILENAME = os.path.join(DATA_DIR, 'reference', 'wcofs_2km_grid.nc
 
 GLOBAL_LOCK = threading.Lock()
 
-SOURCES = ['https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS',
-           os.path.join(DATA_DIR, 'input/wcofs/avg')]
+SOURCE_URLS = ['https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS',
+               os.path.join(DATA_DIR, 'input/wcofs/avg')]
 
 
 class WCOFS_Dataset:
@@ -99,7 +99,7 @@ class WCOFS_Dataset:
             self.time_deltas = time_deltas
         
         if source_url is None:
-            source_url = SOURCES
+            source_url = SOURCE_URLS
         
         # set start time to WCOFS model run time (0300 UTC)
         self.model_datetime = model_date.replace(hour=3, minute=0, second=0, microsecond=0)
@@ -113,7 +113,7 @@ class WCOFS_Dataset:
 
         self.netcdf_datasets = {}
 
-        for source in SOURCES:
+        for source in SOURCE_URLS:
             if self.source == 'avg':
                 for day in self.time_deltas:
                     if (day < 0 and -1 in self.netcdf_datasets.keys()) or (

@@ -33,7 +33,7 @@ RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 WCOFS_NDBC_STATIONS_FILENAME = os.path.join(DATA_DIR, r"reference\ndbc_stations.txt")
 
-NDBC_CATALOG_URL = f'https://dods.ndbc.noaa.gov/thredds/catalog/data/ocean/catalog.html'
+SOURCE_URL = 'https://dods.ndbc.noaa.gov/thredds/catalog/data/ocean/catalog.html'
 
 
 class NDBC_Station:
@@ -114,7 +114,7 @@ class NDBC_Range:
         self.station_names = stations
         
         if self.station_names is None:
-            with requests.get(NDBC_CATALOG_URL) as catalog:
+            with requests.get(SOURCE_URL) as catalog:
                 self.station_names = re.findall("href='(.*?)/catalog.html'", catalog.text)
         
         self.stations = {}

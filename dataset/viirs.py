@@ -36,7 +36,7 @@ RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
 
 NRT_DELAY = datetime.timedelta(hours=2)
 
-SOURCES = OrderedDict({
+SOURCE_URLS = OrderedDict({
     'OpenDAP': OrderedDict({
         'NESDIS': 'https://www.star.nesdis.noaa.gov/thredds/dodsC',
         'JPL': 'https://podaac-opendap.jpl.nasa.gov:443/opendap/allData/ghrsst/data/GDS2/L3U',
@@ -96,7 +96,7 @@ class VIIRS_Dataset:
         filename = f'{self.granule_datetime.strftime("%Y%m%d%H%M%S")}-' + \
                    f'{self.algorithm}-L3U_GHRSST-SSTsubskin-VIIRS_{satellite.upper()}-ACSPO_V{self.version}-v02.0-fv01.0.nc'
 
-        for source, source_url in SOURCES['OpenDAP'].items():
+        for source, source_url in SOURCE_URLS['OpenDAP'].items():
             # TODO N20 does not have an OpenDAP archive
             if satellite.upper() == 'N20':
                 continue
@@ -121,7 +121,7 @@ class VIIRS_Dataset:
         if self.url is None:
             print('Error collecting from OpenDAP; falling back to FTP...')
 
-            for source, source_url in SOURCES['FTP'].items():
+            for source, source_url in SOURCE_URLS['FTP'].items():
                 host_url, input_dir = source_url.split('/', 1)
 
                 if source == 'NESDIS':
