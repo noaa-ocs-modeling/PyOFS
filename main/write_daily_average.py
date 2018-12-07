@@ -123,13 +123,24 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
         rtofs_dataset = rtofs.RTOFS_Dataset(model_run_date, source='2ds', time_interval='daily')
         
         for day_delta, daily_average_dir in output_dirs.items():
+            existing_files = os.listdir(daily_average_dir)
+            existing_files = [filename for filename in existing_files if 'rtofs' in filename]
+            
             if day_delta in MODEL_DAY_DELTAS['RTOFS']:
                 day_of_forecast = model_run_date + datetime.timedelta(days=day_delta)
 
-                rtofs_dataset.write_rasters(daily_average_dir, variables=['temp'], time=day_of_forecast,
-                                            drivers=['GTiff'])
-                rtofs_dataset.write_rasters(daily_average_dir, variables=['u', 'v'], time=day_of_forecast,
-                                            vector_components=True, drivers=['AAIGrid'])
+                if not any('temp' in filename for filename in existing_files):
+                    rtofs_dataset.write_rasters(daily_average_dir, variables=['temp'], time=day_of_forecast,
+                                                drivers=['GTiff'])
+                else:
+                    print(f'Skipping RTOFS day {day_delta} temp')
+
+                if not any('u' in filename for filename in existing_files) or not any(
+                        'v' in filename for filename in existing_files):
+                    rtofs_dataset.write_rasters(daily_average_dir, variables=['u', 'v'], time=day_of_forecast,
+                                                vector_components=True, drivers=['AAIGrid'])
+                else:
+                    print(f'Skipping RTOFS day {day_delta} uv')
         
         del rtofs_dataset
     except _utilities.NoDataError as error:
@@ -142,18 +153,30 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
         wcofs_dataset = wcofs.WCOFS_Dataset(model_run_date, source='avg')
 
         for day_delta, daily_average_dir in output_dirs.items():
+            existing_files = os.listdir(daily_average_dir)
+            existing_files = [filename for filename in existing_files if 'wcofs' in filename and 'noDA' not in filename]
+            
             if day_delta in MODEL_DAY_DELTAS['WCOFS']:
                 wcofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
                 time_delta_string = f'{wcofs_direction[0]}' + \
                                     f'{abs(day_delta) + 1 if wcofs_direction == "forecast" else abs(day_delta):03}'
                 wcofs_filename_suffix = f'{time_delta_string}'
 
-                wcofs_dataset.write_rasters(daily_average_dir, ['temp'], filename_suffix=wcofs_filename_suffix,
-                                            time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'])
-                wcofs_dataset.write_rasters(daily_average_dir, ['u', 'v'], filename_suffix=wcofs_filename_suffix,
-                                            time_deltas=[day_delta], vector_components=True,
-                                            fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
+                if not any('temp' in filename for filename in existing_files):
+                    wcofs_dataset.write_rasters(daily_average_dir, ['temp'], filename_suffix=wcofs_filename_suffix,
+                                                time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
+                                                drivers=['GTiff'])
+                else:
+                    print(f'Skipping WCOFS day {day_delta} temp')
 
+                if not any('u' in filename for filename in existing_files) or not any(
+                        'v' in filename for filename in existing_files):
+                    wcofs_dataset.write_rasters(daily_average_dir, ['u', 'v'], filename_suffix=wcofs_filename_suffix,
+                                                time_deltas=[day_delta], vector_components=True,
+                                                fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
+                else:
+                    print(f'Skipping WCOFS day {day_delta} uv')
+        
         del wcofs_dataset
     except _utilities.NoDataError as error:
         print(error)
@@ -167,19 +190,32 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                                                 wcofs_string='wcofs4')
 
         for day_delta, daily_average_dir in output_dirs.items():
+            existing_files = os.listdir(daily_average_dir)
+            existing_files = [filename for filename in existing_files if
+                              'wcofs' in filename and 'noDA' in filename and '4km' in filename]
+            
             if day_delta in MODEL_DAY_DELTAS['WCOFS']:
                 wcofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
                 time_delta_string = f'{wcofs_direction[0]}' + \
                                     f'{abs(day_delta) + 1 if wcofs_direction == "forecast" else abs(day_delta):03}'
                 wcofs_filename_suffix = f'{time_delta_string}_noDA_4km'
 
-                wcofs_4km_dataset.write_rasters(daily_average_dir, ['temp'], filename_suffix=wcofs_filename_suffix,
-                                                time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
-                                                drivers=['GTiff'])
-                wcofs_4km_dataset.write_rasters(daily_average_dir, ['u', 'v'], filename_suffix=wcofs_filename_suffix,
-                                                time_deltas=[day_delta], vector_components=True,
-                                                fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
+                if not any('temp' in filename for filename in existing_files):
+                    wcofs_4km_dataset.write_rasters(daily_average_dir, ['temp'], filename_suffix=wcofs_filename_suffix,
+                                                    time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
+                                                    drivers=['GTiff'])
+                else:
+                    print(f'Skipping WCOFS 4km noDA day {day_delta} temp')
 
+                if not any('u' in filename for filename in existing_files) or not any(
+                        'v' in filename for filename in existing_files):
+                    wcofs_4km_dataset.write_rasters(daily_average_dir, ['u', 'v'],
+                                                    filename_suffix=wcofs_filename_suffix,
+                                                    time_deltas=[day_delta], vector_components=True,
+                                                    fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
+                else:
+                    print(f'Skipping WCOFS 4km noDA day {day_delta} temp')
+        
         del wcofs_4km_dataset
     except _utilities.NoDataError as error:
         print(error)
@@ -286,7 +322,7 @@ if __name__ == '__main__':
     # for model_run_date in model_run_dates:
     #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path)
 
-    model_run_date = datetime.date.today()
+    model_run_date = datetime.date.today() - datetime.timedelta(days=1)
     write_daily_average(DAILY_AVERAGES_DIR, model_run_date, day_deltas, log_path)
 
     message = f'Finished writing files. Total time: ' + \

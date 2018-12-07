@@ -45,7 +45,8 @@ WCOFS_2KM_GRID_FILENAME = os.path.join(DATA_DIR, 'reference', 'wcofs_2km_grid.nc
 
 GLOBAL_LOCK = threading.Lock()
 
-SOURCE_URL = 'https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS'
+SOURCE_URLS = ['https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS',
+               os.path.join(DATA_DIR, 'input/wcofs/avg')]
 
 
 class WCOFS_Dataset:
@@ -98,14 +99,13 @@ class WCOFS_Dataset:
             self.time_deltas = time_deltas
         
         if source_url is None:
-            source_url = SOURCE_URL
+            source_url = SOURCE_URLS
         
         # set start time to WCOFS model run time (0300 UTC)
         self.model_datetime = model_date.replace(hour=3, minute=0, second=0, microsecond=0)
         self.x_size = x_size
         self.y_size = y_size
         self.grid_filename = grid_filename
-        self.source_url = source_url
         self.wcofs_string = wcofs_string
 
         month_string = self.model_datetime.strftime('%Y%m')
@@ -113,42 +113,32 @@ class WCOFS_Dataset:
 
         self.netcdf_datasets = {}
 
-        if self.source == 'avg':
-            for day in self.time_deltas:
-                if day > 0 and 1 in self.netcdf_datasets.keys():
-                    continue
-
-                model_type = 'nowcast' if day < 0 else 'forecast'
-                url = f'{self.source_url}/{month_string}/nos.{self.wcofs_string}.avg.{model_type}.{date_string}.t{WCOFS_MODEL_RUN_HOUR:02}z.nc'
-
-                try:
-                    self.netcdf_datasets[-1 if day < 0 else 1] = xarray.open_dataset(url, decode_times=False)
-                except OSError:
-                    print(f'No WCOFS dataset found at {url}')
-        else:
-            # concurrently populate dictionary with NetCDF datasets for every hour in the given list of hours
-            with futures.ThreadPoolExecutor() as concurrency_pool:
-                running_futures = {}
-                
+        for source in SOURCE_URLS:
+            if self.source == 'avg':
+                for day in self.time_deltas:
+                    if (day < 0 and -1 in self.netcdf_datasets.keys()) or (
+                            day >= 0 and 1 in self.netcdf_datasets.keys()):
+                        continue
+            
+                    model_type = 'nowcast' if day < 0 else 'forecast'
+                    url = f'{source}/{month_string}/nos.{self.wcofs_string}.avg.{model_type}.{date_string}.t{WCOFS_MODEL_RUN_HOUR:02}z.nc'
+            
+                    try:
+                        self.netcdf_datasets[-1 if day < 0 else 1] = xarray.open_dataset(url, decode_times=False)
+                        self.source_url = source
+                    except OSError:
+                        print(f'No WCOFS dataset found at {url}')
+            else:
                 for hour in self.time_deltas:
-                    url = f'{self.source_url}/{month_string}/nos.{self.wcofs_string}.{self.location}.{"n" if hour <= 0 else "f"}' + \
+                    model_type = 'n' if hour <= 0 else 'f'
+                    url = f'{source}/{month_string}/nos.{self.wcofs_string}.{self.location}.{model_type}' + \
                           f'{abs(hour):03}.{date_string}.t{self.cycle:02}z.nc'
                     
-                    future = concurrency_pool.submit(xarray.open_dataset, url, decode_times=False)
-                    running_futures[future] = hour
-
-                for completed_future in futures.as_completed(running_futures):
                     try:
-                        hour = running_futures[completed_future]
-                        result = completed_future.result()
-
-                        if result is not None:
-                            self.netcdf_datasets[hour] = result
+                        self.netcdf_datasets[hour] = xarray.open_dataset(url, decode_times=False)
+                        self.source_url = source
                     except OSError:
-                        # print(f'No WCOFS dataset found at {url}')
-                        pass
-
-                del running_futures
+                        print(f'No WCOFS dataset found at {url}')
         
         if len(self.netcdf_datasets) > 0:
             self.sample_netcdf_dataset = next(iter(self.netcdf_datasets.values()))
@@ -229,7 +219,7 @@ class WCOFS_Dataset:
 
         else:
             raise _utilities.NoDataError(
-                f'No WCOFS datasets found for {self.model_datetime} from {self.source_url} at the given time deltas ({self.time_deltas}).')
+                f'No WCOFS datasets found for {self.model_datetime} at the given time deltas ({self.time_deltas}).')
     
     def bounds(self, variable: str = 'psi') -> tuple:
         """
@@ -269,7 +259,7 @@ class WCOFS_Dataset:
                             raw_u = self.netcdf_datasets[dataset_index]['u'][day_index, -1, :-1, :].values
                             raw_v = self.netcdf_datasets[dataset_index]['v'][day_index, -1, :, :-1].values
                             theta = WCOFS_Dataset.angle[:-1, :-1]
-            
+
                             if variable == 'u':
                                 output_data = raw_u * numpy.cos(theta) - raw_v * numpy.sin(theta)
                                 extra_row = numpy.empty((1, output_data.shape[1]), dtype=output_data.dtype)
@@ -312,7 +302,7 @@ class WCOFS_Dataset:
 
             for completed_future in futures.as_completed(running_futures):
                 result = completed_future.result()
-    
+
                 if result is not None:
                     variable_data.append(result)
             
@@ -417,13 +407,13 @@ class WCOFS_Dataset:
 
             if u_name not in variable_means:
                 u_data = self.data_average(u_name, time_deltas)
-    
+
                 if u_data is not None:
                     variable_means[u_name] = u_data
             
             if v_name not in variable_means:
                 v_data = self.data_average(v_name, time_deltas)
-    
+
                 if v_data is not None:
                     variable_means[v_name] = v_data
         
@@ -437,52 +427,52 @@ class WCOFS_Dataset:
             # concurrently populate dictionary with interpolated data in given grid for each variable
             with futures.ThreadPoolExecutor() as concurrency_pool:
                 running_futures = {}
-        
+
                 for variable, variable_data in variable_means.items():
                     if variable_data is not None:
                         print(f'Starting {variable} interpolation...')
-                
+
                         grid_lon = output_grid_coordinates[variable]['lon']
                         grid_lat = output_grid_coordinates[variable]['lat']
-                
+
                         grid_name = self.variable_grids[variable]
-                
+
                         lon = self.data_coordinates[grid_name]['lon']
                         lat = self.data_coordinates[grid_name]['lat']
-                
+
                         if len(grid_lon) > 0:
                             running_future = concurrency_pool.submit(interpolate_grid, lon, lat, variable_data,
                                                                      grid_lon,
                                                                      grid_lat)
                             running_futures[running_future] = variable
-        
+
                 for completed_future in futures.as_completed(running_futures):
                     variable = running_futures[completed_future]
                     result = completed_future.result()
-            
+
                     if result is not None:
                         interpolated_data[variable] = result
-        
+
                 del running_futures
-    
+
             if vector_components:
                 if 'u' in interpolated_data and 'v' in interpolated_data:
                     interpolated_data['dir'] = {}
                     interpolated_data['mag'] = {}
-            
+
                     u_data = interpolated_data[u_name]
                     v_data = interpolated_data[v_name]
-            
+
                     # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
                     interpolated_data['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (180 / numpy.pi)
                     interpolated_data['mag'] = numpy.sqrt(numpy.square(u_data) + numpy.square(v_data))
-            
+
                     if u_name not in variables:
                         del interpolated_data[u_name]
-            
+
                     if v_name not in variables:
                         del interpolated_data[v_name]
-    
+
             print(f'parallel grid interpolation took ' + \
                   f'{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
         
