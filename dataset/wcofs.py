@@ -99,7 +99,10 @@ class WCOFS_Dataset:
             self.time_deltas = time_deltas
         
         if source_url is None:
-            source_url = SOURCE_URLS
+            source_url = SOURCE_URLS[0]
+
+        if grid_filename is None:
+            grid_filename = WCOFS_4KM_GRID_FILENAME
         
         # set start time to WCOFS model run time (0300 UTC)
         self.model_datetime = model_date.replace(hour=3, minute=0, second=0, microsecond=0)
@@ -119,10 +122,10 @@ class WCOFS_Dataset:
                     if (day < 0 and -1 in self.netcdf_datasets.keys()) or (
                             day >= 0 and 1 in self.netcdf_datasets.keys()):
                         continue
-            
+
                     model_type = 'nowcast' if day < 0 else 'forecast'
                     url = f'{source}/{month_string}/nos.{self.wcofs_string}.avg.{model_type}.{date_string}.t{WCOFS_MODEL_RUN_HOUR:02}z.nc'
-            
+
                     try:
                         self.netcdf_datasets[-1 if day < 0 else 1] = xarray.open_dataset(url, decode_times=False)
                         self.source_url = source
