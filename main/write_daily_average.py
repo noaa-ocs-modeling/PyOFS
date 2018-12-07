@@ -322,7 +322,7 @@ if __name__ == '__main__':
     # for model_run_date in model_run_dates:
     #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path)
 
-    model_run_date = datetime.date.today() - datetime.timedelta(days=1)
+    model_run_date = datetime.date.today()
     write_daily_average(DAILY_AVERAGES_DIR, model_run_date, day_deltas, log_path)
 
     message = f'Finished writing files. Total time: ' + \
