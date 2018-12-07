@@ -143,7 +143,7 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                     print(f'Skipping RTOFS day {day_delta} uv')
         
         del rtofs_dataset
-    except Exception as error:
+    except _utilities.NoDataError as error:
         print(error)
         with open(log_path, 'a') as log_file:
             log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) RTOFS: {error}\n')
@@ -178,7 +178,7 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                     print(f'Skipping WCOFS day {day_delta} uv')
         
         del wcofs_dataset
-    except Exception as error:
+    except _utilities.NoDataError as error:
         print(error)
         with open(log_path, 'a') as log_file:
             log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) WCOFS: {error}\n')
@@ -217,7 +217,7 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                     print(f'Skipping WCOFS 4km noDA day {day_delta} uv')
         
         del wcofs_4km_dataset
-    except Exception as error:
+    except _utilities.NoDataError as error:
         print(error)
         with open(log_path, 'a') as log_file:
             log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) WCOFS: {error}\n')
@@ -259,7 +259,7 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
     #                 print(f'Skipping WCOFS 2km noDA day {day_delta} uv')
     #
     #     del wcofs_2km_dataset
-    # except Exception as error:
+    # except _utilities.NoDataError as error:
     #     print(error)
     #     with open(log_path, 'a') as log_file:
     #         log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) WCOFS: {error}\n')
