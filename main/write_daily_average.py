@@ -227,25 +227,25 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                                                 grid_filename=wcofs.WCOFS_2KM_GRID_FILENAME,
                                                 source_url=os.path.join(DATA_DIR, 'input/wcofs/avg'),
                                                 wcofs_string='wcofs2')
-    
+
         for day_delta, daily_average_dir in output_dirs.items():
             if day_delta in MODEL_DAY_DELTAS['WCOFS']:
                 wcofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
                 time_delta_string = f'{wcofs_direction[0]}' + \
                                     f'{abs(day_delta) + 1 if wcofs_direction == "forecast" else abs(day_delta):03}'
                 wcofs_filename_suffix = f'{time_delta_string}_noDA_2km'
-            
+
                 existing_files = os.listdir(daily_average_dir)
                 existing_files = [filename for filename in existing_files if
                                   'wcofs' in filename and 'noDA' in filename and time_delta_string in filename and '2km' in filename]
-            
+
                 if not any('temp' in filename for filename in existing_files):
                     wcofs_2km_dataset.write_rasters(daily_average_dir, ['temp'], filename_suffix=wcofs_filename_suffix,
                                                     time_deltas=[day_delta], x_size=0.02, y_size=0.02,
                                                     fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'])
                 else:
                     print(f'Skipping WCOFS 2km noDA day {day_delta} temp')
-            
+
                 if not any('u' in filename for filename in existing_files) or not any(
                         'v' in filename for filename in existing_files):
                     wcofs_2km_dataset.write_rasters(daily_average_dir, ['u', 'v'],
@@ -328,13 +328,13 @@ if __name__ == '__main__':
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = MODEL_DAY_DELTAS['WCOFS']
 
-    model_run_dates = _utilities.range_daily(datetime.datetime.now(),
-                                             datetime.datetime.now() - datetime.timedelta(days=1))
-    for model_run_date in model_run_dates:
-        write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path)
+    # model_run_dates = _utilities.range_daily(datetime.datetime.now(),
+    #                                          datetime.datetime.now() - datetime.timedelta(days=1))
+    # for model_run_date in model_run_dates:
+    #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path)
 
-    # model_run_date = datetime.date.today()
-    # write_daily_average(DAILY_AVERAGES_DIR, model_run_date, day_deltas, log_path)
+    model_run_date = datetime.date.today()
+    write_daily_average(DAILY_AVERAGES_DIR, model_run_date, day_deltas, log_path)
     
     message = f'Finished writing files. Total time: ' + \
               f'{(datetime.datetime.now() - start_time).total_seconds(): .2f} seconds'
