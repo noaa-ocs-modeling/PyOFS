@@ -49,13 +49,13 @@ SOURCE_URLS = OrderedDict({
 
 class VIIRS_Dataset:
     study_area_transform = None
-    study_area_index_bounds = None
+    study_area_extent = None
+    study_area_bounds = None
     study_area_coordinates = None
-    study_area_geojson = None
 
     def __init__(self, granule_datetime: datetime.datetime,
                  study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, algorithm: str = 'OSPO',
-                 version: str = None):
+                 version: str = None, satellite: str = 'NPP'):
         """
         Retrieve VIIRS NetCDF dataset from NOAA with given datetime.
 
@@ -63,6 +63,7 @@ class VIIRS_Dataset:
         :param study_area_polygon_filename: Filename of vector file containing study area boundary.
         :param algorithm: Either 'STAR' or 'OSPO'.
         :param version: ACSPO algorithm version.
+        :param satellite: VIIRS platform.
         :raises NoDataError: if dataset does not exist.
         """
 
@@ -90,17 +91,11 @@ class VIIRS_Dataset:
 
         self.url = None
 
-        satellite = 'NPP'
-
         month_dir = f'{self.granule_datetime.year}/{self.granule_datetime.timetuple().tm_yday:03}'
         filename = f'{self.granule_datetime.strftime("%Y%m%d%H%M%S")}-' + \
                    f'{self.algorithm}-L3U_GHRSST-SSTsubskin-VIIRS_{satellite.upper()}-ACSPO_V{self.version}-v02.0-fv01.0.nc'
 
         for source, source_url in SOURCE_URLS['OpenDAP'].items():
-            # TODO N20 does not have an OpenDAP archive
-            if satellite.upper() == 'N20':
-                continue
-
             if source == 'NESDIS':
                 url = f'{source_url}/grid{"" if self.near_real_time else "S"}{satellite.upper()}VIIRS{"NRT" if self.near_real_time else "SCIENCE"}L3UWW00/{month_dir}/{filename}'
             elif source == 'JPL':
@@ -128,10 +123,10 @@ class VIIRS_Dataset:
                     if self.near_real_time:
                         ftp_path = f'/{input_dir}/nrt/viirs/{satellite.lower()}/l3u/{month_dir}/{filename}'
                     else:
-                        # TODO N20 does not have a reanalysis archive
+                        # TODO N20 does not yet have a reanalysis archive
                         if satellite.upper() == 'N20':
                             continue
-
+    
                         ftp_path = f'/{input_dir}/ran/viirs/{"S" if satellite.upper() == "NPP" else ""}{satellite.lower()}/l3u/{month_dir}/{filename}'
 
                     url = f'{host_url}/{ftp_path.lstrip("/")}'
@@ -139,8 +134,13 @@ class VIIRS_Dataset:
                 try:
                     with ftplib.FTP(host_url) as ftp_connection:
                         ftp_connection.login()
-                        temp_filename = os.path.join(DATA_DIR, 'tempfile.nc')
+                        temp_filename = os.path.join(DATA_DIR,
+                                                     f'viirs_{self.granule_datetime.strftime("%Y%m%dT%H%M")}' + \
+                                                     f'_tempfile.nc')
 
+                        if os.path.exists(temp_filename):
+                            os.remove(temp_filename)
+                        
                         try:
                             with open(temp_filename, 'wb') as temp_file:
                                 ftp_connection.retrbinary(f'RETR {ftp_path}', temp_file.write)
@@ -161,69 +161,34 @@ class VIIRS_Dataset:
         if self.url is None:
             raise _utilities.NoDataError(f'No VIIRS dataset found at {self.granule_datetime} UTC.')
         
-        # construct rectangular polygon of granule extent
-        if 'geospatial_bounds' in self.netcdf_dataset.attrs:
-            self.data_extent = shapely.wkt.loads(self.netcdf_dataset.geospatial_bounds)
-        elif 'geospatial_lon_min' in self.netcdf_dataset.attrs:
-            lon_min = float(self.netcdf_dataset.geospatial_lon_min)
-            lon_max = float(self.netcdf_dataset.geospatial_lon_max)
-            lat_min = float(self.netcdf_dataset.geospatial_lat_min)
-            lat_max = float(self.netcdf_dataset.geospatial_lat_max)
-
-            if lon_min < lon_max:
-                self.data_extent = shapely.geometry.Polygon(
-                    [(lon_min, lat_max), (lon_max, lat_max), (lon_max, lat_min), (lon_min, lat_min)])
-            else:
-                # geospatial bounds cross the antimeridian, so we create a multipolygon
-                self.data_extent = shapely.geometry.MultiPolygon([
-                    shapely.geometry.Polygon([(lon_min, lat_max), (180, lat_max), (180, lat_min), (lon_min, lat_min)]),
-                    shapely.geometry.Polygon(
-                        [(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
-        else:
-            print(f'{self.granule_datetime} UTC: Dataset has no stored bounds...')
-        
         lon_pixel_size = self.netcdf_dataset.geospatial_lon_resolution
         lat_pixel_size = self.netcdf_dataset.geospatial_lat_resolution
 
-        if VIIRS_Dataset.study_area_index_bounds is None:
+        if VIIRS_Dataset.study_area_extent is None:
             # print(f'Calculating indices and transform from granule at {self.granule_datetime} UTC...')
             
             # get first record in layer
             with fiona.open(self.study_area_polygon_filename, layer=study_area_polygon_layer_name) as vector_layer:
-                VIIRS_Dataset.study_area_geojson = next(iter(vector_layer))['geometry']
+                VIIRS_Dataset.study_area_extent = shapely.geometry.MultiPolygon(
+                    [shapely.geometry.Polygon(polygon[0]) for polygon in
+                     next(iter(vector_layer))['geometry']['coordinates']])
 
-            global_west = numpy.min(self.netcdf_dataset['lon'])
-            global_north = numpy.max(self.netcdf_dataset['lat'])
-
-            global_grid_transform = rasterio.transform.from_origin(global_west, global_north, lon_pixel_size,
-                                                                   lat_pixel_size)
-
-            # create array mask of data extent within study area, with the overall shape of the global VIIRS grid
-            raster_mask = rasterio.features.rasterize([VIIRS_Dataset.study_area_geojson], out_shape=(
-                self.netcdf_dataset['lat'].shape[0], self.netcdf_dataset['lon'].shape[0]),
-                                                      transform=global_grid_transform)
-
-            # get indices of rows and columns within the data where the polygon mask exists
-            mask_row_indices, mask_col_indices = numpy.where(raster_mask == 1)
-
-            west_index = numpy.min(mask_col_indices)
-            north_index = numpy.min(mask_row_indices)
-            east_index = numpy.max(mask_col_indices)
-            south_index = numpy.max(mask_row_indices)
-
-            # create variable for the index bounds of the mask within the greater VIIRS global grid (west, north, east, south)
-            VIIRS_Dataset.study_area_index_bounds = (west_index, north_index, east_index, south_index)
-            VIIRS_Dataset.study_area_coordinates = {
-                'lon': self.netcdf_dataset['lon'][west_index:east_index],
-                'lat': self.netcdf_dataset['lat'][north_index:south_index]
-            }
-            
-            study_area_west = self.netcdf_dataset['lon'][west_index]
-            study_area_north = self.netcdf_dataset['lat'][north_index]
-
-            VIIRS_Dataset.study_area_transform = rasterio.transform.from_origin(study_area_west, study_area_north,
+            VIIRS_Dataset.study_area_bounds = VIIRS_Dataset.study_area_extent.bounds
+            VIIRS_Dataset.study_area_transform = rasterio.transform.from_origin(VIIRS_Dataset.study_area_bounds[0],
+                                                                                VIIRS_Dataset.study_area_bounds[3],
                                                                                 lon_pixel_size, lat_pixel_size)
 
+        if VIIRS_Dataset.study_area_bounds is not None:
+            self.netcdf_dataset = self.netcdf_dataset.isel(time=0).sel(lon=slice(VIIRS_Dataset.study_area_bounds[0],
+                                                                                 VIIRS_Dataset.study_area_bounds[2]),
+                                                                       lat=slice(VIIRS_Dataset.study_area_bounds[3],
+                                                                                 VIIRS_Dataset.study_area_bounds[1]))
+
+        if VIIRS_Dataset.study_area_coordinates is None:
+            VIIRS_Dataset.study_area_coordinates = {
+                'lon': self.netcdf_dataset['lon'], 'lat': self.netcdf_dataset['lat']
+            }
+    
     def bounds(self) -> tuple:
         """
         Get coordinate bounds of dataset.
@@ -242,22 +207,24 @@ class VIIRS_Dataset:
 
         return self.netcdf_dataset.geospatial_lon_resolution, self.netcdf_dataset.geospatial_lat_resolution
 
-    def sst(self, sses_correction: bool = False) -> numpy.ndarray:
+    def data(self, variable: str = 'sst', sses_correction: bool = False) -> numpy.ndarray:
+        if variable == 'sst':
+            output_data = self._sst(sses_correction)
+        elif variable == 'sses':
+            output_data = self._sses()
+    
+        return output_data
+
+    def _sst(self, sses_correction: bool = False) -> numpy.ndarray:
         """
         Return matrix of sea surface temperature.
 
         :return: Matrix of SST in Celsius.
         """
 
-        west_index = VIIRS_Dataset.study_area_index_bounds[0]
-        north_index = VIIRS_Dataset.study_area_index_bounds[1]
-        east_index = VIIRS_Dataset.study_area_index_bounds[2]
-        south_index = VIIRS_Dataset.study_area_index_bounds[3]
-
         # dataset SST data (masked array) using vertically reflected VIIRS grid
-        output_sst_data = self.netcdf_dataset['sea_surface_temperature'][0, north_index:south_index,
-                          west_index:east_index].values
-
+        output_sst_data = self.netcdf_dataset['sea_surface_temperature'].values
+        
         # check for unmasked data
         if not numpy.isnan(output_sst_data).all():
             if numpy.nanmax(output_sst_data) > 0:
@@ -265,12 +232,12 @@ class VIIRS_Dataset:
                     output_sst_data[output_sst_data <= 0] = numpy.nan
 
                 if sses_correction:
-                    sses = self.sses()
-
+                    sses = self._sses()
+                    
                     mismatched_records = len(numpy.where(numpy.isnan(output_sst_data) != (sses == 0))[0])
                     total_records = output_sst_data.shape[0] * output_sst_data.shape[1]
                     mismatch_percentage = mismatched_records / total_records * 100
-
+    
                     if mismatch_percentage > 0:
                         print(f'{self.granule_datetime} UTC: SSES extent mismatch at {mismatch_percentage:.1f}%')
                     
@@ -283,27 +250,22 @@ class VIIRS_Dataset:
 
         return output_sst_data
 
-    def sses(self) -> numpy.ndarray:
+    def _sses(self) -> numpy.ndarray:
         """
         Return matrix of sensor-specific error statistics.
 
         :return: Array of SSES bias in Celsius.
         """
 
-        west_index = VIIRS_Dataset.study_area_index_bounds[0]
-        north_index = VIIRS_Dataset.study_area_index_bounds[1]
-        east_index = VIIRS_Dataset.study_area_index_bounds[2]
-        south_index = VIIRS_Dataset.study_area_index_bounds[3]
-
         # dataset bias values using vertically reflected VIIRS grid
-        sses_data = self.netcdf_dataset['sses_bias'][0, north_index:south_index, west_index:east_index].values
-
+        sses_data = self.netcdf_dataset['sses_bias'].values
+        
         # replace masked values with 0
         sses_data[numpy.isnan(sses_data)] = 0
 
-        # offset by 2.048
-        sses_data = sses_data - 2.048
-
+        # negative offset by 2.048
+        sses_data -= 2.048
+        
         return sses_data
 
     def write_rasters(self, output_dir: str, variables: list = ['sst', 'sses'], filename_prefix: str = 'viirs',
@@ -320,12 +282,11 @@ class VIIRS_Dataset:
         """
 
         for variable in variables:
-            if variable == 'sst':
-                input_data = self.sst(sses_correction=sses_correction)
-            elif variable == 'sses':
-                input_data = self.sses()
+            input_data = self.data(variable, sses_correction)
+    
+            if variable == 'sses':
                 fill_value = 0
-
+    
             if input_data is not None and not numpy.isnan(input_data).all():
                 if fill_value is not -9999.0:
                     input_data[numpy.isnan(input_data)] = fill_value
@@ -378,7 +339,7 @@ class VIIRS_Range:
     def __init__(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime,
                  study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
                  pass_times_filename: str = PASS_TIMES_FILENAME, algorithm: str = 'OSPO',
-                 version: str = None):
+                 version: str = None, satellites: list = ['NPP', 'N20']):
         """
         Collect VIIRS datasets within time interval.
 
@@ -388,6 +349,7 @@ class VIIRS_Range:
         :param pass_times_filename: Path to text file with pass times.
         :param algorithm: Either 'STAR' or 'OSPO'.
         :param version: ACSPO algorithm version.
+        :param satellites: List of VIIRS platforms.
         :raises NoDataError: if data does not exist.
         """
 
@@ -411,31 +373,34 @@ class VIIRS_Range:
                 f'UTC {numpy.min(self.pass_times)} and UTC{numpy.max(self.pass_times)}...')
             
             # create dictionary to store scenes
-            self.datasets = {}
-
+            self.datasets = {pass_time: {} for pass_time in self.pass_times}
+            
             with futures.ThreadPoolExecutor() as concurrency_pool:
-                running_futures = {}
-
-                for pass_time in self.pass_times:
-                    running_future = concurrency_pool.submit(VIIRS_Dataset, granule_datetime=pass_time,
-                                                             study_area_polygon_filename=self.study_area_polygon_filename,
-                                                             algorithm=self.algorithm, version=self.version)
-                    running_futures[running_future] = pass_time
-
-                for completed_future in futures.as_completed(running_futures):
-                    if completed_future.exception() is None:
-                        pass_time = running_futures[completed_future]
-                        viirs_dataset = completed_future.result()
-                        self.datasets[pass_time] = viirs_dataset
-                    else:
-                        print(completed_future.exception())
-
-                del running_futures
+                for satellite in satellites:
+                    running_futures = {}
+        
+                    for pass_time in self.pass_times:
+                        running_future = concurrency_pool.submit(VIIRS_Dataset, granule_datetime=pass_time,
+                                                                 study_area_polygon_filename=self.study_area_polygon_filename,
+                                                                 algorithm=self.algorithm, version=self.version,
+                                                                 satellite=satellite)
+                        running_futures[running_future] = pass_time
+        
+                    for completed_future in futures.as_completed(running_futures):
+                        if completed_future.exception() is None:
+                            pass_time = running_futures[completed_future]
+                            viirs_dataset = completed_future.result()
+                            self.datasets[pass_time][satellite] = viirs_dataset
+                        else:
+                            print(completed_future.exception())
+        
+                    del running_futures
             
             if len(self.datasets) > 0:
                 VIIRS_Range.study_area_transform = VIIRS_Dataset.study_area_transform
-                VIIRS_Range.study_area_index_bounds = VIIRS_Dataset.study_area_index_bounds
-
+                VIIRS_Range.study_area_extent = VIIRS_Dataset.study_area_extent
+                VIIRS_Range.study_area_bounds = VIIRS_Dataset.study_area_bounds
+                
                 self.sample_dataset = next(iter(self.datasets.values()))
 
                 print(f'VIIRS data was found in {len(self.datasets)} passes.')
@@ -445,7 +410,7 @@ class VIIRS_Range:
 
         else:
             raise _utilities.NoDataError(
-                f'There are no VIIRS passes between {self.start_datetime} and {self.end_datetime} UTC.')
+                f'There are no VIIRS passes between {self.start_datetime} UTC and {self.end_datetime} UTC.')
     
     def cell_size(self) -> tuple:
         """
@@ -458,7 +423,8 @@ class VIIRS_Range:
                 self.sample_dataset.netcdf_dataset.geospatial_lat_resolution)
 
     def data(self, start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
-             average: bool = False, sses_correction: bool = False, variables: list = ['sst']) -> dict:
+             average: bool = False, sses_correction: bool = False, variables: list = ['sst'],
+             satellite: str = None) -> dict:
         """
         Get VIIRS data (either overlapped or averaged) from the given time interval.
     
@@ -469,6 +435,7 @@ class VIIRS_Range:
         :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
         :param sses_correction: Whether to subtract SSES bias from L3 sea surface temperature data.
         :param variables: List of variables to write (either 'sst' or 'sses').
+        :param satellite: VIIRS platform to retrieve. Default: per-granule averages of platform datasets.
         :return Dictionary of data per variable.
         """
 
@@ -486,47 +453,46 @@ class VIIRS_Range:
         if variables is None:
             variables = ['sst', 'sses']
 
-        variable_data = {}
-
+        variables_data = {}
+        
         for variable in variables:
-            output_data = None
+            scenes_data = []
+    
+            for pass_datetime in pass_datetimes:
+                if len(self.datasets[pass_datetime]) > 0:
+                    if satellite is not None and satellite in self.datasets[pass_datetime]:
+                        dataset = self.datasets[pass_datetime][satellite]
+                        scene_data = dataset.data(variable, sses_correction)
+                    else:
+                        scene_data = numpy.nanmean(numpy.stack([dataset.data(variable, sses_correction) for dataset in
+                                                                self.datasets[pass_datetime].values()], axis=0), axis=0)
+            
+                    if numpy.any(~numpy.isnan(scene_data)):
+                        scenes_data.append(scene_data)
+    
+            variable_data = numpy.empty(
+                (VIIRS_Dataset.study_area_coordinates['lat'].shape[0],
+                 VIIRS_Dataset.study_area_coordinates['lon'].shape[0]))
+            variable_data[:] = numpy.nan
+    
+            if len(scenes_data) > 0:
+                # check if user wants to average data
+                if average:
+                    variable_data = numpy.nanmean(numpy.stack(scenes_data, axis=0), axis=0)
+                else:  # otherwise overlap based on datetime
+                    for scene_data in scenes_data:
+                        if variable == 'sses':
+                            scene_data[scene_data == 0] = numpy.nan
+                
+                        variable_data[~numpy.isnan(scene_data)] = scene_data[~numpy.isnan(scene_data)]
+    
+            variables_data[variable] = variable_data
 
-            # check if user wants to average data
-            if average:
-                scenes_data = []
-
-                for pass_datetime in pass_datetimes:
-                    dataset = self.datasets[pass_datetime]
-
-                    if variable == 'sst':
-                        scene_data = dataset.sst(sses_correction)
-                    elif variable == 'sses':
-                        scene_data = dataset.sses()
-
-                    scenes_data.append(scene_data)
-
-                if len(scenes_data) > 0:
-                    output_data = numpy.nanmean(numpy.stack(scenes_data, axis=0), axis=0)
-            else:  # otherwise overlap based on datetime
-                for pass_datetime in pass_datetimes:
-                    if variable == 'sst':
-                        scene_data = self.datasets[pass_datetime].sst(sses_correction=sses_correction)
-                    elif variable == 'sses':
-                        scene_data = self.datasets[pass_datetime].sses()
-                        scene_data[scene_data == 0] = numpy.nan
-
-                    if output_data is None:
-                        output_data = numpy.empty_like(scene_data)
-                        output_data[:] = numpy.nan
-
-                    output_data[~numpy.isnan(scene_data)] = scene_data[~numpy.isnan(scene_data)]
-
-            variable_data[variable] = output_data
-
-        return variable_data
-
+        return variables_data
+    
     def write_rasters(self, output_dir: str, variables: list = ['sst', 'sses'], filename_prefix: str = 'viirs',
-                      fill_value: float = None, drivers: list = ['GTiff'], sses_correction: bool = False):
+                      fill_value: float = None, drivers: list = ['GTiff'], sses_correction: bool = False,
+                      satellite: str = None):
         """
         Write individual VIIRS rasters to directory.
     
@@ -536,21 +502,25 @@ class VIIRS_Range:
         :param fill_value: Desired fill value of output.
         :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
         :param sses_correction: Whether to subtract SSES bias from L3 sea surface temperature data.
+        :param satellite: VIIRS platform to retrieve. Default: per-granule averages of platform datasets.
         """
 
         # write a raster for each pass retrieved scene
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            for dataset_datetime, dataset in self.datasets.items():
-                concurrency_pool.submit(dataset.write_rasters, output_dir, variables=variables,
-                                        filename_prefix=f'{filename_prefix}_' + \
-                                                        f'{dataset_datetime.strftime("%Y%m%d%H%M%S")}',
-                                        fill_value=fill_value, drivers=drivers, sses_correction=sses_correction)
-
+            for dataset_datetime, current_satellite in self.datasets.items():
+                if current_satellite is None or current_satellite == satellite:
+                    dataset = self.datasets[dataset_datetime][current_satellite]
+            
+                    concurrency_pool.submit(dataset.write_rasters, output_dir, variables=variables,
+                                            filename_prefix=f'{filename_prefix}_' + \
+                                                            f'{dataset_datetime.strftime("%Y%m%d%H%M%S")}',
+                                            fill_value=fill_value, drivers=drivers, sses_correction=sses_correction)
+    
     def write_raster(self, output_dir: str, filename_prefix: str = None, filename_suffix: str = None,
                      start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
                      average: bool = False, fill_value: float = -9999, drivers: list = ['GTiff'],
-                     sses_correction: bool = False, variables: list = ['sst']):
-    
+                     sses_correction: bool = False, variables: list = ['sst'], satellite: str = None):
+        
         """
         Write VIIRS raster of SST data (either overlapped or averaged) from the given time interval.
     
@@ -564,18 +534,19 @@ class VIIRS_Range:
         :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
         :param sses_correction: Whether to subtract SSES bias from L3 sea surface temperature data.
         :param variables: List of variables to write (either 'sst' or 'sses').
+        :param satellite: VIIRS platform to retrieve. Default: per-granule averages of platform datasets.
         """
-    
-        variable_data = self.data(start_datetime, end_datetime, average, sses_correction, variables)
-    
+
+        variable_data = self.data(start_datetime, end_datetime, average, sses_correction, variables, satellite)
+        
         if start_datetime is None:
             start_datetime = self.start_datetime
-    
+
         if end_datetime is None:
             end_datetime = self.end_datetime
         
         for variable, output_data in variable_data.items():
-            if output_data is not None and not numpy.isnan(output_data).all():
+            if output_data is not None and numpy.any(~numpy.isnan(output_data)):
                 output_data[numpy.isnan(output_data)] = fill_value
 
                 # define arguments to GDAL driver
@@ -638,36 +609,54 @@ class VIIRS_Range:
                     with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                         output_raster.write(raster_data, 1)
             else:
-                print(f'No VIIRS {variable} found between {start_datetime} and {end_datetime}.')
+                print(
+                    f'No {"VIIRS" if satellite is None else "VIIRS " + satellite} {variable} found between {start_datetime} and {end_datetime}.')
 
-    def to_xarray(self, variables: list = ['sst'], mean: bool = True, sses_correction: bool = False) -> xarray.Dataset:
+    def to_xarray(self, variables: list = ['sst', 'sses'], mean: bool = True, sses_correction: bool = False,
+                  satellites: list = None) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
     
         :param variables: List of variables to use.
         :param mean: Whether to average all time indices.
         :param sses_correction: Whether to subtract SSES bias from L3 sea surface temperature data.
+        :param satellites: VIIRS platforms to retrieve. Default: per-granule averages of platform datasets.
         :return: xarray Dataset of given variables.
         """
 
         data_arrays = {}
 
-        variable_data = self.data(average=mean, sses_correction=sses_correction, variables=variables)
+        coordinates = OrderedDict({
+            'lat': VIIRS_Dataset.study_area_coordinates['lat'],
+            'lon': VIIRS_Dataset.study_area_coordinates['lon']
+        })
 
-        for variable, data in variable_data.items():
-            data_arrays[variable] = xarray.DataArray(data, coords={
-                'lon': VIIRS_Dataset.study_area_coordinates['lon'],
-                'lat': VIIRS_Dataset.study_area_coordinates['lat']
-            },
-                                                     dims=('lat', 'lon'))
+        if satellites is not None:
+            coordinates['satellite'] = satellites
+    
+            satellites_data = [self.data(average=mean, sses_correction=sses_correction,
+                                         variables=variables, satellite=satellite) for satellite in satellites]
+    
+            variables_data = {}
+    
+            for variable in variables:
+                satellites_variable_data = [satellite_data[variable] for satellite_data in satellites_data if
+                                            satellite_data[variable] is not None]
+                variables_data[variable] = numpy.stack(satellites_variable_data, axis=2)
+        else:
+            variables_data = self.data(average=mean, sses_correction=sses_correction, variables=variables)
 
+        for variable, variable_data in variables_data.items():
+            data_arrays[variable] = xarray.DataArray(variable_data, coords=coordinates, dims=tuple(coordinates.keys()))
+        
         output_dataset = xarray.Dataset(data_vars=data_arrays)
 
         del data_arrays
 
         return output_dataset
 
-    def to_netcdf(self, output_file: str, variables: list = None, mean: bool = True, sses_correction: bool = False):
+    def to_netcdf(self, output_file: str, variables: list = None, mean: bool = True, sses_correction: bool = False,
+                  satellites: list = None):
         """
         Writes to NetCDF file.
     
@@ -675,10 +664,11 @@ class VIIRS_Range:
         :param variables: List of variables to use.
         :param mean: Whether to average all time indices.
         :param sses_correction: Whether to subtract SSES bias from L3 sea surface temperature data.
+        :param satellites: VIIRS platforms to retrieve. Default: per-granule averages of platform datasets.
         """
 
-        self.to_xarray(variables, mean, sses_correction).to_netcdf(output_file)
-
+        self.to_xarray(variables, mean, sses_correction, satellites).to_netcdf(output_file)
+    
     def __repr__(self):
         used_params = [self.start_datetime.__repr__(), self.end_datetime.__repr__()]
         optional_params = [self.study_area_polygon_filename, self.viirs_pass_times_filename,
@@ -750,23 +740,46 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
                 dataset = VIIRS_Dataset(cycle_datetime, study_area_polygon_filename, data_source, subskin,
                                         acspo_version)
 
+                # construct rectangular polygon of granule extent
+                if 'geospatial_bounds' in dataset.netcdf_dataset.attrs:
+                    data_extent = shapely.wkt.loads(dataset.netcdf_dataset.geospatial_bounds)
+                elif 'geospatial_lon_min' in dataset.netcdf_dataset.attrs:
+                    lon_min = float(dataset.netcdf_dataset.geospatial_lon_min)
+                    lon_max = float(dataset.netcdf_dataset.geospatial_lon_max)
+                    lat_min = float(dataset.netcdf_dataset.geospatial_lat_min)
+                    lat_max = float(dataset.netcdf_dataset.geospatial_lat_max)
+    
+                    if lon_min < lon_max:
+                        data_extent = shapely.geometry.Polygon(
+                            [(lon_min, lat_max), (lon_max, lat_max), (lon_max, lat_min), (lon_min, lat_min)])
+                    else:
+                        # geospatial bounds cross the antimeridian, so we create a multipolygon
+                        data_extent = shapely.geometry.MultiPolygon([
+                            shapely.geometry.Polygon(
+                                [(lon_min, lat_max), (180, lat_max), (180, lat_min), (lon_min, lat_min)]),
+                            shapely.geometry.Polygon(
+                                [(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
+                else:
+                    print(f'{dataset.granule_datetime} UTC: Dataset has no stored bounds...')
+                
                 # check if dataset falls within polygon extent
-                if dataset.data_extent.is_valid and study_area_polygon.intersects(dataset.data_extent):
-                    # get duration from current cycle start
-                    cycle_duration = cycle_datetime - (start_datetime + cycle_offset)
-
-                    print(
-                        f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")} {cycle_duration.total_seconds()}: ' + \
-                        f'valid scene (checked {cycle_index + 1} cycle(s))')
-                    lines.append(f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")},{cycle_duration.total_seconds()}')
-
+                if data_extent.is_valid:
+                    if study_area_polygon.intersects(data_extent):
+                        # get duration from current cycle start
+                        cycle_duration = cycle_datetime - (start_datetime + cycle_offset)
+        
+                        print(
+                            f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")} {cycle_duration.total_seconds()}: ' + \
+                            f'valid scene (checked {cycle_index + 1} cycle(s))')
+                        lines.append(f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")},{cycle_duration.total_seconds()}')
+                
                 # if we get to here, break and continue to the next datetime
                 break
             except _utilities.NoDataError as error:
                 print(error)
         else:
-            print(f'{datetime.strftime("%Y%m%dT%H%M%S")}: missing dataset across all cycles')
-
+            print(f'{current_datetime.strftime("%Y%m%dT%H%M%S")}: missing dataset across all cycles')
+        
         # write lines to file
         with open(output_filename, 'w') as output_file:
             output_file.write('\n'.join(lines))
@@ -825,10 +838,11 @@ def get_pass_times(start_datetime: datetime.datetime, end_datetime: datetime.dat
 if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIR, r'output\test')
 
-    start_datetime = datetime.datetime(2018, 11, 8)
+    start_datetime = datetime.datetime.utcnow() - datetime.timedelta(days=1)
     end_datetime = start_datetime + datetime.timedelta(days=1)
 
     viirs_range = VIIRS_Range(start_datetime, end_datetime)
-    viirs_range.write_raster(output_dir)
+    viirs_range.write_raster(output_dir, filename_prefix='viirs_npp', satellite='NPP')
+    viirs_range.write_raster(output_dir, filename_prefix='viirs_n20', satellite='N20')
     
     print('done')
