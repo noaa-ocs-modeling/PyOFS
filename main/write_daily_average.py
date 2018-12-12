@@ -124,7 +124,8 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
         
         for day_delta, daily_average_dir in output_dirs.items():
             if day_delta in MODEL_DAY_DELTAS['RTOFS']:
-                time_delta_string = f'{"f" if day_delta >= 0 else "n"}{day_delta:03}'
+                time_delta_string = f'{"f" if day_delta >= 0 else "n"}' + \
+                                    f'{abs(day_delta) + 1 if day_delta >= 0 else abs(day_delta):03}'
                 day_of_forecast = model_run_date + datetime.timedelta(days=day_delta)
     
                 existing_files = os.listdir(daily_average_dir)
