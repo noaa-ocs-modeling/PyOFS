@@ -126,7 +126,7 @@ class VIIRS_Dataset:
                         # TODO N20 does not yet have a reanalysis archive
                         if satellite.upper() == 'N20':
                             continue
-    
+
                         ftp_path = f'/{input_dir}/ran/viirs/{"S" if satellite.upper() == "NPP" else ""}{satellite.lower()}/l3u/{month_dir}/{filename}'
 
                     url = f'{host_url}/{ftp_path.lstrip("/")}'
@@ -160,6 +160,28 @@ class VIIRS_Dataset:
 
         if self.url is None:
             raise _utilities.NoDataError(f'No VIIRS dataset found at {self.granule_datetime} UTC.')
+
+        # construct rectangular polygon of granule extent
+        if 'geospatial_bounds' in self.netcdf_dataset.attrs:
+            self.data_extent = shapely.wkt.loads(self.netcdf_dataset.geospatial_bounds)
+        elif 'geospatial_lon_min' in self.netcdf_dataset.attrs:
+            lon_min = float(self.netcdf_dataset.geospatial_lon_min)
+            lon_max = float(self.netcdf_dataset.geospatial_lon_max)
+            lat_min = float(self.netcdf_dataset.geospatial_lat_min)
+            lat_max = float(self.netcdf_dataset.geospatial_lat_max)
+    
+            if lon_min < lon_max:
+                self.data_extent = shapely.geometry.Polygon(
+                    [(lon_min, lat_max), (lon_max, lat_max), (lon_max, lat_min), (lon_min, lat_min)])
+            else:
+                # geospatial bounds cross the antimeridian, so we create a multipolygon
+                self.data_extent = shapely.geometry.MultiPolygon([
+                    shapely.geometry.Polygon(
+                        [(lon_min, lat_max), (180, lat_max), (180, lat_min), (lon_min, lat_min)]),
+                    shapely.geometry.Polygon(
+                        [(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
+        else:
+            print(f'{self.granule_datetime} UTC: Dataset has no stored bounds...')
         
         lon_pixel_size = self.netcdf_dataset.geospatial_lon_resolution
         lat_pixel_size = self.netcdf_dataset.geospatial_lat_resolution
@@ -212,7 +234,7 @@ class VIIRS_Dataset:
             output_data = self._sst(sses_correction)
         elif variable == 'sses':
             output_data = self._sses()
-    
+
         return output_data
 
     def _sst(self, sses_correction: bool = False) -> numpy.ndarray:
@@ -237,7 +259,7 @@ class VIIRS_Dataset:
                     mismatched_records = len(numpy.where(numpy.isnan(output_sst_data) != (sses == 0))[0])
                     total_records = output_sst_data.shape[0] * output_sst_data.shape[1]
                     mismatch_percentage = mismatched_records / total_records * 100
-    
+
                     if mismatch_percentage > 0:
                         print(f'{self.granule_datetime} UTC: SSES extent mismatch at {mismatch_percentage:.1f}%')
                     
@@ -283,10 +305,10 @@ class VIIRS_Dataset:
 
         for variable in variables:
             input_data = self.data(variable, sses_correction)
-    
+
             if variable == 'sses':
                 fill_value = 0
-    
+
             if input_data is not None and not numpy.isnan(input_data).all():
                 if fill_value is not -9999.0:
                     input_data[numpy.isnan(input_data)] = fill_value
@@ -378,14 +400,14 @@ class VIIRS_Range:
             with futures.ThreadPoolExecutor() as concurrency_pool:
                 for satellite in satellites:
                     running_futures = {}
-        
+
                     for pass_time in self.pass_times:
                         running_future = concurrency_pool.submit(VIIRS_Dataset, granule_datetime=pass_time,
                                                                  study_area_polygon_filename=self.study_area_polygon_filename,
                                                                  algorithm=self.algorithm, version=self.version,
                                                                  satellite=satellite)
                         running_futures[running_future] = pass_time
-        
+
                     for completed_future in futures.as_completed(running_futures):
                         if completed_future.exception() is None:
                             pass_time = running_futures[completed_future]
@@ -393,7 +415,7 @@ class VIIRS_Range:
                             self.datasets[pass_time][satellite] = viirs_dataset
                         else:
                             print(completed_future.exception())
-        
+
                     del running_futures
             
             if len(self.datasets) > 0:
@@ -457,7 +479,7 @@ class VIIRS_Range:
         
         for variable in variables:
             scenes_data = []
-    
+
             for pass_datetime in pass_datetimes:
                 if len(self.datasets[pass_datetime]) > 0:
                     if satellite is not None and satellite in self.datasets[pass_datetime]:
@@ -466,15 +488,15 @@ class VIIRS_Range:
                     else:
                         scene_data = numpy.nanmean(numpy.stack([dataset.data(variable, sses_correction) for dataset in
                                                                 self.datasets[pass_datetime].values()], axis=0), axis=0)
-            
+
                     if numpy.any(~numpy.isnan(scene_data)):
                         scenes_data.append(scene_data)
-    
+
             variable_data = numpy.empty(
                 (VIIRS_Dataset.study_area_coordinates['lat'].shape[0],
                  VIIRS_Dataset.study_area_coordinates['lon'].shape[0]))
             variable_data[:] = numpy.nan
-    
+
             if len(scenes_data) > 0:
                 # check if user wants to average data
                 if average:
@@ -483,9 +505,9 @@ class VIIRS_Range:
                     for scene_data in scenes_data:
                         if variable == 'sses':
                             scene_data[scene_data == 0] = numpy.nan
-                
+
                         variable_data[~numpy.isnan(scene_data)] = scene_data[~numpy.isnan(scene_data)]
-    
+
             variables_data[variable] = variable_data
 
         return variables_data
@@ -510,7 +532,7 @@ class VIIRS_Range:
             for dataset_datetime, current_satellite in self.datasets.items():
                 if current_satellite is None or current_satellite == satellite:
                     dataset = self.datasets[dataset_datetime][current_satellite]
-            
+
                     concurrency_pool.submit(dataset.write_rasters, output_dir, variables=variables,
                                             filename_prefix=f'{filename_prefix}_' + \
                                                             f'{dataset_datetime.strftime("%Y%m%d%H%M%S")}',
@@ -633,12 +655,12 @@ class VIIRS_Range:
 
         if satellites is not None:
             coordinates['satellite'] = satellites
-    
+
             satellites_data = [self.data(average=mean, sses_correction=sses_correction,
                                          variables=variables, satellite=satellite) for satellite in satellites]
-    
+
             variables_data = {}
-    
+
             for variable in variables:
                 satellites_variable_data = [satellite_data[variable] for satellite_data in satellites_data if
                                             satellite_data[variable] is not None]
@@ -739,35 +761,13 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
                 # get dataset of new datetime
                 dataset = VIIRS_Dataset(cycle_datetime, study_area_polygon_filename, data_source, subskin,
                                         acspo_version)
-
-                # construct rectangular polygon of granule extent
-                if 'geospatial_bounds' in dataset.netcdf_dataset.attrs:
-                    data_extent = shapely.wkt.loads(dataset.netcdf_dataset.geospatial_bounds)
-                elif 'geospatial_lon_min' in dataset.netcdf_dataset.attrs:
-                    lon_min = float(dataset.netcdf_dataset.geospatial_lon_min)
-                    lon_max = float(dataset.netcdf_dataset.geospatial_lon_max)
-                    lat_min = float(dataset.netcdf_dataset.geospatial_lat_min)
-                    lat_max = float(dataset.netcdf_dataset.geospatial_lat_max)
-    
-                    if lon_min < lon_max:
-                        data_extent = shapely.geometry.Polygon(
-                            [(lon_min, lat_max), (lon_max, lat_max), (lon_max, lat_min), (lon_min, lat_min)])
-                    else:
-                        # geospatial bounds cross the antimeridian, so we create a multipolygon
-                        data_extent = shapely.geometry.MultiPolygon([
-                            shapely.geometry.Polygon(
-                                [(lon_min, lat_max), (180, lat_max), (180, lat_min), (lon_min, lat_min)]),
-                            shapely.geometry.Polygon(
-                                [(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
-                else:
-                    print(f'{dataset.granule_datetime} UTC: Dataset has no stored bounds...')
                 
                 # check if dataset falls within polygon extent
-                if data_extent.is_valid:
-                    if study_area_polygon.intersects(data_extent):
+                if dataset.data_extent.is_valid:
+                    if study_area_polygon.intersects(dataset.data_extent):
                         # get duration from current cycle start
                         cycle_duration = cycle_datetime - (start_datetime + cycle_offset)
-        
+
                         print(
                             f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")} {cycle_duration.total_seconds()}: ' + \
                             f'valid scene (checked {cycle_index + 1} cycle(s))')
