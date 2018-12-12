@@ -392,7 +392,7 @@ class VIIRS_Range:
         if len(self.pass_times) > 0:
             print(
                 f'Collecting VIIRS data from {len(self.pass_times)} passes between ' + \
-                f'UTC {numpy.min(self.pass_times)} and UTC{numpy.max(self.pass_times)}...')
+                f'{numpy.min(self.pass_times)} UTC and {numpy.max(self.pass_times)} UTC...')
             
             # create dictionary to store scenes
             self.datasets = {pass_time: {} for pass_time in self.pass_times}
