@@ -234,7 +234,7 @@ class VIIRS_Dataset:
             output_data = self._sst(sses_correction)
         elif variable == 'sses':
             output_data = self._sses()
-    
+
         return output_data
 
     def _sst(self, sses_correction: bool = False) -> numpy.ndarray:
@@ -305,7 +305,7 @@ class VIIRS_Dataset:
 
         for variable in variables:
             input_data = self.data(variable, sses_correction)
-    
+
             if variable == 'sses':
                 fill_value = 0
 
@@ -392,7 +392,7 @@ class VIIRS_Range:
         if len(self.pass_times) > 0:
             print(
                 f'Collecting VIIRS data from {len(self.pass_times)} passes between ' + \
-                f'UTC {numpy.min(self.pass_times)} and UTC{numpy.max(self.pass_times)}...')
+                f'{numpy.min(self.pass_times)} UTC and {numpy.max(self.pass_times)} UTC...')
             
             # create dictionary to store scenes
             self.datasets = {pass_time: {} for pass_time in self.pass_times}
@@ -400,14 +400,14 @@ class VIIRS_Range:
             with futures.ThreadPoolExecutor() as concurrency_pool:
                 for satellite in satellites:
                     running_futures = {}
-        
+
                     for pass_time in self.pass_times:
                         running_future = concurrency_pool.submit(VIIRS_Dataset, granule_datetime=pass_time,
                                                                  study_area_polygon_filename=self.study_area_polygon_filename,
                                                                  algorithm=self.algorithm, version=self.version,
                                                                  satellite=satellite)
                         running_futures[running_future] = pass_time
-        
+
                     for completed_future in futures.as_completed(running_futures):
                         if completed_future.exception() is None:
                             pass_time = running_futures[completed_future]
@@ -415,7 +415,7 @@ class VIIRS_Range:
                             self.datasets[pass_time][satellite] = viirs_dataset
                         else:
                             print(completed_future.exception())
-        
+
                     del running_futures
             
             if len(self.datasets) > 0:
@@ -479,7 +479,7 @@ class VIIRS_Range:
         
         for variable in variables:
             scenes_data = []
-    
+
             for pass_datetime in pass_datetimes:
                 if len(self.datasets[pass_datetime]) > 0:
                     if satellite is not None and satellite in self.datasets[pass_datetime]:
@@ -488,15 +488,15 @@ class VIIRS_Range:
                     else:
                         scene_data = numpy.nanmean(numpy.stack([dataset.data(variable, sses_correction) for dataset in
                                                                 self.datasets[pass_datetime].values()], axis=0), axis=0)
-            
+
                     if numpy.any(~numpy.isnan(scene_data)):
                         scenes_data.append(scene_data)
-    
+
             variable_data = numpy.empty(
                 (VIIRS_Dataset.study_area_coordinates['lat'].shape[0],
                  VIIRS_Dataset.study_area_coordinates['lon'].shape[0]))
             variable_data[:] = numpy.nan
-    
+
             if len(scenes_data) > 0:
                 # check if user wants to average data
                 if average:
@@ -505,9 +505,9 @@ class VIIRS_Range:
                     for scene_data in scenes_data:
                         if variable == 'sses':
                             scene_data[scene_data == 0] = numpy.nan
-                
+
                         variable_data[~numpy.isnan(scene_data)] = scene_data[~numpy.isnan(scene_data)]
-    
+
             variables_data[variable] = variable_data
 
         return variables_data
@@ -532,7 +532,7 @@ class VIIRS_Range:
             for dataset_datetime, current_satellite in self.datasets.items():
                 if current_satellite is None or current_satellite == satellite:
                     dataset = self.datasets[dataset_datetime][current_satellite]
-            
+
                     concurrency_pool.submit(dataset.write_rasters, output_dir, variables=variables,
                                             filename_prefix=f'{filename_prefix}_' + \
                                                             f'{dataset_datetime.strftime("%Y%m%d%H%M%S")}',
@@ -655,12 +655,12 @@ class VIIRS_Range:
 
         if satellites is not None:
             coordinates['satellite'] = satellites
-    
+
             satellites_data = [self.data(average=mean, sses_correction=sses_correction,
                                          variables=variables, satellite=satellite) for satellite in satellites]
-    
+
             variables_data = {}
-    
+
             for variable in variables:
                 satellites_variable_data = [satellite_data[variable] for satellite_data in satellites_data if
                                             satellite_data[variable] is not None]
@@ -767,7 +767,7 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
                     if study_area_polygon.intersects(dataset.data_extent):
                         # get duration from current cycle start
                         cycle_duration = cycle_datetime - (start_datetime + cycle_offset)
-        
+
                         print(
                             f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")} {cycle_duration.total_seconds()}: ' + \
                             f'valid scene (checked {cycle_index + 1} cycle(s))')

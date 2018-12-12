@@ -124,17 +124,20 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
         
         for day_delta, daily_average_dir in output_dirs.items():
             if day_delta in MODEL_DAY_DELTAS['RTOFS']:
+                time_delta_string = f'{"f" if day_delta >= 0 else "n"}' + \
+                                    f'{abs(day_delta) + 1 if day_delta >= 0 else abs(day_delta):03}'
                 day_of_forecast = model_run_date + datetime.timedelta(days=day_delta)
-
+    
                 existing_files = os.listdir(daily_average_dir)
-                existing_files = [filename for filename in existing_files if 'rtofs' in filename]
+                existing_files = [filename for filename in existing_files if
+                                  'rtofs' in filename and time_delta_string in filename]
                 
                 if not any('temp' in filename for filename in existing_files):
                     rtofs_dataset.write_rasters(daily_average_dir, variables=['temp'], time=day_of_forecast,
                                                 drivers=['GTiff'])
                 else:
                     print(f'Skipping RTOFS day {day_delta} temp')
-
+    
                 if not any('u' in filename for filename in existing_files) or not any(
                         'v' in filename for filename in existing_files):
                     rtofs_dataset.write_rasters(daily_average_dir, variables=['u', 'v'], time=day_of_forecast,
