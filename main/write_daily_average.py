@@ -64,7 +64,6 @@ def write_observational_data(output_dir: str, observation_date: typing.Union[dat
         hfr_range.write_rasters(output_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}',
                                 variables=['ssu', 'ssv'], vector_components=True, drivers=['AAIGrid'],
                                 fill_value=LEAFLET_NODATA_VALUE)
-
         del hfr_range
     except _utilities.NoDataError as error:
         print(error)
@@ -87,7 +86,6 @@ def write_observational_data(output_dir: str, observation_date: typing.Union[dat
                                  start_datetime=noon_in_utc, end_datetime=end_of_day_in_utc,
                                  fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=False,
                                  variables=['sst'])
-
         del viirs_range
     except _utilities.NoDataError as error:
         print(error)
@@ -315,22 +313,22 @@ def write_daily_average(output_dir: str, output_date: datetime.datetime, day_del
     start_time = datetime.datetime.now()
     
     with open(log_path, 'a') as log_file:
-        # # write observational data to directory for specified date
-        # observation_dir = os.path.join(output_dir, output_date.strftime("%Y%m%d"))
-        # if not os.path.isdir(observation_dir):
-        #     os.mkdir(observation_dir)
-        #
-        # write_observational_data(observation_dir, output_date, log_path)
-        #
-        # # populate JSON file with new directory structure so that JavaScript application can see it
-        # json_dir_structure.populate_json(OUTPUT_DIR, JSON_PATH)
-        #
-        # # write to log
-        # message = f'Wrote observational data to {output_dir}'
-        # log_file.write(
-        #     f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ' + \
-        #     f'({(datetime.datetime.now() - start_time).total_seconds(): .2f}s): {message}\n')
-        # print(message)
+        # write observational data to directory for specified date
+        observation_dir = os.path.join(output_dir, output_date.strftime("%Y%m%d"))
+        if not os.path.isdir(observation_dir):
+            os.mkdir(observation_dir)
+    
+        write_observational_data(observation_dir, output_date, log_path)
+    
+        # populate JSON file with new directory structure so that JavaScript application can see it
+        json_dir_structure.populate_json(OUTPUT_DIR, JSON_PATH)
+    
+        # write to log
+        message = f'Wrote observational data to {output_dir}'
+        log_file.write(
+            f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ' + \
+            f'({(datetime.datetime.now() - start_time).total_seconds(): .2f}s): {message}\n')
+        print(message)
         
         # write models to directories
         write_model_output(output_dir, output_date, day_deltas, log_path)

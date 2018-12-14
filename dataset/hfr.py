@@ -279,7 +279,7 @@ class HFR_Range:
             with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_WGS84) as layer:
                 layer.writerecords(layer_records)
 
-    def write_vector(self, output_filename: str, layer_name: str = 'uv', variables: list = None,
+    def write_vector(self, output_filename: str, layer_name: str = 'ssuv', variables: list = None,
                      start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
                      dop_threshold: float = 0.5):
         """
