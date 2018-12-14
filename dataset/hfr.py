@@ -20,7 +20,7 @@ import xarray
 from dataset import _utilities
 from main import DATA_DIR
 
-DATA_VARIABLES = ['u', 'v', 'DOPx', 'DOPy']
+DATA_VARIABLES = {'ssu': 'u', 'ssv': 'v', 'dopx': 'DOPx', 'dopy': 'DOPy'}
 
 FIONA_WGS84 = fiona.crs.from_epsg(4326)
 RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
@@ -117,8 +117,8 @@ class HFR_Range:
         :return: Array of data.
         """
 
-        output_data = self.netcdf_dataset[variable].sel(time).values
-
+        output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(time).values
+        
         if dop_threshold is not None:
             dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=time) <= dop_threshold) | (
                     self.netcdf_dataset['DOPy'].sel(time=time) <= dop_threshold))
@@ -144,8 +144,8 @@ class HFR_Range:
         if end_datetime is None:
             end_datetime = self.end_datetime
 
-        output_data = self.netcdf_dataset[variable].sel(time=slice(start_datetime, end_datetime)).values
-
+        output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(time=slice(start_datetime, end_datetime)).values
+        
         if dop_threshold is not None:
             dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold) | (
                     self.netcdf_dataset['DOPy'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold)).values
@@ -248,8 +248,9 @@ class HFR_Range:
 
             for col in range(len(self.netcdf_dataset['lon'])):
                 for row in range(len(self.netcdf_dataset['lat'])):
-                    data = [float(hfr_data[variable][row, col].values) for variable in variables]
-
+                    data = [float(hfr_data[variable_name][row, col].values) for variable, variable_name in
+                            variables.items()]
+                    
                     # stop if record has masked values
                     if not (numpy.isnan(data)).all():
                         lon = self.netcdf_dataset['lon'][col]
@@ -260,7 +261,7 @@ class HFR_Range:
                             'properties': {'lon': float(lon), 'lat': float(lat)}
                         }
 
-                        record['properties'].update(dict(zip(variables, data)))
+                        record['properties'].update(dict(zip(list(variables.keys()), data)))
                         
                         layer_records.append(record)
                         feature_index += 1
@@ -278,7 +279,7 @@ class HFR_Range:
             with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_WGS84) as layer:
                 layer.writerecords(layer_records)
 
-    def write_vector(self, output_filename: str, layer_name: str = 'uv', variables: list = None,
+    def write_vector(self, output_filename: str, layer_name: str = 'ssuv', variables: list = None,
                      start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
                      dop_threshold: float = 0.5):
         """
@@ -365,16 +366,16 @@ class HFR_Range:
                           variable in variables}
 
         if vector_components:
-            if 'u' in variables:
-                u_data = variable_means['u']
+            if 'ssu' in variables:
+                u_data = variable_means['ssu']
             else:
-                u_data = self.data_average('u', start_datetime, end_datetime, dop_threshold)
-
-            if 'v' in variables:
-                v_data = variable_means['v']
+                u_data = self.data_average('ssu', start_datetime, end_datetime, dop_threshold)
+    
+            if 'ssv' in variables:
+                v_data = variable_means['ssv']
             else:
-                v_data = self.data_average('v', start_datetime, end_datetime, dop_threshold)
-
+                v_data = self.data_average('ssv', start_datetime, end_datetime, dop_threshold)
+            
             # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
             variable_means['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (180 / numpy.pi)
             variable_means['mag'] = numpy.sqrt(numpy.square(u_data) + numpy.square(v_data))
