@@ -32,10 +32,17 @@ FIONA_WGS84 = fiona.crs.from_epsg(4326)
 WCOFS_PROJ4 = pyproj.Proj('+proj=ob_tran +o_proj=longlat +o_lat_p=37.4 +o_lon_p=-57.6')
 
 GRID_LOCATIONS = {'face': 'rho', 'edge1': 'u', 'edge2': 'v', 'node': 'psi'}
-COORDINATES = ['grid', 'ocean_time', 'lon_rho', 'lat_rho', 'lon_u', 'lat_u', 'lon_v', 'lat_v', 'lon_psi', 'lat_psi',
-               'angle', 'pm', 'pn']
+COORDINATE_VARIABLES = ['grid', 'ocean_time', 'lon_rho', 'lat_rho', 'lon_u', 'lat_u', 'lon_v', 'lat_v', 'lon_psi',
+                        'lat_psi',
+                        'angle', 'pm', 'pn']
 STATIC_VARIABLES = ['h', 'f', 'mask_rho', 'mask_u', 'mask_v', 'mask_psi']
-DATA_VARIABLES = {'other': ['u', 'v', 'w', 'temp', 'salt'], '2ds': ['u_sur', 'v_sur', 'temp_sur', 'salt_sur']}
+DATA_VARIABLES = {
+    'sst': {'2ds': 'temp_sur', 'avg': 'temp'},
+    'ssu': {'2ds': 'u_sur', 'avg': 'u'},
+    'ssv': {'2ds': 'v_sur', 'avg': 'v'},
+    'sss': {'2ds': 'salt_sur', 'avg': 'salt'}
+}
+
 WCOFS_MODEL_HOURS = {'n': -24, 'f': 72}
 WCOFS_MODEL_RUN_HOUR = 3
 
@@ -144,16 +151,25 @@ class WCOFS_Dataset:
                         print(f'No WCOFS dataset found at {url}')
         
         if len(self.netcdf_datasets) > 0:
-            self.sample_netcdf_dataset = next(iter(self.netcdf_datasets.values()))
             self.dataset_locks = {time_delta: threading.Lock() for time_delta in self.netcdf_datasets.keys()}
 
+            sample_dataset = next(iter(self.netcdf_datasets.values()))
+            
             with GLOBAL_LOCK:
                 if WCOFS_Dataset.variable_grids is None:
                     WCOFS_Dataset.variable_grids = {}
 
-                    for variable_name, variable in self.sample_netcdf_dataset.data_vars.items():
+                    for netcdf_variable_name, variable in sample_dataset.data_vars.items():
                         if 'location' in variable.attrs:
                             grid_name = GRID_LOCATIONS[variable.location]
+
+                            variable_name = netcdf_variable_name
+
+                            for variable, source_variables in DATA_VARIABLES.items():
+                                if source_variables[self.source] == netcdf_variable_name:
+                                    variable_name = variable
+                                    break
+                            
                             WCOFS_Dataset.variable_grids[variable_name] = grid_name
 
             with GLOBAL_LOCK:
@@ -162,8 +178,8 @@ class WCOFS_Dataset:
                     WCOFS_Dataset.masks = {}
 
                     wcofs_grid = xarray.open_dataset(self.grid_filename,
-                                                     decode_times=False) if self.grid_filename is not None else self.sample_netcdf_dataset
-
+                                                     decode_times=False) if self.grid_filename is not None else sample_dataset
+                    
                     for grid_name in GRID_LOCATIONS.values():
                         WCOFS_Dataset.masks[grid_name] = ~(wcofs_grid[f'mask_{grid_name}'].values).astype(bool)
 
@@ -258,31 +274,34 @@ class WCOFS_Dataset:
                 if dataset_index in self.dataset_locks:
                     with self.dataset_locks[dataset_index]:
                         # get surface layer; the last layer (of 40) at dimension 1
-                        if variable in ['u', 'v']:
-                            raw_u = self.netcdf_datasets[dataset_index]['u'][day_index, -1, :-1, :].values
-                            raw_v = self.netcdf_datasets[dataset_index]['v'][day_index, -1, :, :-1].values
+                        if variable in ['ssu', 'ssv']:
+                            raw_u = self.netcdf_datasets[dataset_index][DATA_VARIABLES['ssu'][self.source]][day_index,
+                                    -1, :-1, :].values
+                            raw_v = self.netcdf_datasets[dataset_index][DATA_VARIABLES['ssv'][self.source]][day_index,
+                                    -1, :, :-1].values
                             theta = WCOFS_Dataset.angle[:-1, :-1]
-
-                            if variable == 'u':
+    
+                            if variable == 'ssu':
                                 output_data = raw_u * numpy.cos(theta) - raw_v * numpy.sin(theta)
                                 extra_row = numpy.empty((1, output_data.shape[1]), dtype=output_data.dtype)
                                 extra_row[:] = numpy.nan
                                 output_data = numpy.concatenate((output_data, extra_row), axis=0)
-                            elif variable == 'v':
+                            elif variable == 'ssv':
                                 output_data = raw_u * numpy.sin(theta) + raw_v * numpy.cos(theta)
                                 extra_column = numpy.empty((output_data.shape[0], 1), dtype=output_data.dtype)
                                 extra_column[:] = numpy.nan
                                 output_data = numpy.concatenate((output_data, extra_column), axis=1)
                         else:
-                            data_variable = self.netcdf_datasets[dataset_index][variable]
+                            data_variable = self.netcdf_datasets[dataset_index][DATA_VARIABLES[variable][self.source]]
                             if len(data_variable.shape) == 3:
                                 output_data = data_variable[day_index, :, :].values
                             if len(data_variable.shape) == 4:
                                 output_data = data_variable[day_index, -1, :, :].values
             else:
                 with self.dataset_locks[time_delta]:
-                    output_data = self.netcdf_datasets[time_delta][variable][0, :, :].values
-
+                    output_data = self.netcdf_datasets[time_delta][DATA_VARIABLES[variable][self.source]][0, :,
+                                  :].values
+        
         return output_data
 
     def data_average(self, variable: str, time_deltas: list = None) -> numpy.ndarray:
@@ -338,8 +357,8 @@ class WCOFS_Dataset:
         """
 
         if variables is None:
-            variables = DATA_VARIABLES['2ds'] if self.source == '2ds' else DATA_VARIABLES['other']
-
+            variables = list(DATA_VARIABLES.keys())
+        
         study_area_polygon_geopackage, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
 
         if study_area_polygon_layer_name == '':
@@ -348,21 +367,24 @@ class WCOFS_Dataset:
         with fiona.open(study_area_polygon_geopackage, layer=study_area_polygon_layer_name) as vector_layer:
             study_area_geojson = next(iter(vector_layer))['geometry']
 
-        # if cell sizes are not specified, get maximum coordinate differences between cell points on psi grid
-        if x_size is None:
-            x_size = numpy.max(numpy.diff(self.sample_netcdf_dataset['lon_psi'][:]))
-        if y_size is None:
-            y_size = numpy.max(numpy.diff(self.sample_netcdf_dataset['lat_psi'][:]))
-
+        if x_size is None or y_size is None:
+            sample_dataset = next(iter(self.netcdf_datasets.values()))
+    
+            # if cell sizes are not specified, get maximum coordinate differences between cell points on psi grid
+            if x_size is None:
+                x_size = numpy.max(numpy.diff(sample_dataset['lon_psi'][:]))
+            if y_size is None:
+                y_size = numpy.max(numpy.diff(sample_dataset['lat_psi'][:]))
+        
         filename_suffix = f'_{filename_suffix}' if filename_suffix is not None else ''
 
+        grid_variables = list(variables)
+        
         if vector_components:
             self.variable_grids['dir'] = 'rho'
             self.variable_grids['mag'] = 'rho'
-            grid_variables = variables + ['dir', 'mag']
-        else:
-            grid_variables = variables
-
+            grid_variables += ['dir', 'mag']
+        
         output_grid_coordinates = {}
 
         for variable in grid_variables:
@@ -388,9 +410,9 @@ class WCOFS_Dataset:
             running_futures = {}
             
             for variable in variables:
-                wcofs_future = concurrency_pool.submit(self.data_average, variable, time_deltas)
-                running_futures[wcofs_future] = variable
-
+                running_future = concurrency_pool.submit(self.data_average, variable, time_deltas)
+                running_futures[running_future] = variable
+            
             for completed_future in futures.as_completed(running_futures):
                 variable = running_futures[completed_future]
                 result = completed_future.result()
@@ -401,13 +423,9 @@ class WCOFS_Dataset:
             del running_futures
         
         if vector_components:
-            if self.source == '2ds':
-                u_name = 'u_sur'
-                v_name = 'v_sur'
-            else:
-                u_name = 'u'
-                v_name = 'v'
-
+            u_name = 'ssu'
+            v_name = 'ssv'
+            
             if u_name not in variable_means:
                 u_data = self.data_average(u_name, time_deltas)
 
@@ -445,8 +463,7 @@ class WCOFS_Dataset:
 
                         if len(grid_lon) > 0:
                             running_future = concurrency_pool.submit(interpolate_grid, lon, lat, variable_data,
-                                                                     grid_lon,
-                                                                     grid_lat)
+                                                                     grid_lon, grid_lat)
                             running_futures[running_future] = variable
 
                 for completed_future in futures.as_completed(running_futures):
@@ -459,7 +476,7 @@ class WCOFS_Dataset:
                 del running_futures
 
             if vector_components:
-                if 'u' in interpolated_data and 'v' in interpolated_data:
+                if 'ssu' in interpolated_data and 'ssv' in interpolated_data:
                     interpolated_data['dir'] = {}
                     interpolated_data['mag'] = {}
 
@@ -530,120 +547,117 @@ class WCOFS_Dataset:
             with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
                 output_raster.write(masked_data, 1)
 
-
-def write_vector(self, output_filename: str, layer_name: str = None, time_deltas: list = None):
-    """
-    Write average of surface velocity vector data for all hours in the given time interval to the provided output file.
-
-    :param output_filename: Path to output file.
-    :param layer_name: Name of layer to write.
-    :param time_deltas: List of integers of hours to use in average.
-    """
+    def write_vector(self, output_filename: str, layer_name: str = None, time_deltas: list = None):
+        """
+        Write average of surface velocity vector data for all hours in the given time interval to the provided output file.
     
-    variables = DATA_VARIABLES['2ds'] if self.source == '2ds' else DATA_VARIABLES['other']
+        :param output_filename: Path to output file.
+        :param layer_name: Name of layer to write.
+        :param time_deltas: List of integers of hours to use in average.
+        """
     
-    start_time = datetime.datetime.now()
+        variables = list(DATA_VARIABLES.keys())
     
-    variable_means = {}
+        start_time = datetime.datetime.now()
     
-    # concurrently populate dictionary with averaged data within given time interval for each variable
-    with futures.ThreadPoolExecutor() as concurrency_pool:
-        running_futures = {concurrency_pool.submit(self.data_average, variable, time_deltas): variable for variable
-                           in variables}
+        variable_means = {}
+    
+        # concurrently populate dictionary with averaged data within given time interval for each variable
+        with futures.ThreadPoolExecutor() as concurrency_pool:
+            running_futures = {concurrency_pool.submit(self.data_average, variable, time_deltas): variable for variable
+                               in variables}
         
-        for completed_future in futures.as_completed(running_futures):
-            variable = running_futures[completed_future]
-            variable_means[variable] = completed_future.result()
+            for completed_future in futures.as_completed(running_futures):
+                variable = running_futures[completed_future]
+                variable_means[variable] = completed_future.result()
         
-        del running_futures
+            del running_futures
     
-    print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+        print(f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
     
-    schema = {
-        'geometry': 'Point', 'properties': {
-            'row': 'int', 'col': 'int', 'rho_lon': 'float', 'rho_lat': 'float'
+        schema = {
+            'geometry': 'Point', 'properties': {
+                'row': 'int', 'col': 'int', 'rho_lon': 'float', 'rho_lat': 'float'
+            }
         }
-    }
     
-    for variable in variables:
-        schema['properties'][variable] = 'float'
+        for variable in variables:
+            schema['properties'][variable] = 'float'
     
-    start_time = datetime.datetime.now()
+        start_time = datetime.datetime.now()
     
-    print('Creating records...')
+        print('Creating records...')
     
-    # create features
-    layer_records = []
+        # create features
+        layer_records = []
     
-    grid_height, grid_width = WCOFS_Dataset.data_coordinates['psi']['lon'].shape
+        grid_height, grid_width = WCOFS_Dataset.data_coordinates['psi']['lon'].shape
     
-    with futures.ThreadPoolExecutor() as concurrency_pool:
-        feature_index = 1
-        running_futures = []
+        with futures.ThreadPoolExecutor() as concurrency_pool:
+            feature_index = 1
+            running_futures = []
         
-        for col in range(grid_width):
-            for row in range(grid_height):
-                if WCOFS_Dataset.masks['psi'][row, col] == 0:
-                    # check if current record is unmasked
-                    running_futures.append(
-                        concurrency_pool.submit(self._create_fiona_record, variable_means, row, col,
-                                                feature_index))
-                    feature_index += 1
+            for col in range(grid_width):
+                for row in range(grid_height):
+                    if WCOFS_Dataset.masks['psi'][row, col] == 0:
+                        # check if current record is unmasked
+                        running_futures.append(
+                            concurrency_pool.submit(self._create_fiona_record, variable_means, row, col,
+                                                    feature_index))
+                        feature_index += 1
         
-        for completed_future in futures.as_completed(running_futures):
-            result = completed_future.result()
+            for completed_future in futures.as_completed(running_futures):
+                result = completed_future.result()
             
-            if result is not None:
-                layer_records.append(result)
+                if result is not None:
+                    layer_records.append(result)
     
-    print(f'creating records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+        print(f'creating records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
     
-    start_time = datetime.datetime.now()
+        start_time = datetime.datetime.now()
     
-    print(f'Writing {output_filename}:{layer_name}')
+        print(f'Writing {output_filename}:{layer_name}')
     
-    # create layer
-    with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_WGS84,
-                    layer=layer_name) as output_vector_file:
-        output_vector_file.writerecords(layer_records)
+        # create layer
+        with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_WGS84,
+                        layer=layer_name) as output_vector_file:
+            output_vector_file.writerecords(layer_records)
     
-    print(f'writing records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+        print(f'writing records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
-
-def _create_fiona_record(self, variable_means, row, col, feature_index):
-    # get coordinates of cell center
-    rho_lon = WCOFS_Dataset.data_coordinates['rho']['lon'][row, col]
-    rho_lat = WCOFS_Dataset.data_coordinates['rho']['lat'][row, col]
+    def _create_fiona_record(self, variable_means, row, col, feature_index):
+        # get coordinates of cell center
+        rho_lon = WCOFS_Dataset.data_coordinates['rho']['lon'][row, col]
+        rho_lat = WCOFS_Dataset.data_coordinates['rho']['lat'][row, col]
     
-    record = {
-        'geometry': {
-            'id': feature_index, 'type': 'Point', 'coordinates': (float(rho_lon), float(rho_lat))
-        }, 'properties': {
-            'row': row, 'col': col, 'rho_lon': float(rho_lon), 'rho_lat': float(rho_lat)
+        record = {
+            'geometry': {
+                'id': feature_index, 'type': 'Point', 'coordinates': (float(rho_lon), float(rho_lat))
+            }, 'properties': {
+                'row': row, 'col': col, 'rho_lon': float(rho_lon), 'rho_lat': float(rho_lat)
+            }
         }
-    }
     
-    for variable in variable_means.keys():
-        record['properties'][variable] = float(variable_means[variable][row, col])
+        for variable in variable_means.keys():
+            record['properties'][variable] = float(variable_means[variable][row, col])
     
-    return record
+        return record
 
-
-def __repr__(self):
-    used_params = [self.model_datetime.__repr__()]
-    optional_params = [self.source, self.time_deltas, self.x_size, self.y_size, self.grid_filename, self.source_url,
-                       self.wcofs_string]
+    def __repr__(self):
+        used_params = [self.model_datetime.__repr__()]
+        optional_params = [self.source, self.time_deltas, self.x_size, self.y_size, self.grid_filename, self.source_url,
+                           self.wcofs_string]
     
-    for param in optional_params:
-        if param is not None:
-            if 'str' in str(type(param)):
-                param = f'"{param}"'
-            else:
-                param = str(param)
+        for param in optional_params:
+            if param is not None:
+                if 'str' in str(type(param)):
+                    param = f'"{param}"'
+                else:
+                    param = str(param)
             
-            used_params.append(param)
+                used_params.append(param)
     
-    return f'{self.__class__.__name__}({str(", ".join(used_params))})'
+        return f'{self.__class__.__name__}({str(", ".join(used_params))})'
 
 
 class WCOFS_Range:
@@ -758,13 +772,13 @@ class WCOFS_Range:
 
                 # get dataset for the current hours (usually all hours)
                 if time_deltas is None or len(time_deltas) > 0:
-                    future = concurrency_pool.submit(WCOFS_Dataset, model_date=model_date, source=self.source,
-                                                     time_deltas=self.time_deltas, x_size=self.x_size,
-                                                     y_size=self.y_size, grid_filename=self.grid_filename,
-                                                     source_url=self.source_url, wcofs_string=self.wcofs_string)
-
-                    running_futures[future] = model_date
-
+                    running_future = concurrency_pool.submit(WCOFS_Dataset, model_date=model_date, source=self.source,
+                                                             time_deltas=self.time_deltas, x_size=self.x_size,
+                                                             y_size=self.y_size, grid_filename=self.grid_filename,
+                                                             source_url=self.source_url, wcofs_string=self.wcofs_string)
+    
+                    running_futures[running_future] = model_date
+            
             for completed_future in futures.as_completed(running_futures):
                 model_date = running_futures[completed_future]
                 
@@ -775,8 +789,6 @@ class WCOFS_Range:
             del running_futures
         
         if len(self.datasets) > 0:
-            self.sample_wcofs_dataset = next(iter(self.datasets.values()))
-
             self.grid_transforms = WCOFS_Dataset.grid_transforms
             self.grid_shapes = WCOFS_Dataset.grid_shapes
             self.grid_bounds = WCOFS_Dataset.grid_bounds
@@ -949,8 +961,8 @@ class WCOFS_Range:
         """
 
         if variables is None:
-            variables = DATA_VARIABLES['2ds'] if self.source == '2ds' else DATA_VARIABLES['other']
-
+            variables = list(DATA_VARIABLES.keys())
+        
         study_area_polygon_geopackage, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
 
         if study_area_polygon_layer_name == '':
@@ -959,12 +971,15 @@ class WCOFS_Range:
         with fiona.open(study_area_polygon_geopackage, layer=study_area_polygon_layer_name) as vector_layer:
             study_area_geojson = next(iter(vector_layer))['geometry']
 
-        # if cell sizes are not specified, get maximum coordinate differences between cell points on psi grid
-        if x_size is None:
-            x_size = numpy.max(numpy.diff(self.sample_wcofs_dataset.sample_netcdf_dataset['lon_psi'][:]))
-        if y_size is None:
-            y_size = numpy.max(numpy.diff(self.sample_wcofs_dataset.sample_netcdf_dataset['lat_psi'][:]))
-
+        if x_size is None or y_size is None:
+            sample_dataset = next(iter(next(iter(self.datasets.values())).datasets.values()))
+    
+            # if cell sizes are not specified, get maximum coordinate differences between cell points on psi grid
+            if x_size is None:
+                x_size = numpy.max(numpy.diff(sample_dataset['lon_psi'][:]))
+            if y_size is None:
+                y_size = numpy.max(numpy.diff(sample_dataset['lat_psi'][:]))
+        
         filename_suffix = f'_{filename_suffix}' if filename_suffix is not None else ''
 
         if vector_components:
@@ -1007,16 +1022,12 @@ class WCOFS_Range:
             del running_futures
         
         if vector_components:
-            if self.source == '2ds':
-                u_name = 'u_sur'
-                v_name = 'v_sur'
-            else:
-                u_name = 'u'
-                v_name = 'v'
-
+            u_name = 'ssu'
+            v_name = 'ssv'
+            
             if u_name not in variable_data_stack_averages:
                 variable_data_stack_averages[u_name] = self.data_averages(u_name, start_datetime, end_datetime)
-
+    
             if v_name not in variable_data_stack_averages:
                 variable_data_stack_averages[v_name] = self.data_averages(v_name, start_datetime, end_datetime)
 
@@ -1145,8 +1156,8 @@ class WCOFS_Range:
         """
 
         if variables is None:
-            variables = DATA_VARIABLES['2ds'] if self.source == '2ds' else DATA_VARIABLES['other']
-
+            variables = list(DATA_VARIABLES.keys())
+        
         start_time = datetime.datetime.now()
 
         variable_data_stack_averages = {}
@@ -1227,8 +1238,8 @@ class WCOFS_Range:
         data_arrays = {}
 
         if variables is None:
-            variables = DATA_VARIABLES['2ds'] if self.source == '2ds' else DATA_VARIABLES['other']
-
+            variables = list(DATA_VARIABLES.keys())
+        
         if mean:
             for variable in variables:
                 grid = self.variable_grids[variable]
@@ -1423,6 +1434,6 @@ if __name__ == '__main__':
     end_datetime = start_datetime + datetime.timedelta(days=1)
 
     wcofs_range = WCOFS_Range(start_datetime, end_datetime, source='avg')
-    wcofs_range.write_rasters(output_dir, variables=['salt', 'temp', 'u', 'v', 'zeta'])
+    wcofs_range.write_rasters(output_dir, variables=['sss', 'sst', 'ssu', 'ssv', 'zeta'])
     
     print('done')

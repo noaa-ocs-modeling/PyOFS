@@ -47,13 +47,11 @@ DATASET_STRUCTURE = {
 }
 
 DATA_VARIABLES = {
-    'salt': {'2ds': {'prog': 'sss'}, '3dz': {'salt': 'salinity'}},
-    'temp': {'2ds': {'prog': 'sst'}, '3dz': {'temp': 'temperature'}},
-    'u': {'2ds': {'prog': 'u_velocity'}, '3dz': {'uvel': 'u'}},
-    'v': {'2ds': {'prog': 'v_velocity'}, '3dz': {'vvel': 'v'}},
-    'ssh': {'2ds': {'diag': 'ssh'}},
-    'ice_coverage': {'2ds': {'diag': 'ice_coverage'}},
-    'ice_thickness': {'2ds': {'diag': 'ice_thickness'}}
+    'sst': {'2ds': {'prog': 'sst'}, '3dz': {'temp': 'temperature'}},
+    'sss': {'2ds': {'prog': 'sss'}, '3dz': {'salt': 'salinity'}},
+    'ssu': {'2ds': {'prog': 'u_velocity'}, '3dz': {'uvel': 'u'}},
+    'ssv': {'2ds': {'prog': 'v_velocity'}, '3dz': {'vvel': 'v'}},
+    'ssh': {'2ds': {'diag': 'ssh'}}
 }
 
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
@@ -171,28 +169,30 @@ class RTOFS_Dataset:
                     dataset_name, variable_name = next(iter(datasets.items()))
 
                     with self.dataset_locks[direction][dataset_name]:
-                        variable = self.netcdf_datasets[direction][dataset_name][variable_name]
-
+                        data_variable = self.netcdf_datasets[direction][dataset_name][
+                            DATA_VARIABLES[variable][self.source][dataset_name]]
+                        
                         # TODO study areas that cross over longitude +74.16 may have problems here
                         if crop:
-                            selection = variable.sel(time=time,
-                                                     lon=slice(self.study_area_west + 360, self.study_area_east + 360),
-                                                     lat=slice(self.study_area_south, self.study_area_north))
+                            selection = data_variable.sel(time=time,
+                                                          lon=slice(self.study_area_west + 360,
+                                                                    self.study_area_east + 360),
+                                                          lat=slice(self.study_area_south, self.study_area_north))
                             selection = numpy.squeeze(selection).values
                         else:
-                            western_selection = variable.sel(time=time,
-                                                             lon=slice(180, numpy.max(self.raw_lon)),
-                                                             lat=slice(numpy.min(self.lat), numpy.max(self.lat)))
-                            eastern_selection = variable.sel(time=time,
-                                                             lon=slice(numpy.min(self.raw_lon), 180),
-                                                             lat=slice(numpy.min(self.lat), numpy.max(self.lat)))
+                            western_selection = data_variable.sel(time=time,
+                                                                  lon=slice(180, numpy.max(self.raw_lon)),
+                                                                  lat=slice(numpy.min(self.lat), numpy.max(self.lat)))
+                            eastern_selection = data_variable.sel(time=time,
+                                                                  lon=slice(numpy.min(self.raw_lon), 180),
+                                                                  lat=slice(numpy.min(self.lat), numpy.max(self.lat)))
                             selection = numpy.concatenate((numpy.squeeze(western_selection),
                                                            numpy.squeeze(eastern_selection)), axis=1)
-
+    
                         selection = numpy.flipud(selection)
                         return selection
                 else:
-                    raise ValueError(f'Variable must be one of {list(DATA_VARIABLES.keys())}.')
+                    raise ValueError(f'Variable must be not one of {list(DATA_VARIABLES.keys())}.')
             else:
                 print(f'{direction} does not exist in RTOFS dataset for {self.model_datetime.strftime("%Y%m%d")}.')
         else:
@@ -235,19 +235,19 @@ class RTOFS_Dataset:
             variable_means[variable] = self.data(variable, time, crop)
         
         if vector_components:
-            u_name = 'u'
-            v_name = 'v'
-
+            u_name = 'ssu'
+            v_name = 'ssv'
+            
             if u_name not in variable_means:
                 u_data = self.data(u_name, time, crop)
             else:
                 u_data = variable_means[u_name]
-
+    
             if v_name not in variable_means:
                 v_data = self.data(v_name, time, crop)
             else:
                 v_data = variable_means[v_name]
-
+    
             if u_data is not None and v_data is not None:
                 variable_means['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (180 / numpy.pi)
                 variable_means['mag'] = numpy.sqrt(numpy.square(u_data) + numpy.square(v_data))
