@@ -137,7 +137,7 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                     if not any(variable in filename for filename in existing_files):
                         if rtofs_dataset is None:
                             rtofs_dataset = create_rtofs_dataset()
-        
+
                         rtofs_dataset.write_rasters(daily_average_dir, variables=[variable], time=day_of_forecast,
                                                     drivers=['GTiff'])
                     else:
@@ -180,7 +180,7 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                     if not any(variable in filename for filename in existing_files):
                         if wcofs_dataset is None:
                             wcofs_dataset = create_wcofs_dataset()
-        
+
                         wcofs_dataset.write_rasters(daily_average_dir, [variable],
                                                     filename_suffix=wcofs_filename_suffix,
                                                     time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
@@ -229,7 +229,7 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                     if not any(variable in filename for filename in existing_files):
                         if wcofs_4km_dataset is None:
                             wcofs_4km_dataset = create_wcofs_4km_dataset()
-        
+
                         wcofs_4km_dataset.write_rasters(daily_average_dir, [variable],
                                                         filename_suffix=wcofs_filename_suffix,
                                                         time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
@@ -262,37 +262,37 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                                        grid_filename=wcofs.WCOFS_2KM_GRID_FILENAME,
                                        source_url=os.path.join(DATA_DIR, 'input/wcofs/avg'),
                                        wcofs_string='wcofs2')
-    
+
         wcofs_2km_dataset = None
-    
+
         for day_delta, daily_average_dir in output_dirs.items():
             if day_delta in MODEL_DAY_DELTAS['WCOFS']:
                 wcofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
                 time_delta_string = f'{wcofs_direction[0]}' + \
                                     f'{abs(day_delta) + 1 if wcofs_direction == "forecast" else abs(day_delta):03}'
                 wcofs_filename_suffix = f'{time_delta_string}_noDA_2km'
-            
+
                 existing_files = os.listdir(daily_average_dir)
                 existing_files = [filename for filename in existing_files if
                                   'wcofs' in filename and 'noDA' in filename and time_delta_string in filename and '2km' in filename]
-            
+
                 for variable in ['sst', 'sss', 'ssh']:
                     if not any(variable in filename for filename in existing_files):
                         if wcofs_2km_dataset is None:
                             wcofs_2km_dataset = create_wcofs_2km_dataset()
-                    
+
                         wcofs_2km_dataset.write_rasters(daily_average_dir, [variable],
                                                         filename_suffix=wcofs_filename_suffix,
                                                         time_deltas=[day_delta], x_size=0.02, y_size=0.02,
                                                         fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'])
                     else:
                         print(f'Skipping WCOFS 2km noDA day {day_delta} {variable}')
-            
+
                 if not any('ssu' in filename for filename in existing_files) or not any(
                         'ssv' in filename for filename in existing_files):
                     if wcofs_2km_dataset is None:
                         wcofs_2km_dataset = create_wcofs_2km_dataset()
-                
+
                     wcofs_2km_dataset.write_rasters(daily_average_dir, ['ssu', 'ssv'],
                                                     filename_suffix=wcofs_filename_suffix,
                                                     time_deltas=[day_delta], vector_components=True, x_size=0.02,
