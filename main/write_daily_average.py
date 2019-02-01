@@ -160,7 +160,7 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
     
     # write WCOFS rasters
     try:
-        wcofs_dataset = None
+        wcofs_da = None
         
         for day_delta, daily_average_dir in output_dirs.items():
             if day_delta in MODEL_DAY_DELTAS['WCOFS']:
@@ -175,35 +175,35 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
 
                 for variable in ['sst', 'sss', 'ssh']:
                     if not any(variable in filename for filename in existing_files):
-                        if wcofs_dataset is None:
-                            wcofs_dataset = wcofs.WCOFS_Dataset(model_run_date, source='avg')
-                        
-                        wcofs_dataset.write_rasters(daily_average_dir, [variable],
-                                                    filename_suffix=wcofs_filename_suffix,
-                                                    time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
-                                                    drivers=['GTiff'])
+                        if wcofs_da is None:
+                            wcofs_da = wcofs.WCOFS_Dataset(model_run_date, source='avg')
+    
+                        wcofs_da.write_rasters(daily_average_dir, [variable],
+                                               filename_suffix=wcofs_filename_suffix,
+                                               time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
+                                               drivers=['GTiff'])
                     else:
                         print(f'Skipping WCOFS day {day_delta} {variable}')
                 
                 if not any('ssu' in filename for filename in existing_files) or not any(
                         'ssv' in filename for filename in existing_files):
-                    if wcofs_dataset is None:
-                        wcofs_dataset = wcofs.WCOFS_Dataset(model_run_date, source='avg')
-                    
-                    wcofs_dataset.write_rasters(daily_average_dir, ['ssu', 'ssv'],
-                                                filename_suffix=wcofs_filename_suffix,
-                                                time_deltas=[day_delta], vector_components=True,
-                                                fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
+                    if wcofs_da is None:
+                        wcofs_da = wcofs.WCOFS_Dataset(model_run_date, source='avg')
+    
+                    wcofs_da.write_rasters(daily_average_dir, ['ssu', 'ssv'],
+                                           filename_suffix=wcofs_filename_suffix,
+                                           time_deltas=[day_delta], vector_components=True,
+                                           fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
                 else:
                     print(f'Skipping WCOFS day {day_delta} uv')
-        del wcofs_dataset
+        del wcofs_da
     except _utilities.NoDataError as error:
         print(error)
         with open(log_path, 'a') as log_file:
             log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) WCOFS: {error}\n')
     
     try:
-        wcofs_noda_dataset = None
+        wcofs_noda = None
         
         for day_delta, daily_average_dir in output_dirs.items():
             if day_delta in MODEL_DAY_DELTAS['WCOFS']:
@@ -218,35 +218,35 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
 
                 for variable in ['sst', 'sss', 'ssh']:
                     if not any(variable in filename for filename in existing_files):
-                        if wcofs_noda_dataset is None:
-                            wcofs_noda_dataset = wcofs.WCOFS_Dataset(model_run_date, source='avg',
+                        if wcofs_noda is None:
+                            wcofs_noda = wcofs.WCOFS_Dataset(model_run_date, source='avg',
                                                                      grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME,
                                                                      source_url=os.path.join(DATA_DIR,
                                                                                              'input/wcofs/avg'),
                                                                      wcofs_string='wcofs4')
     
-                        wcofs_noda_dataset.write_rasters(daily_average_dir, [variable],
-                                                         filename_suffix=wcofs_filename_suffix,
-                                                         time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
-                                                         drivers=['GTiff'])
+                        wcofs_noda.write_rasters(daily_average_dir, [variable],
+                                                 filename_suffix=wcofs_filename_suffix,
+                                                 time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
+                                                 drivers=['GTiff'])
                     else:
                         print(f'Skipping WCOFS 4km noDA day {day_delta} {variable}')
                 
                 if not any('ssu' in filename for filename in existing_files) or not any(
                         'ssv' in filename for filename in existing_files):
-                    if wcofs_noda_dataset is None:
-                        wcofs_noda_dataset = wcofs.WCOFS_Dataset(model_run_date, source='avg',
+                    if wcofs_noda is None:
+                        wcofs_noda = wcofs.WCOFS_Dataset(model_run_date, source='avg',
                                                                  grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME,
                                                                  source_url=os.path.join(DATA_DIR, 'input/wcofs/avg'),
                                                                  wcofs_string='wcofs4')
     
-                    wcofs_noda_dataset.write_rasters(daily_average_dir, ['ssu', 'ssv'],
-                                                     filename_suffix=wcofs_filename_suffix,
-                                                     time_deltas=[day_delta], vector_components=True,
-                                                     fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
+                    wcofs_noda.write_rasters(daily_average_dir, ['ssu', 'ssv'],
+                                             filename_suffix=wcofs_filename_suffix,
+                                             time_deltas=[day_delta], vector_components=True,
+                                             fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
                 else:
                     print(f'Skipping WCOFS 4km noDA day {day_delta} uv')
-        del wcofs_noda_dataset
+        del wcofs_noda
     except _utilities.NoDataError as error:
         print(error)
         with open(log_path, 'a') as log_file:
@@ -255,7 +255,7 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
     # wcofs.reset_dataset_grid()
     #
     # try:
-    #     wcofs_2km_dataset = None
+    #     wcofs_noda_2km = None
     #
     #     for day_delta, daily_average_dir in output_dirs.items():
     #         if day_delta in MODEL_DAY_DELTAS['WCOFS']:
@@ -270,14 +270,14 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
     #
     #             for variable in ['sst', 'sss', 'ssh']:
     #                 if not any(variable in filename for filename in existing_files):
-    #                     if wcofs_2km_dataset is None:
-    #                         wcofs_2km_dataset = wcofs.WCOFS_Dataset(model_run_date, source='avg',
+    #                     if wcofs_noda_2km is None:
+    #                         wcofs_noda_2km = wcofs.WCOFS_Dataset(model_run_date, source='avg',
     #                                                                 grid_filename=wcofs.WCOFS_2KM_GRID_FILENAME,
     #                                                                 source_url=os.path.join(DATA_DIR,
     #                                                                                         'input/wcofs/avg'),
     #                                                                 wcofs_string='wcofs2')
     #
-    #                     wcofs_2km_dataset.write_rasters(daily_average_dir, [variable],
+    #                     wcofs_noda_2km.write_rasters(daily_average_dir, [variable],
     #                                                     filename_suffix=wcofs_filename_suffix,
     #                                                     time_deltas=[day_delta], x_size=0.02, y_size=0.02,
     #                                                     fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'])
@@ -286,19 +286,19 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
     #
     #             if not any('ssu' in filename for filename in existing_files) or not any(
     #                     'ssv' in filename for filename in existing_files):
-    #                 if wcofs_2km_dataset is None:
-    #                     wcofs_2km_dataset = wcofs.WCOFS_Dataset(model_run_date, source='avg',
+    #                 if wcofs_noda_2km is None:
+    #                     wcofs_noda_2km = wcofs.WCOFS_Dataset(model_run_date, source='avg',
     #                                                             grid_filename=wcofs.WCOFS_2KM_GRID_FILENAME,
     #                                                             source_url=os.path.join(DATA_DIR, 'input/wcofs/avg'),
     #                                                             wcofs_string='wcofs2')
     #
-    #                 wcofs_2km_dataset.write_rasters(daily_average_dir, ['ssu', 'ssv'],
+    #                 wcofs_noda_2km.write_rasters(daily_average_dir, ['ssu', 'ssv'],
     #                                                 filename_suffix=wcofs_filename_suffix,
     #                                                 time_deltas=[day_delta], vector_components=True, x_size=0.02,
     #                                                 y_size=0.02, fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
     #             else:
     #                 print(f'Skipping WCOFS 2km noDA day {day_delta} uv')
-    #     del wcofs_2km_dataset
+    #     del wcofs_noda_2km
     # except _utilities.NoDataError as error:
     #     print(error)
     #     with open(log_path, 'a') as log_file:
