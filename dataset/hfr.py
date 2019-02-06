@@ -412,10 +412,10 @@ class HFR_Range:
                                                                     numpy.max(numpy.diff(output_lon)),
                                                                     numpy.max(numpy.diff(output_lon)))
                     })
-                elif driver == 'GTiff':
-                    file_extension = 'tiff'
                 elif driver == 'GPKG':
                     file_extension = 'gpkg'
+                else:
+                    file_extension = 'tiff'
 
                 output_filename = os.path.join(output_dir,
                                                f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')

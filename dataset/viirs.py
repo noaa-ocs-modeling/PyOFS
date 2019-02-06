@@ -223,7 +223,7 @@ class VIIRS_Dataset:
             VIIRS_Dataset.study_area_coordinates = {
                 'lon': self.netcdf_dataset['lon'], 'lat': self.netcdf_dataset['lat']
             }
-
+    
     def bounds(self) -> tuple:
         """
         Get coordinate bounds of dataset.
@@ -335,10 +335,10 @@ class VIIRS_Dataset:
                     if driver == 'AAIGrid':
                         file_extension = 'asc'
                         gdal_args.update({'FORCE_CELLSIZE': 'YES'})
-                    elif driver == 'GTiff':
-                        file_extension = 'tiff'
                     elif driver == 'GPKG':
                         file_extension = 'gpkg'
+                    else:
+                        file_extension = 'tiff'
 
                     output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
 
@@ -602,13 +602,6 @@ class VIIRS_Range:
                             'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item(),
                             'FORCE_CELLSIZE': 'YES'
                         })
-                    elif driver == 'GTiff':
-                        file_extension = 'tiff'
-                        raster_data = output_data.astype(rasterio.float32)
-                        gdal_args.update({
-                            'dtype': raster_data.dtype,
-                            'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
-                        })
                     elif driver == 'GPKG':
                         file_extension = 'gpkg'
                         gpkg_dtype = rasterio.uint8
@@ -620,6 +613,13 @@ class VIIRS_Range:
                         gdal_args.update({
                             'dtype': gpkg_dtype, 'nodata': gpkg_fill_value
                         })  # , 'TILE_FORMAT': 'PNG8'})
+                    elif driver == 'GTiff':
+                        file_extension = 'tiff'
+                        raster_data = output_data.astype(rasterio.float32)
+                        gdal_args.update({
+                            'dtype': raster_data.dtype,
+                            'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
+                        })
                     else:
                         raster_data = numpy.empty_like(output_data)
 
@@ -777,7 +777,7 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
                 # get dataset of new datetime
                 dataset = VIIRS_Dataset(cycle_datetime, study_area_polygon_filename, data_source, subskin,
                                         acspo_version)
-
+                
                 # check if dataset falls within polygon extent
                 if dataset.data_extent.is_valid:
                     if study_area_polygon.intersects(dataset.data_extent):
