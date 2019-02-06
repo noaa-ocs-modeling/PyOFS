@@ -11,6 +11,7 @@ import os
 import sys
 import typing
 
+import logbook
 import pytz
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
@@ -36,15 +37,16 @@ LEAFLET_NODATA_VALUE = -9999
 MODEL_DAY_DELTAS = {'WCOFS': range(-1, 2 + 1), 'RTOFS': range(-3, 8 + 1)}
 
 
-def write_observational_data(output_dir: str, observation_date: typing.Union[datetime.date, datetime.datetime],
-                             log_path: str):
+def write_observational_data(output_dir: str, observation_date: typing.Union[datetime.date, datetime.datetime]):
     """
     Writes daily average of observational data on given date.
     
     :param output_dir: Output directory to write files.
     :param observation_date: Date of observation.
-    :param log_path: Path to log file.
     """
+
+    hfr_log = logbook.Logger('HFR')
+    viirs_log = logbook.Logger('VIIRS')
     
     if 'datetime.date' in str(type(observation_date)):
         start_of_day = datetime.datetime.combine(observation_date, datetime.time.min)
@@ -66,9 +68,7 @@ def write_observational_data(output_dir: str, observation_date: typing.Union[dat
                                 fill_value=LEAFLET_NODATA_VALUE)
         del hfr_range
     except _utilities.NoDataError as error:
-        print(error)
-        with open(log_path, 'a') as log_file:
-            log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) HFR: {error}\n')
+        hfr_log.warn(error)
     
     # write VIIRS rasters
     try:
@@ -88,20 +88,20 @@ def write_observational_data(output_dir: str, observation_date: typing.Union[dat
                                  variables=['sst'])
         del viirs_range
     except _utilities.NoDataError as error:
-        print(error)
-        with open(log_path, 'a') as log_file:
-            log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) VIIRS: {error}\n')
+        viirs_log.warn(error)
 
 
-def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_deltas: list, log_path: str):
+def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_deltas: list):
     """
     Writes daily average of model output on given date.
 
     :param output_dir: Output directory to write files.
     :param model_run_date: Date of model run.
     :param day_deltas: Time deltas for which to write model output.
-    :param log_path: Path to log file.
     """
+
+    wcofs_log = logbook.Logger('WCOFS')
+    rtofs_log = logbook.Logger('RTOFS')
     
     if 'datetime.date' in str(type(model_run_date)):
         model_run_date = datetime.datetime.combine(model_run_date, datetime.datetime.min.time())
@@ -152,11 +152,10 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                                                 vector_components=True, drivers=['AAIGrid'])
                 else:
                     print(f'Skipping RTOFS day {day_delta} uv')
-        del rtofs_dataset
     except _utilities.NoDataError as error:
-        print(error)
-        with open(log_path, 'a') as log_file:
-            log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) RTOFS: {error}\n')
+        rtofs_log.warn(error)
+    finally:
+        del rtofs_dataset
     
     # write WCOFS rasters
     try:
@@ -177,7 +176,7 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                     if not any(variable in filename for filename in existing_files):
                         if wcofs_da is None:
                             wcofs_da = wcofs.WCOFS_Dataset(model_run_date, source='avg')
-    
+
                         wcofs_da.write_rasters(daily_average_dir, [variable],
                                                filename_suffix=wcofs_filename_suffix,
                                                time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
@@ -189,18 +188,17 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                         'ssv' in filename for filename in existing_files):
                     if wcofs_da is None:
                         wcofs_da = wcofs.WCOFS_Dataset(model_run_date, source='avg')
-    
+
                     wcofs_da.write_rasters(daily_average_dir, ['ssu', 'ssv'],
                                            filename_suffix=wcofs_filename_suffix,
                                            time_deltas=[day_delta], vector_components=True,
                                            fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
                 else:
                     print(f'Skipping WCOFS day {day_delta} uv')
-        del wcofs_da
     except _utilities.NoDataError as error:
-        print(error)
-        with open(log_path, 'a') as log_file:
-            log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) WCOFS: {error}\n')
+        wcofs_log.warn(error)
+    finally:
+        del wcofs_da
     
     try:
         wcofs_noda = None
@@ -220,11 +218,11 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                     if not any(variable in filename for filename in existing_files):
                         if wcofs_noda is None:
                             wcofs_noda = wcofs.WCOFS_Dataset(model_run_date, source='avg',
-                                                                     grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME,
-                                                                     source_url=os.path.join(DATA_DIR,
-                                                                                             'input/wcofs/avg'),
-                                                                     wcofs_string='wcofs4')
-    
+                                                             grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME,
+                                                             source_url=os.path.join(DATA_DIR,
+                                                                                     'input/wcofs/avg'),
+                                                             wcofs_string='wcofs4')
+                        
                         wcofs_noda.write_rasters(daily_average_dir, [variable],
                                                  filename_suffix=wcofs_filename_suffix,
                                                  time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
@@ -236,10 +234,10 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                         'ssv' in filename for filename in existing_files):
                     if wcofs_noda is None:
                         wcofs_noda = wcofs.WCOFS_Dataset(model_run_date, source='avg',
-                                                                 grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME,
-                                                                 source_url=os.path.join(DATA_DIR, 'input/wcofs/avg'),
-                                                                 wcofs_string='wcofs4')
-    
+                                                         grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME,
+                                                         source_url=os.path.join(DATA_DIR, 'input/wcofs/avg'),
+                                                         wcofs_string='wcofs4')
+                    
                     wcofs_noda.write_rasters(daily_average_dir, ['ssu', 'ssv'],
                                              filename_suffix=wcofs_filename_suffix,
                                              time_deltas=[day_delta], vector_components=True,
@@ -248,10 +246,10 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
                     print(f'Skipping WCOFS 4km noDA day {day_delta} uv')
         del wcofs_noda
     except _utilities.NoDataError as error:
-        print(error)
-        with open(log_path, 'a') as log_file:
-            log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) WCOFS: {error}\n')
-
+        wcofs_log.warn(error)
+    finally:
+        del wcofs_noda
+    
     # wcofs.reset_dataset_grid()
     #
     # try:
@@ -300,54 +298,48 @@ def write_model_output(output_dir: str, model_run_date: datetime.datetime, day_d
     #                 print(f'Skipping WCOFS 2km noDA day {day_delta} uv')
     #     del wcofs_noda_2km
     # except _utilities.NoDataError as error:
-    #     print(error)
-    #     with open(log_path, 'a') as log_file:
-    #         log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} (0.00s) WCOFS: {error}\n')
+    #     wcofs_log.warn(error)
+    # finally:
+    #     del wcofs_noda_2km
 
 
-def write_daily_average(output_dir: str, output_date: datetime.datetime, day_deltas: list, log_path: str):
+def write_daily_average(output_dir: str, output_date: datetime.datetime, day_deltas: list):
     """
     Writes daily average of observational data and model output on given date.
     
     :param output_dir: Output directory to write files.
     :param output_date: Date of data run.
     :param day_deltas: Time deltas for which to write model output.
-    :param log_path: Path to log file.
+    :param log_path: Log handler.
     """
     
     # get time for log
     start_time = datetime.datetime.now()
-    
-    with open(log_path, 'a') as log_file:
-        # write observational data to directory for specified date
-        observation_dir = os.path.join(output_dir, output_date.strftime("%Y%m%d"))
-        if not os.path.isdir(observation_dir):
-            os.mkdir(observation_dir)
 
-        write_observational_data(observation_dir, output_date, log_path)
+    log = logbook.Logger()
 
-        # populate JSON file with new directory structure so that JavaScript application can see it
-        json_dir_structure.populate_json(OUTPUT_DIR, JSON_PATH)
+    # write observational data to directory for specified date
+    observation_dir = os.path.join(output_dir, output_date.strftime("%Y%m%d"))
+    if not os.path.isdir(observation_dir):
+        os.mkdir(observation_dir)
 
-        # write to log
-        message = f'Wrote observational data to {output_dir}'
-        log_file.write(
-            f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ' + \
-            f'({(datetime.datetime.now() - start_time).total_seconds(): .2f}s): {message}\n')
-        print(message)
-        
-        # write models to directories
-        write_model_output(output_dir, output_date, day_deltas, log_path)
-        
-        # populate JSON file with new directory structure so that JavaScript application can see it
-        json_dir_structure.populate_json(OUTPUT_DIR, JSON_PATH)
-        
-        # write to log
-        message = f'Wrote model output to {output_dir}.'
-        log_file.write(
-            f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ' + \
-            f'({(datetime.datetime.now() - start_time).total_seconds(): .2f}s): {message}\n')
-        print(message)
+    write_observational_data(observation_dir, output_date)
+
+    # populate JSON file with new directory structure so that JavaScript application can see it
+    json_dir_structure.populate_json(OUTPUT_DIR, JSON_PATH)
+
+    # write to log
+    log.notice(
+        f'Wrote observational data ({(datetime.datetime.now() - start_time).total_seconds():.2f}s) to {output_dir}')
+
+    # write models to directories
+    write_model_output(output_dir, output_date, day_deltas)
+
+    # populate JSON file with new directory structure so that JavaScript application can see it
+    json_dir_structure.populate_json(OUTPUT_DIR, JSON_PATH)
+
+    # write to log
+    log.notice(f'Wrote model output ({(datetime.datetime.now() - start_time).total_seconds():.2f}s) to {output_dir}')
 
 
 if __name__ == '__main__':
@@ -360,30 +352,25 @@ if __name__ == '__main__':
     
     # define log filename
     log_path = os.path.join(LOG_DIR, f'{start_time.strftime("%Y%m%d")}_daily_average.log')
+
+    logbook.FileHandler(log_path).push_application()
+    log = logbook.Logger()
     
     # write initial message
-    message = f'Starting file conversion...'
-    with open(log_path, 'a') as log_file:
-        log_file.write(
-            f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")} ' + \
-            f'({(datetime.datetime.now() - start_time).total_seconds(): .2f}s): {message}\n')
-    print(message)
+    log.notice('Starting file conversion...')
     
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = MODEL_DAY_DELTAS['WCOFS']
 
-    # model_run_dates = _utilities.range_daily(datetime.datetime.now(),
-    #                                          datetime.datetime.now() - datetime.timedelta(days=1))
+    # model_run_dates = _utilities.range_daily(datetime.datetime(2019, 1, 23),
+    #                                          datetime.datetime(2019, 1, 29))
     # for model_run_date in model_run_dates:
-    #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path)
-
-    model_run_date = datetime.date.today()
-    write_daily_average(DAILY_AVERAGES_DIR, model_run_date, day_deltas, log_path)
+    #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas)
     
-    message = f'Finished writing files. Total time: ' + \
-              f'{(datetime.datetime.now() - start_time).total_seconds(): .2f} seconds'
-    with open(log_path, 'a') as log_file:
-        log_file.write(f'{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")}(0.00s): {message}\n')
-    print(message)
+    model_run_date = datetime.date.today()
+    write_daily_average(DAILY_AVERAGES_DIR, model_run_date, day_deltas)
+
+    log.notice(f'Finished writing files. Total time: ' + \
+               f'{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
     
     print('done')

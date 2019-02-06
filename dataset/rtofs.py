@@ -56,7 +56,7 @@ DATA_VARIABLES = {
 
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 
-SOURCE_URL = 'http://nomads.ncep.noaa.gov:9090/dods/rtofs'
+SOURCE_URL = 'https://nomads.ncep.noaa.gov:9090/dods/rtofs'
 
 GLOBAL_LOCK = threading.Lock()
 
