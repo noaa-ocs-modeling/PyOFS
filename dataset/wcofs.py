@@ -531,10 +531,10 @@ class WCOFS_Dataset:
                 if driver == 'AAIGrid':
                     file_extension = 'asc'
                     gdal_args.update({'FORCE_CELLSIZE': 'YES'})
-                elif driver == 'GTiff':
-                    file_extension = 'tiff'
                 elif driver == 'GPKG':
                     file_extension = 'gpkg'
+                else:
+                    file_extension = 'tiff'
 
                 output_filename = os.path.join(output_dir,
                                                f'wcofs_{variable}_{self.model_datetime.strftime("%Y%m%d")}' + \
@@ -1129,10 +1129,10 @@ class WCOFS_Range:
                         if driver == 'AAIGrid':
                             file_extension = 'asc'
                             gdal_args.update({'FORCE_CELLSIZE': 'YES'})
-                        elif driver == 'GTiff':
-                            file_extension = 'tiff'
                         elif driver == 'GPKG':
                             file_extension = 'gpkg'
+                        else:
+                            file_extension = 'tiff'
 
                         output_filename = os.path.join(output_dir,
                                                        f'wcofs_{variable}_{model_string}{filename_suffix}.{file_extension}')

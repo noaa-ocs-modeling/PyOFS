@@ -335,10 +335,10 @@ class VIIRS_Dataset:
                     if driver == 'AAIGrid':
                         file_extension = 'asc'
                         gdal_args.update({'FORCE_CELLSIZE': 'YES'})
-                    elif driver == 'GTiff':
-                        file_extension = 'tiff'
                     elif driver == 'GPKG':
                         file_extension = 'gpkg'
+                    else:
+                        file_extension = 'tiff'
 
                     output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
 
@@ -602,13 +602,6 @@ class VIIRS_Range:
                             'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item(),
                             'FORCE_CELLSIZE': 'YES'
                         })
-                    elif driver == 'GTiff':
-                        file_extension = 'tiff'
-                        raster_data = output_data.astype(rasterio.float32)
-                        gdal_args.update({
-                            'dtype': raster_data.dtype,
-                            'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
-                        })
                     elif driver == 'GPKG':
                         file_extension = 'gpkg'
                         gpkg_dtype = rasterio.uint8
@@ -620,6 +613,13 @@ class VIIRS_Range:
                         gdal_args.update({
                             'dtype': gpkg_dtype, 'nodata': gpkg_fill_value
                         })  # , 'TILE_FORMAT': 'PNG8'})
+                    elif driver == 'GTiff':
+                        file_extension = 'tiff'
+                        raster_data = output_data.astype(rasterio.float32)
+                        gdal_args.update({
+                            'dtype': raster_data.dtype,
+                            'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
+                        })
                     else:
                         raster_data = numpy.empty_like(output_data)
 

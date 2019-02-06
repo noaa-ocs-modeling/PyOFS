@@ -188,7 +188,7 @@ class RTOFS_Dataset:
                                                                   lat=slice(numpy.min(self.lat), numpy.max(self.lat)))
                             selection = numpy.concatenate((numpy.squeeze(western_selection),
                                                            numpy.squeeze(eastern_selection)), axis=1)
-    
+
                         selection = numpy.flipud(selection)
                         return selection
                 else:
@@ -242,12 +242,12 @@ class RTOFS_Dataset:
                 u_data = self.data(u_name, time, crop)
             else:
                 u_data = variable_means[u_name]
-    
+
             if v_name not in variable_means:
                 v_data = self.data(v_name, time, crop)
             else:
                 v_data = variable_means[v_name]
-    
+
             if u_data is not None and v_data is not None:
                 variable_means['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (180 / numpy.pi)
                 variable_means['mag'] = numpy.sqrt(numpy.square(u_data) + numpy.square(v_data))
@@ -274,10 +274,10 @@ class RTOFS_Dataset:
                     if driver == 'AAIGrid':
                         file_extension = '.asc'
                         gdal_args.update({'FORCE_CELLSIZE': 'YES'})
-                    elif driver == 'GTiff':
-                        file_extension = '.tiff'
                     elif driver == 'GPKG':
                         file_extension = '.gpkg'
+                    else:
+                        file_extension = '.tiff'
 
                     output_filename = f'{os.path.splitext(output_filename)[0]}{file_extension}'
 
@@ -316,11 +316,11 @@ class RTOFS_Dataset:
                 if driver == 'AAIGrid':
                     file_extension = '.asc'
                     gdal_args.update({'FORCE_CELLSIZE': 'YES'})
-                elif driver == 'GTiff':
-                    file_extension = '.tiff'
                 elif driver == 'GPKG':
                     file_extension = '.gpkg'
-
+                else:
+                    file_extension = '.tiff'
+                
                 output_filename = f'{os.path.splitext(output_filename)[0]}{file_extension}'
 
                 print(f'Writing {output_filename}')
