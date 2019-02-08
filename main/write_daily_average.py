@@ -266,18 +266,22 @@ def write_daily_average(output_dir: str, output_date: datetime.datetime, day_del
     :param day_deltas: time deltas for which to write model output
     :param logger: logging object
     """
-    
+
+    logger.notice('Processing HFR SSUV...')
     write_observation(output_dir, output_date, 'hfr', logger=logbook.Logger('HFR'))
+    logger.notice('Processing VIIRS SST...')
     write_observation(output_dir, output_date, 'viirs', logger=logbook.Logger('VIIRS'))
+    logger.notice('Processing SMAP SSS...')
     write_observation(output_dir, output_date, 'smap', logger=logbook.Logger('SMAP'))
-    logger.notice(
-        f'Wrote observational data to {output_dir}')
-    
-    # write models to directories
+    logger.notice(f'Wrote observations to {output_dir}')
+
+    logger.notice('Processing RTOFS...')
     write_rtofs(output_dir, output_date, day_deltas, logger=logbook.Logger('RTOFS'))
+    logger.notice('Processing WCOFS...')
     write_wcofs(output_dir, output_date, day_deltas, logger=logbook.Logger('WCOFS'))
+    logger.notice('Processing WCOFS noDA...')
     write_wcofs(output_dir, output_date, day_deltas, data_assimilation=False, logger=logbook.Logger('WCOFS noDA'))
-    logger.notice(f'Wrote model output to {output_dir}')
+    logger.notice(f'Wrote models to {output_dir}')
     
     # populate JSON file with new directory structure so that JavaScript application can see it
     json_dir_structure.populate_json(OUTPUT_DIR, JSON_PATH)
@@ -293,8 +297,8 @@ if __name__ == '__main__':
     
     log_path = os.path.join(LOG_DIR, f'{start_time.strftime("%Y%m%d")}_conversion.log')
 
-    logbook.FileHandler(log_path, level='NOTICE', bubble=True).push_application()
     logbook.StreamHandler(sys.stdout, level='DEBUG', bubble=True).push_application()
+    logbook.FileHandler(log_path, level='NOTICE', bubble=True).push_application()
     logger = logbook.Logger('PyOFS')
     
     # write initial message
