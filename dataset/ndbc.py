@@ -220,7 +220,7 @@ class NDBC_Range:
                 layer_records.append(record)
     
             if self.logger is not None:
-                self.logger.notice(f'Writing {output_filename}:{layer_name}')
+                self.logger.info(f'Writing {output_filename}:{layer_name}')
             layer.writerecords(layer_records)
     
     def __repr__(self):

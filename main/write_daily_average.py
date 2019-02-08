@@ -66,7 +66,6 @@ def write_observation(output_dir: str, observation_date: typing.Union[datetime.d
 
     try:
         if observation == 'hfr':
-            # write HFR rasters
             start_of_day_hfr_time = start_of_day + datetime.timedelta(hours=2)
             end_of_day_hfr_time = end_of_day + datetime.timedelta(hours=2)
 
@@ -76,7 +75,6 @@ def write_observation(output_dir: str, observation_date: typing.Union[datetime.d
                                     fill_value=LEAFLET_NODATA_VALUE)
             del hfr_range
         elif observation == 'viirs':
-            # write VIIRS rasters
             start_of_day_in_utc = start_of_day + STUDY_AREA_TO_UTC
             noon_in_utc = start_of_day + datetime.timedelta(hours=12) + STUDY_AREA_TO_UTC
             end_of_day_in_utc = start_of_day + datetime.timedelta(hours=24) + STUDY_AREA_TO_UTC
@@ -93,7 +91,6 @@ def write_observation(output_dir: str, observation_date: typing.Union[datetime.d
                                      variables=['sst'])
             del viirs_range
         elif observation == 'smap':
-            # write VIIRS rasters
             smap_dataset = smap.SMAP_Dataset(logger=logger)
 
             smap_dataset.write_rasters(observation_dir, data_datetime=start_of_day, fill_value=LEAFLET_NODATA_VALUE,
@@ -127,7 +124,6 @@ def write_rtofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
         if not os.path.isdir(daily_average_dir):
             os.mkdir(daily_average_dir)
     
-    # write RTOFS rasters
     try:
         rtofs_dataset = None
 
@@ -203,7 +199,6 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
         wcofs_string = 'wcofs2'
         wcofs.reset_dataset_grid()
     
-    # write WCOFS rasters
     try:
         wcofs_dataset = None
 
@@ -272,27 +267,20 @@ def write_daily_average(output_dir: str, output_date: datetime.datetime, day_del
     :param logger: logging object
     """
     
-    # get time for log
-    start_time = datetime.datetime.now()
-
     write_observation(output_dir, output_date, 'hfr', logger=logbook.Logger('HFR'))
     write_observation(output_dir, output_date, 'viirs', logger=logbook.Logger('VIIRS'))
     write_observation(output_dir, output_date, 'smap', logger=logbook.Logger('SMAP'))
-    
-    # write to log
     logger.notice(
-        f'Wrote observational data ({(datetime.datetime.now() - start_time).total_seconds():.2f}s) to {output_dir}')
-
+        f'Wrote observational data to {output_dir}')
+    
     # write models to directories
     write_rtofs(output_dir, output_date, day_deltas, logger=logbook.Logger('RTOFS'))
     write_wcofs(output_dir, output_date, day_deltas, logger=logbook.Logger('WCOFS'))
     write_wcofs(output_dir, output_date, day_deltas, data_assimilation=False, logger=logbook.Logger('WCOFS noDA'))
+    logger.notice(f'Wrote model output to {output_dir}')
     
     # populate JSON file with new directory structure so that JavaScript application can see it
     json_dir_structure.populate_json(OUTPUT_DIR, JSON_PATH)
-
-    # write to log
-    logger.notice(f'Wrote model output ({(datetime.datetime.now() - start_time).total_seconds():.2f}s) to {output_dir}')
 
 
 if __name__ == '__main__':
@@ -303,7 +291,6 @@ if __name__ == '__main__':
     
     start_time = datetime.datetime.now()
     
-    # define log filename
     log_path = os.path.join(LOG_DIR, f'{start_time.strftime("%Y%m%d")}_conversion.log')
 
     logbook.FileHandler(log_path, level='NOTICE', bubble=True).push_application()
