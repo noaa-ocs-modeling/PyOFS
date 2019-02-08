@@ -23,6 +23,17 @@ import xarray
 from dataset import _utilities
 from main import DATA_DIR
 
+try:
+    from logbook import Logger
+except ImportError:
+    class Logger(object):
+        def __init__(self, name, level=0):
+            self.name = name
+            self.level = level
+        
+        debug = info = warn = warning = notice = error = exception = \
+            critical = log = lambda *a, **kw: None
+
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 
 RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
@@ -39,14 +50,17 @@ class SMAP_Dataset:
     study_area_extent = None
     study_area_bounds = None
     study_area_coordinates = None
-    
-    def __init__(self, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME):
+
+    def __init__(self, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, logger: Logger = None):
         """
         Retrieve VIIRS NetCDF dataset from NOAA with given datetime.
 
         :param study_area_polygon_filename: filename of vector file containing study area boundary
+        :param logger: logbook logger
         :raises NoDataError: if dataset does not exist.
         """
+
+        self.logger = logger
         
         self.study_area_polygon_filename, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
         
@@ -58,7 +72,8 @@ class SMAP_Dataset:
                 self.netcdf_dataset = xarray.open_dataset(source_url)
                 break
             except Exception as error:
-                print(f'Error collecting dataset from {source}: {error}')
+                if self.logger is not None:
+                    self.logger.error(f'Error collecting dataset from {source}: {error}')
         
         # construct rectangular polygon of granule extent
         lon_min = float(self.netcdf_dataset.geospatial_lon_min)
@@ -81,8 +96,6 @@ class SMAP_Dataset:
         lat_pixel_size = numpy.mean(numpy.diff(self.netcdf_dataset['latitude'].values))
         
         if SMAP_Dataset.study_area_extent is None:
-            # print(f'Calculating indices and transform from granule at {self.granule_datetime} UTC...')
-            
             # get first record in layer
             with fiona.open(self.study_area_polygon_filename, layer=study_area_polygon_layer_name) as vector_layer:
                 SMAP_Dataset.study_area_extent = shapely.geometry.MultiPolygon(
@@ -192,7 +205,8 @@ class SMAP_Dataset:
                     output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
                     
                     # use rasterio to write to raster with GDAL args
-                    print(f'Writing to {output_filename}')
+                    if self.logger is not None:
+                        self.logger.notice(f'Writing to {output_filename}')
                     with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                         output_raster.write(input_data, 1)
     

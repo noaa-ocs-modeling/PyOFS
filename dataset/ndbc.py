@@ -24,6 +24,17 @@ import xarray
 from dataset import _utilities
 from main import DATA_DIR
 
+try:
+    from logbook import Logger
+except ImportError:
+    class Logger(object):
+        def __init__(self, name, level=0):
+            self.name = name
+            self.level = level
+        
+        debug = info = warn = warning = notice = error = exception = \
+            critical = log = lambda *a, **kw: None
+
 MEASUREMENT_VARIABLES = ['water_temperature', 'conductivity', 'salinity', 'o2_saturation', 'dissolved_oxygen',
                          'chlorophyll_concentration', 'turbidity', 'water_ph', 'water_eh']
 
@@ -40,14 +51,17 @@ class NDBC_Station:
     """
     Buoy data of ocean variables within a time interval.
     """
-    
-    def __init__(self, station):
+
+    def __init__(self, station, logger: Logger = None):
         """
         Creates new dataset object.
 
         :param str station: Station name.
+        :param logger: logbook logger
         :raises NoDataError: if dataset does not exist.
         """
+
+        self.logger = logger
         
         self.valid = False
         self.station_name = station
@@ -63,18 +77,19 @@ class NDBC_Station:
     
     def geometry(self):
         return shapely.geometry.point.Point(self.longitude, self.latitude)
-    
-    def data(self, start_datetime, end_datetime):
+
+    def data(self, start_datetime, end_datetime) -> dict:
         """
         Collects data from given station in the given time interval.
 
         :param datetime.datetime start_datetime: Beginning of time interval.
         :param datetime.datetime end_datetime: End of time interval.
         :return: Dictionary of data from the given station over the given time interval.
-        :rtype: dict(str, numpy.ma.MaskedArray)
         """
-        
-        print(f'Collecting NDBC data of station {self.station_name} from {start_datetime} to {end_datetime}...')
+
+        if self.logger is not None:
+            self.logger.info(
+                f'Collecting NDBC data of station {self.station_name} from {start_datetime} to {end_datetime}...')
         
         output_data = {variable: None for variable in MEASUREMENT_VARIABLES}
         
@@ -89,8 +104,8 @@ class NDBC_Station:
                 output_data[variable] = self.netcdf_dataset[variable][start_index:end_index, :, :].values
         
         return output_data
-    
-    def __repr__(self):
+
+    def __repr__(self) -> str:
         return f'{self.__class__.__name__}({self.station_name})'
 
 
@@ -129,7 +144,8 @@ class NDBC_Range:
                 
                 if type(completed_future.exception()) is not _utilities.NoDataError:
                     result = completed_future.result()
-                    print(f'Collecting NDBC data from station {station_name}...')
+                    if self.logger is not None:
+                        self.logger.info(f'Collecting NDBC data from station {station_name}...')
                     self.stations[station_name] = result
 
             del running_futures
@@ -176,7 +192,8 @@ class NDBC_Range:
         }
         
         with fiona.open(output_filename, 'w', 'GPKG', schema, FIONA_WGS84, layer=layer_name) as layer:
-            print('Creating features...')
+            if self.logger is not None:
+                self.logger.debug('Creating features...')
             
             layer_records = []
             
@@ -201,8 +218,9 @@ class NDBC_Range:
                 }
                 
                 layer_records.append(record)
-            
-            print(f'Writing {output_filename}:{layer_name}')
+    
+            if self.logger is not None:
+                self.logger.notice(f'Writing {output_filename}:{layer_name}')
             layer.writerecords(layer_records)
     
     def __repr__(self):

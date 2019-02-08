@@ -24,6 +24,17 @@ import xarray
 from dataset import _utilities
 from main import DATA_DIR
 
+try:
+    from logbook import Logger
+except ImportError:
+    class Logger(object):
+        def __init__(self, name, level=0):
+            self.name = name
+            self.level = level
+        
+        debug = info = warn = warning = notice = error = exception = \
+            critical = log = lambda *a, **kw: None
+
 RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
 FIONA_WGS84 = fiona.crs.from_epsg(4326)
 
@@ -67,15 +78,18 @@ class RTOFS_Dataset:
     """
     
     def __init__(self, model_date: datetime.datetime, source: str = '2ds', time_interval: str = 'daily',
-                 study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME):
+                 study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, logger: Logger = None):
         """
         Creates new dataset object from datetime and given model parameters.
 
         :param model_date: Model run date.
         :param source: Either '2ds' or '3dz'.
         :param time_interval: Time interval of model output.
+        :param logger: logbook logger
         :param study_area_polygon_filename: Filename of vector file containing study area boundary.
         """
+
+        self.logger = logger
         
         self.model_datetime = model_date.replace(hour=0, minute=0, second=0, microsecond=0)
         self.source = source
@@ -113,8 +127,9 @@ class RTOFS_Dataset:
                         self.netcdf_datasets[forecast_direction][dataset_name] = dataset
                         self.dataset_locks[forecast_direction][dataset_name] = threading.Lock()
                     except OSError as error:
-                        print(f'Error collecting RTOFS: {error}')
-
+                        if self.logger is not None:
+                            self.logger.error(f'Error collecting RTOFS: {error}')
+        
         if (len(self.netcdf_datasets['nowcast']) + len(self.netcdf_datasets['forecast'])) > 0:
             if len(self.netcdf_datasets['nowcast']) > 0:
                 sample_dataset = next(iter(self.netcdf_datasets['nowcast'].values()))
@@ -194,7 +209,9 @@ class RTOFS_Dataset:
                 else:
                     raise ValueError(f'Variable must be not one of {list(DATA_VARIABLES.keys())}.')
             else:
-                print(f'{direction} does not exist in RTOFS dataset for {self.model_datetime.strftime("%Y%m%d")}.')
+                if self.logger is not None:
+                    self.logger.warn(
+                        f'{direction} does not exist in RTOFS dataset for {self.model_datetime.strftime("%Y%m%d")}.')
         else:
             raise ValueError(f'Direction must be one of {list(DATASET_STRUCTURE[self.source].keys())}.')
 
@@ -281,7 +298,8 @@ class RTOFS_Dataset:
 
                     output_filename = f'{os.path.splitext(output_filename)[0]}{file_extension}'
 
-                    print(f'Writing {output_filename}')
+                    if self.logger is not None:
+                        self.logger.notice(f'Writing {output_filename}')
                     with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                         output_raster.write(variable_mean, 1)
 
@@ -323,7 +341,8 @@ class RTOFS_Dataset:
                 
                 output_filename = f'{os.path.splitext(output_filename)[0]}{file_extension}'
 
-                print(f'Writing {output_filename}')
+                if self.logger is not None:
+                    self.logger.notice(f'Writing {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(output_data, 1)
     
