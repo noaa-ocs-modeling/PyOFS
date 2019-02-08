@@ -10,6 +10,7 @@ Created on Aug 9, 2018
 import datetime
 import ftplib
 import os
+import sys
 
 import logbook
 
@@ -42,16 +43,17 @@ if __name__ == '__main__':
             os.mkdir(directory)
     
     # define log filename
-    log_path = os.path.join(LOG_DIR, f'{datetime.datetime.now().strftime("%Y%m%d")}_ftp_transfer.log')
-
+    log_path = os.path.join(LOG_DIR, f'{datetime.datetime.now().strftime("%Y%m%d")}_download.log')
+    
     # check whether logfile exists
     log_exists = os.path.exists(log_path)
 
-    logbook.FileHandler(log_path).push_application()
-    log = logbook.Logger('FTP')
+    logbook.FileHandler(log_path, level='NOTICE', bubble=True).push_application()
+    logbook.StreamHandler(sys.stdout, level='DEBUG', bubble=True).push_application()
+    logger = logbook.Logger('FTP')
     
     # write initial message
-    log.notice('Starting FTP transfer...')
+    logger.notice('Starting FTP transfer...')
     
     # instantiate FTP connection
     with ftplib.FTP(FTP_URI) as ftp_connection:
@@ -61,13 +63,13 @@ if __name__ == '__main__':
         for input_path in input_paths:
             extension = os.path.splitext(input_path)[-1]
             filename = os.path.basename(input_path)
-    
+
             if 'rtofs' in filename:
                 output_path = os.path.join(rtofs_dir, filename)
             elif 'wcofs' in filename:
                 if filename[-4:] == '.sur':
                     filename = filename[:-4]
-        
+
                 if 'fwd' in filename:
                     output_path = os.path.join(fwd_dir, filename)
                 elif 'obs' in filename:
@@ -78,28 +80,28 @@ if __name__ == '__main__':
                     output_path = os.path.join(month_dir, filename)
             else:
                 output_path = os.path.join(OUTPUT_DIR, filename)
-    
+
             # filter for NetCDF and TAR archives
             if '.nc' in filename or '.tar' in filename:
                 current_start_time = datetime.datetime.now()
-        
+
                 # download file (copy via binary connection) to local destination if it does not already exist
                 if not (os.path.exists(output_path) and os.stat(output_path).st_size > 232000):
                     with open(output_path, 'wb') as output_file:
                         ftp_connection.retrbinary(f'RETR {input_path}', output_file.write)
-                        log.notice(f'Copied "{input_path}" ' + \
-                                   f'({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s) ' + \
-                                   f' to "{output_path}", {os.stat(output_path).st_size / 1000} KB')
+                        logger.notice(f'Copied "{input_path}" ' + \
+                                      f'({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s) ' + \
+                                      f' to "{output_path}", {os.stat(output_path).st_size / 1000} KB')
                         num_downloads += 1
                 else:
                     # only write 'file exists' message on the first run of the day
                     if not log_exists:
-                        log.warn('Destination file already exists: ' + \
-                                 f'"{output_path}", {os.stat(output_path).st_size / 1000} KB')
+                        logger.info('Destination file already exists: ' + \
+                                    f'"{output_path}", {os.stat(output_path).st_size / 1000} KB')
 
-    log.notice(f'Downloaded {num_downloads} files. ' + \
-               f'Total time: {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
-
+    logger.notice(f'Downloaded {num_downloads} files. ' + \
+                  f'Total time: {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+    
     if num_downloads == 0:
         exit(1)
     

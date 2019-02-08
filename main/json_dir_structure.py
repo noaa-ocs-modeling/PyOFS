@@ -13,10 +13,15 @@ import os
 
 DATA_DIR = os.environ['OFS_DATA']
 
+
 def get_directory_structure(rootdir):
     """
     Creates a nested dictionary that represents the folder structure of rootdir
+    
+    :param rootdir: directory that will be the root of the output
+    :return: dictionary of folder structure
     """
+
     output_dict = {}
     rootdir = rootdir.rstrip(os.sep)
     start = rootdir.rfind(os.sep) + 1
@@ -29,8 +34,15 @@ def get_directory_structure(rootdir):
 
 
 def populate_json(input_dir, json_path):
+    """
+    Write directory structure to JSON file.
+    
+    :param input_dir: root directory
+    :param json_path: output JSON
+    """
+    
     output_data = get_directory_structure(input_dir)
-
+    
     with open(json_path, 'w') as json_file:
         json.dump(output_data, json_file)
 

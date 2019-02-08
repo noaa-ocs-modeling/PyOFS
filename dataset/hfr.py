@@ -20,6 +20,17 @@ import xarray
 from dataset import _utilities
 from main import DATA_DIR
 
+try:
+    from logbook import Logger
+except ImportError:
+    class Logger(object):
+        def __init__(self, name, level=0):
+            self.name = name
+            self.level = level
+        
+        debug = info = warn = warning = notice = error = exception = \
+            critical = log = lambda *a, **kw: None
+
 DATA_VARIABLES = {'ssu': 'u', 'ssv': 'v', 'dopx': 'DOPx', 'dopy': 'DOPy'}
 
 FIONA_WGS84 = fiona.crs.from_epsg(4326)
@@ -41,7 +52,7 @@ class HFR_Range:
     grid_transform = None
 
     def __init__(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime, resolution: int = 6,
-                 source: str = None):
+                 source: str = None, logger: Logger = None):
         """
         Creates new dataset object from source.
 
@@ -49,9 +60,12 @@ class HFR_Range:
         :param end_datetime: End of time interval.
         :param resolution: Desired dataset resolution in kilometers.
         :param source: Either UCSD (University of California San Diego) or NDBC (National Data Buoy Center). NDBC has a larger extent but only for the past 4 days.
+        :param logger: logbook logger
         :raises NoDataError: if dataset does not exist.
         """
 
+        self.logger = logger
+        
         self.start_datetime = start_datetime
         if end_datetime > datetime.datetime.utcnow():
             # HFR near real time delay is 1 hour behind UTC
@@ -88,10 +102,11 @@ class HFR_Range:
                                                        attrs=raw_times.attrs)
 
         self.netcdf_dataset = self.netcdf_dataset.sel(time=slice(self.start_datetime, self.end_datetime))
-        
-        print(
-            f'Collecting HFR velocity from {self.source} between {str(self.netcdf_dataset["time"].min().values)[:19]}' + \
-            f' and {str(self.netcdf_dataset["time"].max().values)[:19]}...')
+
+        if self.logger is not None:
+            self.logger.info(f'Collecting HFR velocity from {self.source} between ' + \
+                             f'{str(self.netcdf_dataset["time"].min().values)[:19]}' + \
+                             f' and {str(self.netcdf_dataset["time"].max().values)[:19]}...')
         
         if HFR_Range.grid_transform is None:
             lon = self.netcdf_dataset['lon'].values
@@ -333,7 +348,8 @@ class HFR_Range:
                     feature_index += 1
 
         # write queued features to layer
-        print(f'Writing {output_filename}')
+        if self.logger is not None:
+            self.logger.notice(f'Writing {output_filename}')
         with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_WGS84) as layer:
             layer.writerecords(layer_records)
     
@@ -370,7 +386,7 @@ class HFR_Range:
                 u_data = variable_means['ssu']
             else:
                 u_data = self.data_average('ssu', start_datetime, end_datetime, dop_threshold)
-    
+
             if 'ssv' in variables:
                 v_data = variable_means['ssv']
             else:
@@ -420,7 +436,8 @@ class HFR_Range:
                 output_filename = os.path.join(output_dir,
                                                f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
 
-                print(f'Writing {output_filename}')
+                if self.logger is not None:
+                    self.logger.notice(f'Writing {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(numpy.flipud(raster_data), 1)
     
