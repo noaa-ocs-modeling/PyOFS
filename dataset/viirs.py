@@ -670,7 +670,7 @@ class VIIRS_Range:
                                                    f'{current_filename_prefix}_{current_filename_suffix}.{file_extension}')
 
                     if self.logger is not None:
-                        self.logger.notice(f'Writing {output_filename}')
+                        self.logger.info(f'Writing {output_filename}')
                     with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                         output_raster.write(raster_data, 1)
             else:

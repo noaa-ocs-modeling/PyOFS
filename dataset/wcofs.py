@@ -564,7 +564,7 @@ class WCOFS_Dataset:
                 os.remove(output_filename)
 
             if self.logger is not None:
-                self.logger.notice(f'Writing to {output_filename}')
+                self.logger.info(f'Writing to {output_filename}')
             with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
                 output_raster.write(masked_data, 1)
 
@@ -643,7 +643,7 @@ class WCOFS_Dataset:
         start_time = datetime.datetime.now()
 
         if self.logger is not None:
-            self.logger.notice(f'Writing {output_filename}:{layer_name}')
+            self.logger.info(f'Writing {output_filename}:{layer_name}')
         
         # create layer
         with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_WGS84,
@@ -1180,7 +1180,7 @@ class WCOFS_Range:
                             os.remove(output_filename)
 
                         if self.logger is not None:
-                            self.logger.notice(f'Writing to {output_filename}')
+                            self.logger.info(f'Writing to {output_filename}')
                         with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
                             output_raster.write(masked_data, 1)
 
@@ -1265,7 +1265,7 @@ class WCOFS_Range:
         # write queued features to layer
         for layer_name, layer_records in layers.items():
             if self.logger is not None:
-                self.logger.notice(f'Writing {output_filename}:{layer_name}')
+                self.logger.info(f'Writing {output_filename}:{layer_name}')
             with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_WGS84,
                             layer=layer_name) as layer:
                 layer.writerecords(layer_records)

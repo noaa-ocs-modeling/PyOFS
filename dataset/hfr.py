@@ -349,7 +349,7 @@ class HFR_Range:
 
         # write queued features to layer
         if self.logger is not None:
-            self.logger.notice(f'Writing {output_filename}')
+            self.logger.info(f'Writing {output_filename}')
         with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_WGS84) as layer:
             layer.writerecords(layer_records)
     
@@ -437,7 +437,7 @@ class HFR_Range:
                                                f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
 
                 if self.logger is not None:
-                    self.logger.notice(f'Writing {output_filename}')
+                    self.logger.info(f'Writing {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(numpy.flipud(raster_data), 1)
     

@@ -162,11 +162,11 @@ class SMAP_Dataset:
         
         # SMOS has data on month-long resolution
         data_datetime = datetime.datetime(data_datetime.year, data_datetime.month, 16)
-        
-        if numpy.datetime64(data_datetime) in self.netcdf_dataset['times']:
+
+        if numpy.datetime64(data_datetime) in self.netcdf_dataset['times'].values:
             return self.netcdf_dataset['smap_sss'].sel(times=data_datetime).values
         else:
-            raise _utilities.NoDataError('No data exists for that time.')
+            raise _utilities.NoDataError(f'No data exists for {data_datetime.strftime("%Y%m%dT%H%M%S")}.')
     
     def write_rasters(self, output_dir: str, data_datetime: datetime.datetime, variables: list = ['sss'],
                       filename_prefix: str = 'smos', fill_value: float = -9999.0, drivers: list = ['GTiff']):
@@ -206,7 +206,7 @@ class SMAP_Dataset:
                     
                     # use rasterio to write to raster with GDAL args
                     if self.logger is not None:
-                        self.logger.notice(f'Writing to {output_filename}')
+                        self.logger.info(f'Writing to {output_filename}')
                     with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                         output_raster.write(input_data, 1)
     

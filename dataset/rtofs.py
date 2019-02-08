@@ -299,7 +299,7 @@ class RTOFS_Dataset:
                     output_filename = f'{os.path.splitext(output_filename)[0]}{file_extension}'
 
                     if self.logger is not None:
-                        self.logger.notice(f'Writing {output_filename}')
+                        self.logger.info(f'Writing {output_filename}')
                     with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                         output_raster.write(variable_mean, 1)
 
@@ -342,7 +342,7 @@ class RTOFS_Dataset:
                 output_filename = f'{os.path.splitext(output_filename)[0]}{file_extension}'
 
                 if self.logger is not None:
-                    self.logger.notice(f'Writing {output_filename}')
+                    self.logger.info(f'Writing {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(output_data, 1)
     
