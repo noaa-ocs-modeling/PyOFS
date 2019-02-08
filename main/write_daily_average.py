@@ -69,7 +69,7 @@ def write_observation(output_dir: str, observation_date: typing.Union[datetime.d
             # write HFR rasters
             start_of_day_hfr_time = start_of_day + datetime.timedelta(hours=2)
             end_of_day_hfr_time = end_of_day + datetime.timedelta(hours=2)
-        
+
             hfr_range = hfr.HFR_Range(start_of_day_hfr_time, end_of_day_hfr_time, logger=logger)
             hfr_range.write_rasters(observation_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}',
                                     variables=['ssu', 'ssv'], vector_components=True, drivers=['AAIGrid'],
@@ -80,9 +80,9 @@ def write_observation(output_dir: str, observation_date: typing.Union[datetime.d
             start_of_day_in_utc = start_of_day + STUDY_AREA_TO_UTC
             noon_in_utc = start_of_day + datetime.timedelta(hours=12) + STUDY_AREA_TO_UTC
             end_of_day_in_utc = start_of_day + datetime.timedelta(hours=24) + STUDY_AREA_TO_UTC
-        
+
             viirs_range = viirs.VIIRS_Range(start_of_day_in_utc, end_of_day_in_utc, logger=logger)
-        
+
             viirs_range.write_raster(observation_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_morning',
                                      start_datetime=start_of_day_in_utc, end_datetime=noon_in_utc,
                                      fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=False,
@@ -95,7 +95,7 @@ def write_observation(output_dir: str, observation_date: typing.Union[datetime.d
         elif observation == 'smap':
             # write VIIRS rasters
             smap_dataset = smap.SMAP_Dataset(logger=logger)
-        
+
             smap_dataset.write_rasters(observation_dir, data_datetime=start_of_day, fill_value=LEAFLET_NODATA_VALUE,
                                        drivers=['GTiff'], variables=['sss'])
             del smap_dataset
@@ -130,30 +130,30 @@ def write_rtofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
     # write RTOFS rasters
     try:
         rtofs_dataset = None
-    
+
         for day_delta, daily_average_dir in output_dirs.items():
             if day_delta in MODEL_DAY_DELTAS['RTOFS']:
                 time_delta_string = f'{"f" if day_delta >= 0 else "n"}' + \
                                     f'{abs(day_delta) + 1 if day_delta >= 0 else abs(day_delta):03}'
                 day_of_forecast = model_run_date + datetime.timedelta(days=day_delta)
-            
+
                 existing_files = os.listdir(daily_average_dir)
                 existing_files = [filename for filename in existing_files if
                                   'rtofs' in filename and time_delta_string in filename]
-            
+
                 if rtofs_dataset is None and not any(
                         any(variable in filename for filename in existing_files) for variable in
                         ['sst', 'ssu', 'ssv', 'sss', 'ssh']):
                     rtofs_dataset = rtofs.RTOFS_Dataset(model_run_date, source='2ds', time_interval='daily',
                                                         logger=logger)
-            
+
                 for variable in ['sst', 'sss', 'ssh']:
                     if not any(variable in filename for filename in existing_files):
                         rtofs_dataset.write_rasters(daily_average_dir, variables=[variable], time=day_of_forecast,
                                                     drivers=['GTiff'])
                     else:
                         logger.info(f'Skipping RTOFS day {day_delta} {variable}')
-            
+
                 if not any('ssu' in filename for filename in existing_files) or not any(
                         'ssv' in filename for filename in existing_files):
                     rtofs_dataset.write_rasters(daily_average_dir, variables=['ssu', 'ssv'], time=day_of_forecast,
@@ -206,24 +206,24 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
     # write WCOFS rasters
     try:
         wcofs_dataset = None
-    
+
         for day_delta, daily_average_dir in output_dirs.items():
             if day_delta in MODEL_DAY_DELTAS['WCOFS']:
                 wcofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
                 time_delta_string = f'{wcofs_direction[0]}' + \
                                     f'{abs(day_delta) + 1 if wcofs_direction == "forecast" else abs(day_delta):03}'
-            
+
                 wcofs_filename_suffix = f'{time_delta_string}{f"_noDA_{grid_size_km}km" if grid_size_km == 2 else ""}'
-            
+
                 existing_files = os.listdir(daily_average_dir)
-            
+
                 if grid_size_km == 4:
                     existing_files = [filename for filename in existing_files if
                                       'wcofs' in filename and time_delta_string in filename and 'noDA' not in filename]
                 else:
                     existing_files = [filename for filename in existing_files if
                                       'wcofs' in filename and time_delta_string in filename and 'noDA' in filename and f'{grid_size_km}km' in filename]
-            
+
                 if wcofs_dataset is None and not any(
                         any(variable in filename for filename in existing_files) for variable in
                         ['sst', 'ssu', 'ssv', 'sss', 'ssh']):
@@ -235,7 +235,7 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
                                                             source_url=os.path.join(DATA_DIR,
                                                                                     'input/wcofs/avg'),
                                                             wcofs_string=wcofs_string, logger=logger)
-            
+
                 for variable in ['sst', 'sss', 'ssh']:
                     if not any(variable in filename for filename in existing_files):
                         wcofs_dataset.write_rasters(daily_average_dir, [variable],
@@ -244,7 +244,7 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
                                                     drivers=['GTiff'])
                     else:
                         logger.info(f'Skipping WCOFS day {day_delta} {variable}')
-            
+
                 if not any('ssu' in filename for filename in existing_files) or not any(
                         'ssv' in filename for filename in existing_files):
                     wcofs_dataset.write_rasters(daily_average_dir, ['ssu', 'ssv'],
@@ -254,7 +254,7 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
                 else:
                     logger.info(f'Skipping WCOFS day {day_delta} uv')
         del wcofs_dataset
-    
+
         if grid_size_km == 2:
             wcofs.reset_dataset_grid()
     except _utilities.NoDataError as error:
@@ -316,13 +316,14 @@ if __name__ == '__main__':
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = MODEL_DAY_DELTAS['WCOFS']
 
-    # model_run_dates = _utilities.range_daily(datetime.datetime.now(), datetime.datetime.now() - 3)
+    # model_run_dates = _utilities.range_daily(datetime.datetime.now(),
+    #                                          datetime.datetime.now() - datetime.timedelta(days=3))
     # for model_run_date in model_run_dates:
-    #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas)
+    #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, logger=logger)
     
     model_run_date = datetime.date.today()
-    write_daily_average(DAILY_AVERAGES_DIR, model_run_date, day_deltas, logger)
-
+    write_daily_average(DAILY_AVERAGES_DIR, model_run_date, day_deltas, logger=logger)
+    
     logger.notice(f'Finished writing files. Total time: ' + \
                   f'{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
     
