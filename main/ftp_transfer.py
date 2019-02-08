@@ -16,7 +16,7 @@ import logbook
 
 DATA_DIR = os.environ['OFS_DATA']
 
-FTP_URI = 'tidepool.nos.noaa.gov'
+TIDEPOOL_URL = 'tidepool.nos.noaa.gov'
 INPUT_DIR = '/pub/outgoing/CSDL'
 
 OUTPUT_DIR = os.path.join(DATA_DIR, 'input')
@@ -56,7 +56,7 @@ if __name__ == '__main__':
     logger.notice('Starting FTP transfer...')
     
     # instantiate FTP connection
-    with ftplib.FTP(FTP_URI) as ftp_connection:
+    with ftplib.FTP(TIDEPOOL_URL) as ftp_connection:
         ftp_connection.login()
         input_paths = ftp_connection.nlst(INPUT_DIR)
 
