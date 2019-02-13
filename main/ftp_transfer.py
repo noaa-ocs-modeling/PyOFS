@@ -89,17 +89,17 @@ if __name__ == '__main__':
                 if not (os.path.exists(output_path) and os.stat(output_path).st_size > 232000):
                     with open(output_path, 'wb') as output_file:
                         ftp_connection.retrbinary(f'RETR {input_path}', output_file.write)
-                        logger.notice(f'Copied "{input_path}" ' + \
-                                      f'({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s) ' + \
+                        logger.notice(f'Copied "{input_path}" ' +
+                                      f'({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s) ' +
                                       f' to "{output_path}", {os.stat(output_path).st_size / 1000} KB')
                         num_downloads += 1
                 else:
                     # only write 'file exists' message on the first run of the day
                     if not log_exists:
-                        logger.info('Destination file already exists: ' + \
+                        logger.info('Destination file already exists: ' +
                                     f'"{output_path}", {os.stat(output_path).st_size / 1000} KB')
 
-    logger.notice(f'Downloaded {num_downloads} files. ' + \
+    logger.notice(f'Downloaded {num_downloads} files. ' +
                   f'Total time: {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
     if num_downloads == 0:

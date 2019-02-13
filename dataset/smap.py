@@ -45,7 +45,7 @@ SOURCE_URLS = OrderedDict({
 })
 
 
-class SMAP_Dataset:
+class SMAPDataset:
     study_area_transform = None
     study_area_extent = None
     study_area_bounds = None
@@ -95,26 +95,26 @@ class SMAP_Dataset:
         lon_pixel_size = numpy.mean(numpy.diff(self.netcdf_dataset['longitude'].values))
         lat_pixel_size = numpy.mean(numpy.diff(self.netcdf_dataset['latitude'].values))
 
-        if SMAP_Dataset.study_area_extent is None:
+        if SMAPDataset.study_area_extent is None:
             # get first record in layer
             with fiona.open(self.study_area_polygon_filename, layer=study_area_polygon_layer_name) as vector_layer:
-                SMAP_Dataset.study_area_extent = shapely.geometry.MultiPolygon(
+                SMAPDataset.study_area_extent = shapely.geometry.MultiPolygon(
                     [shapely.geometry.Polygon(polygon[0]) for polygon in
                      next(iter(vector_layer))['geometry']['coordinates']])
 
-            SMAP_Dataset.study_area_bounds = SMAP_Dataset.study_area_extent.bounds
-            SMAP_Dataset.study_area_transform = rasterio.transform.from_origin(SMAP_Dataset.study_area_bounds[0],
-                                                                               SMAP_Dataset.study_area_bounds[3],
-                                                                               lon_pixel_size, lat_pixel_size)
+            SMAPDataset.study_area_bounds = SMAPDataset.study_area_extent.bounds
+            SMAPDataset.study_area_transform = rasterio.transform.from_origin(SMAPDataset.study_area_bounds[0],
+                                                                              SMAPDataset.study_area_bounds[3],
+                                                                              lon_pixel_size, lat_pixel_size)
 
-        if SMAP_Dataset.study_area_bounds is not None:
-            self.netcdf_dataset = self.netcdf_dataset.sel(longitude=slice(SMAP_Dataset.study_area_bounds[0],
-                                                                          SMAP_Dataset.study_area_bounds[2]),
-                                                          latitude=slice(SMAP_Dataset.study_area_bounds[3],
-                                                                         SMAP_Dataset.study_area_bounds[1]))
+        if SMAPDataset.study_area_bounds is not None:
+            self.netcdf_dataset = self.netcdf_dataset.sel(longitude=slice(SMAPDataset.study_area_bounds[0],
+                                                                          SMAPDataset.study_area_bounds[2]),
+                                                          latitude=slice(SMAPDataset.study_area_bounds[3],
+                                                                         SMAPDataset.study_area_bounds[1]))
 
-        if SMAP_Dataset.study_area_coordinates is None:
-            SMAP_Dataset.study_area_coordinates = {
+        if SMAPDataset.study_area_coordinates is None:
+            SMAPDataset.study_area_coordinates = {
                 'lon': self.netcdf_dataset['longitude'], 'lat': self.netcdf_dataset['latitude']
             }
 
@@ -191,7 +191,7 @@ class SMAP_Dataset:
                 gdal_args = {
                     'height': input_data.shape[0], 'width': input_data.shape[1], 'count': 1,
                     'dtype': rasterio.float32,
-                    'crs': RASTERIO_WGS84, 'transform': SMAP_Dataset.study_area_transform, 'nodata': fill_value
+                    'crs': RASTERIO_WGS84, 'transform': SMAPDataset.study_area_transform, 'nodata': fill_value
                 }
 
                 if driver == 'AAIGrid':
@@ -229,7 +229,7 @@ class SMAP_Dataset:
 if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIR, r'output\test')
 
-    smap_dataset = SMAP_Dataset()
+    smap_dataset = SMAPDataset()
     smap_dataset.write_rasters(output_dir, datetime.datetime(2018, 12, 1))
 
     print('done')

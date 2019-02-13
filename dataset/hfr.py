@@ -44,7 +44,7 @@ SOURCE_URLS = {
 }
 
 
-class HFR_Range:
+class HFRRange:
     """
     High Frequency Radar (HFR) NetCDF dataset of surface current velocities.
     """
@@ -104,11 +104,11 @@ class HFR_Range:
         self.netcdf_dataset = self.netcdf_dataset.sel(time=slice(self.start_datetime, self.end_datetime))
 
         if self.logger is not None:
-            self.logger.info(f'Collecting HFR velocity from {self.source} between ' + \
-                             f'{str(self.netcdf_dataset["time"].min().values)[:19]}' + \
+            self.logger.info(f'Collecting HFR velocity from {self.source} between ' +
+                             f'{str(self.netcdf_dataset["time"].min().values)[:19]}' +
                              f' and {str(self.netcdf_dataset["time"].max().values)[:19]}...')
 
-        if HFR_Range.grid_transform is None:
+        if HFRRange.grid_transform is None:
             lon = self.netcdf_dataset['lon'].values
             lat = self.netcdf_dataset['lat'].values
 
@@ -244,6 +244,11 @@ class HFR_Range:
             end_datetime = self.end_datetime
 
         time_interval_selection = self.netcdf_dataset.sel(time=slice(start_datetime, end_datetime))
+
+        if dop_threshold is not None:
+            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold) | (
+                    self.netcdf_dataset['DOPy'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold)).values
+            time_interval_selection[~dop_mask] = numpy.nan
 
         # create dict to store features
         layers = {}
@@ -503,7 +508,7 @@ if __name__ == '__main__':
     start_datetime = datetime.datetime(2018, 11, 15)
     end_datetime = start_datetime + datetime.timedelta(days=1)
 
-    hfr_range = HFR_Range(start_datetime, end_datetime)
+    hfr_range = HFRRange(start_datetime, end_datetime)
     hfr_range.write_rasters(output_dir)
 
     print('done')

@@ -68,7 +68,7 @@ def write_observation(output_dir: str, observation_date: datetime.datetime,
             start_of_day_hfr_time = start_of_day + datetime.timedelta(hours=2)
             end_of_day_hfr_time = end_of_day + datetime.timedelta(hours=2)
 
-            hfr_range = hfr.HFR_Range(start_of_day_hfr_time, end_of_day_hfr_time, logger=logger)
+            hfr_range = hfr.HFRRange(start_of_day_hfr_time, end_of_day_hfr_time, logger=logger)
             hfr_range.write_rasters(observation_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}',
                                     variables=['ssu', 'ssv'], vector_components=True, driver='AAIGrid',
                                     fill_value=LEAFLET_NODATA_VALUE)
@@ -78,7 +78,7 @@ def write_observation(output_dir: str, observation_date: datetime.datetime,
             noon_in_utc = start_of_day + datetime.timedelta(hours=12) + STUDY_AREA_TO_UTC
             end_of_day_in_utc = start_of_day + datetime.timedelta(hours=24) + STUDY_AREA_TO_UTC
 
-            viirs_range = viirs.VIIRS_Range(start_of_day_in_utc, end_of_day_in_utc, logger=logger)
+            viirs_range = viirs.VIIRSRange(start_of_day_in_utc, end_of_day_in_utc, logger=logger)
 
             viirs_range.write_raster(observation_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_morning',
                                      start_datetime=start_of_day_in_utc, end_datetime=noon_in_utc,
@@ -90,7 +90,7 @@ def write_observation(output_dir: str, observation_date: datetime.datetime,
                                      variables=['sst'])
             del viirs_range
         elif observation == 'smap':
-            smap_dataset = smap.SMAP_Dataset(logger=logger)
+            smap_dataset = smap.SMAPDataset(logger=logger)
 
             smap_dataset.write_rasters(observation_dir, data_datetime=start_of_day, fill_value=LEAFLET_NODATA_VALUE,
                                        driver='GTiff', variables=['sss'])
@@ -141,8 +141,8 @@ def write_rtofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
                 if rtofs_dataset is None and not all(
                         any(variable in filename for filename in existing_files) for variable in
                         ['sst', 'ssu', 'ssv', 'sss', 'ssh']):
-                    rtofs_dataset = rtofs.RTOFS_Dataset(model_run_date, source='2ds', time_interval='daily',
-                                                        logger=logger)
+                    rtofs_dataset = rtofs.RTOFSDataset(model_run_date, source='2ds', time_interval='daily',
+                                                       logger=logger)
 
                 for variable in ['sst', 'sss', 'ssh']:
                     if not any(variable in filename for filename in existing_files):
@@ -225,13 +225,13 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
                         any(variable in filename for filename in existing_files) for variable in
                         ['sst', 'ssu', 'ssv', 'sss', 'ssh']):
                     if grid_size_km == 4:
-                        wcofs_dataset = wcofs.WCOFS_Dataset(model_run_date, source='avg', logger=logger)
+                        wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg', logger=logger)
                     else:
-                        wcofs_dataset = wcofs.WCOFS_Dataset(model_run_date, source='avg',
-                                                            grid_filename=grid_filename,
-                                                            source_url=os.path.join(DATA_DIR,
+                        wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg',
+                                                           grid_filename=grid_filename,
+                                                           source_url=os.path.join(DATA_DIR,
                                                                                     'input/wcofs/avg'),
-                                                            wcofs_string=wcofs_string, logger=logger)
+                                                           wcofs_string=wcofs_string, logger=logger)
 
                 for variable in ['sst', 'sss', 'ssh']:
                     if not any(variable in filename for filename in existing_files):
@@ -317,7 +317,7 @@ if __name__ == '__main__':
     model_run_date = datetime.date.today()
     write_daily_average(DAILY_AVERAGES_DIR, model_run_date, day_deltas, logger=logger)
 
-    logger.notice(f'Finished writing files. Total time: ' + \
+    logger.notice(f'Finished writing files. Total time: ' +
                   f'{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
     print('done')
