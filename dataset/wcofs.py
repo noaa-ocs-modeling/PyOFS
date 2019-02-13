@@ -354,7 +354,7 @@ class WCOFS_Dataset:
     def write_rasters(self, output_dir: str, variables: list = None, filename_suffix: str = None,
                       time_deltas: list = None, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
                       vector_components: bool = False, x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999,
-                      drivers: list = ['GTiff']):
+                      driver: str = 'GTiff'):
         """
         Write averaged raster data of given variables to given output directory.
 
@@ -367,7 +367,7 @@ class WCOFS_Dataset:
         :param x_size: Cell size of output grid in X direction.
         :param y_size: Cell size of output grid in Y direction.
         :param fill_value: Desired fill value of output.
-        :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
+        :param driver: Strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
         """
 
         if variables is None:
@@ -453,8 +453,8 @@ class WCOFS_Dataset:
                     variable_means[v_name] = v_data
 
         if self.logger is not None:
-            self.logger.debug(
-                f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+            self.logger.debug('parallel data aggregation took ' + \
+                              '{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
         start_time = datetime.datetime.now()
 
@@ -545,18 +545,17 @@ class WCOFS_Dataset:
 
             masked_data = masked_data[0, :, :]
 
-            for driver in drivers:
-                if driver == 'AAIGrid':
-                    file_extension = 'asc'
-                    gdal_args.update({'FORCE_CELLSIZE': 'YES'})
-                elif driver == 'GPKG':
-                    file_extension = 'gpkg'
-                else:
-                    file_extension = 'tiff'
+            if driver == 'AAIGrid':
+                file_extension = 'asc'
+                gdal_args.update({'FORCE_CELLSIZE': 'YES'})
+            elif driver == 'GPKG':
+                file_extension = 'gpkg'
+            else:
+                file_extension = 'tiff'
 
-                output_filename = os.path.join(output_dir,
-                                               f'wcofs_{variable}_{self.model_datetime.strftime("%Y%m%d")}' + \
-                                               f'{filename_suffix}.{file_extension}')
+            output_filename = os.path.join(output_dir,
+                                           f'wcofs_{variable}_{self.model_datetime.strftime("%Y%m%d")}' + \
+                                           f'{filename_suffix}.{file_extension}')
 
             if os.path.isfile(output_filename):
                 os.remove(output_filename)
@@ -569,7 +568,7 @@ class WCOFS_Dataset:
     def write_vector(self, output_filename: str, layer_name: str = None, time_deltas: list = None):
         """
         Write average of surface velocity vector data for all hours in the given time interval to the provided output file.
-    
+
         :param output_filename: Path to output file.
         :param layer_name: Name of layer to write.
         :param time_deltas: List of integers of hours to use in average.
@@ -593,8 +592,8 @@ class WCOFS_Dataset:
             del running_futures
 
         if self.logger is not None:
-            self.logger.debug(
-                f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+            self.logger.debug('parallel data aggregation took ' + \
+                              f'{(datetime.datetime.now() - start_time).total_seconds(): .2f} seconds')
 
         schema = {
             'geometry': 'Point', 'properties': {
@@ -975,7 +974,7 @@ class WCOFS_Range:
                       study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
                       start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
                       vector_components: bool = False, x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999,
-                      drivers: list = ['GTiff']):
+                      driver: str = 'GTiff'):
         """
         Write raster data of given variables to given output directory, averaged over given time interval.
 
@@ -989,7 +988,7 @@ class WCOFS_Range:
         :param x_size: Cell size of output grid in X direction.
         :param y_size: Cell size of output grid in Y direction.
         :param fill_value: Desired fill value of output.
-        :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
+        :param driver: String of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
         """
 
         if variables is None:
@@ -1064,8 +1063,8 @@ class WCOFS_Range:
                 variable_data_stack_averages[v_name] = self.data_averages(v_name, start_datetime, end_datetime)
 
         if self.logger is not None:
-            self.logger.debug(
-                f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+            self.logger.debug('parallel data aggregation took ' + \
+                              f'{(datetime.datetime.now() - start_time).total_seconds(): .2=f} seconds')
 
         start_time = datetime.datetime.now()
 
@@ -1162,31 +1161,30 @@ class WCOFS_Range:
 
                     masked_data = masked_data[0, :, :]
 
-                    for driver in drivers:
-                        if driver == 'AAIGrid':
-                            file_extension = 'asc'
-                            gdal_args.update({'FORCE_CELLSIZE': 'YES'})
-                        elif driver == 'GPKG':
-                            file_extension = 'gpkg'
-                        else:
-                            file_extension = 'tiff'
+                    if driver == 'AAIGrid':
+                        file_extension = 'asc'
+                        gdal_args.update({'FORCE_CELLSIZE': 'YES'})
+                    elif driver == 'GPKG':
+                        file_extension = 'gpkg'
+                    else:
+                        file_extension = 'tiff'
 
-                        output_filename = os.path.join(output_dir,
-                                                       f'wcofs_{variable}_{model_string}{filename_suffix}.{file_extension}')
+                    output_filename = os.path.join(output_dir,
+                                                   f'wcofs_{variable}_{model_string}{filename_suffix}.{file_extension}')
 
-                        if os.path.isfile(output_filename):
-                            os.remove(output_filename)
+                    if os.path.isfile(output_filename):
+                        os.remove(output_filename)
 
-                        if self.logger is not None:
-                            self.logger.info(f'Writing to {output_filename}')
-                        with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
-                            output_raster.write(masked_data, 1)
+                    if self.logger is not None:
+                        self.logger.info(f'Writing to {output_filename}')
+                    with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
+                        output_raster.write(masked_data, 1)
 
     def write_vector(self, output_filename: str, variables: list = None, start_datetime: datetime.datetime = None,
                      end_datetime: datetime.datetime = None):
         """
         Write average of surface velocity vector data for all hours in the given time interval to a single layer of the provided output file.
-    
+
         :param output_filename: Path to output file.
         :param variables: List of variable names to write to vector file.
         :param start_datetime: Beginning of time interval.
@@ -1213,8 +1211,8 @@ class WCOFS_Range:
             del running_futures
 
         if self.logger is not None:
-            self.logger.debug(
-                f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+            self.logger.debug('parallel data aggregation took ' + \
+                              f'{(datetime.datetime.now() - start_time).total_seconds(): .2f} seconds')
 
         model_datetime_strings = [model_datetime for model_datetime in
                                   next(iter(variable_data_stack_averages.values())).keys()]
@@ -1271,7 +1269,7 @@ class WCOFS_Range:
     def to_xarray(self, variables: list = None, mean: bool = True) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
-    
+
         :param variables: List of variables to use.
         :param mean: Whether to average all time indices.
         :return: xarray Dataset of given variables.
@@ -1354,7 +1352,7 @@ class WCOFS_Range:
     def to_netcdf(self, output_file: str, variables: list = None, mean: bool = True):
         """
         Writes to NetCDF file.
-    
+
         :param output_file: Output file to write.
         :param variables: List of variables to use.
         :param mean: Whether to average all time indices.

@@ -41,20 +41,20 @@ if __name__ == '__main__':
     for directory in [OUTPUT_DIR, LOG_DIR, wcofs_dir, rtofs_dir, avg_dir, fwd_dir, obs_dir, mod_dir, month_dir]:
         if not os.path.isdir(directory):
             os.mkdir(directory)
-    
+
     # define log filename
     log_path = os.path.join(LOG_DIR, f'{datetime.datetime.now().strftime("%Y%m%d")}_download.log')
-    
+
     # check whether logfile exists
     log_exists = os.path.exists(log_path)
 
     logbook.FileHandler(log_path, level='NOTICE', bubble=True).push_application()
     logbook.StreamHandler(sys.stdout, level='DEBUG', bubble=True).push_application()
     logger = logbook.Logger('FTP')
-    
+
     # write initial message
     logger.notice('Starting FTP transfer...')
-    
+
     # instantiate FTP connection
     with ftplib.FTP(TIDEPOOL_URL) as ftp_connection:
         ftp_connection.login()
@@ -101,8 +101,8 @@ if __name__ == '__main__':
 
     logger.notice(f'Downloaded {num_downloads} files. ' + \
                   f'Total time: {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
-    
+
     if num_downloads == 0:
         exit(1)
-    
+
     print('done')
