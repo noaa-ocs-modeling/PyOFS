@@ -27,7 +27,7 @@ except ImportError:
         def __init__(self, name, level=0):
             self.name = name
             self.level = level
-        
+
         debug = info = warn = warning = notice = error = exception = \
             critical = log = lambda *a, **kw: None
 
@@ -65,7 +65,7 @@ class HFR_Range:
         """
 
         self.logger = logger
-        
+
         self.start_datetime = start_datetime
         if end_datetime > datetime.datetime.utcnow():
             # HFR near real time delay is 1 hour behind UTC
@@ -89,7 +89,7 @@ class HFR_Range:
         elif self.source == 'UCSD':
             self.url = f'{SOURCE_URLS["UCSD"]}/{self.resolution}km/hourly/RTV/' + \
                        f'HFRADAR_US_West_Coast_{self.resolution}km_Resolution_Hourly_RTV_best.ncd'
-        
+
         try:
             self.netcdf_dataset = xarray.open_dataset(self.url)
         except OSError:
@@ -107,25 +107,25 @@ class HFR_Range:
             self.logger.info(f'Collecting HFR velocity from {self.source} between ' + \
                              f'{str(self.netcdf_dataset["time"].min().values)[:19]}' + \
                              f' and {str(self.netcdf_dataset["time"].max().values)[:19]}...')
-        
+
         if HFR_Range.grid_transform is None:
             lon = self.netcdf_dataset['lon'].values
             lat = self.netcdf_dataset['lat'].values
-            
+
             # define image properties
             west = numpy.min(lon)
             north = numpy.max(lat)
 
             self.mean_x_size = numpy.mean(numpy.diff(lon))
             self.mean_y_size = numpy.mean(numpy.diff(lat))
-            
+
             # get rasterio geotransform of HFR dataset (flipped latitude)
             self.grid_transform = rasterio.transform.from_origin(west, north, self.mean_x_size, self.mean_y_size)
 
     def data(self, variable: str, time: datetime.datetime, dop_threshold: float = None) -> numpy.ndarray:
         """
         Get data for the specified variable at a single time.
-        
+
         :param variable: Variable name.
         :param time: Time to retrieve.
         :param dop_threshold: Threshold for Dilution of Precision (DOP) above which data should be discarded.
@@ -133,7 +133,7 @@ class HFR_Range:
         """
 
         output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(time).values
-        
+
         if dop_threshold is not None:
             dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=time) <= dop_threshold) | (
                     self.netcdf_dataset['DOPy'].sel(time=time) <= dop_threshold))
@@ -141,8 +141,8 @@ class HFR_Range:
 
         return output_data
 
-    def data_average(self, variable: str, start_datetime: datetime.datetime,
-                     end_datetime: datetime.datetime, dop_threshold: float = None) -> numpy.ndarray:
+    def data_average(self, variable: str, start_datetime: datetime.datetime = None,
+                     end_datetime: datetime.datetime = None, dop_threshold: float = None) -> numpy.ndarray:
         """
         Get data for the specified variable at a single time.
 
@@ -160,7 +160,7 @@ class HFR_Range:
             end_datetime = self.end_datetime
 
         output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(time=slice(start_datetime, end_datetime)).values
-        
+
         if dop_threshold is not None:
             dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold) | (
                     self.netcdf_dataset['DOPy'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold)).values
@@ -169,7 +169,7 @@ class HFR_Range:
         output_data = numpy.nanmean(output_data, axis=0)
 
         return output_data
-    
+
     def bounds(self) -> tuple:
         """
         Get coordinate bounds of dataset.
@@ -188,7 +188,7 @@ class HFR_Range:
         """
 
         return abs(self.mean_x_size), abs(self.mean_y_size)
-    
+
     def write_sites(self, output_filename: str, layer_name: str):
         """
         Writes HFR radar facility locations to specified file and layer.
@@ -204,7 +204,7 @@ class HFR_Range:
             site_network_code = self.netcdf_dataset['site_netCode'][site_index].tobytes().decode().strip('\x00').strip()
             lon = float(self.netcdf_dataset['site_lon'][site_index])
             lat = float(self.netcdf_dataset['site_lat'][site_index])
-            
+
             record = {
                 'id': site_index + 1, 'geometry': {'type': 'Point', 'coordinates': (lon, lat)}, 'properties': {
                     'code': site_code, 'net_code': site_network_code, 'lon': float(lon), 'lat': float(lat)
@@ -244,7 +244,7 @@ class HFR_Range:
             end_datetime = self.end_datetime
 
         time_interval_selection = self.netcdf_dataset.sel(time=slice(start_datetime, end_datetime))
-        
+
         # create dict to store features
         layers = {}
 
@@ -265,19 +265,19 @@ class HFR_Range:
                 for row in range(len(self.netcdf_dataset['lat'])):
                     data = [float(hfr_data[variable_name][row, col].values) for variable, variable_name in
                             variables.items()]
-                    
+
                     # stop if record has masked values
                     if not (numpy.isnan(data)).all():
                         lon = self.netcdf_dataset['lon'][col]
                         lat = self.netcdf_dataset['lat'][row]
-                        
+
                         record = {
                             'id': feature_index, 'geometry': {'type': 'Point', 'coordinates': (lon, lat)},
                             'properties': {'lon': float(lon), 'lat': float(lat)}
                         }
 
                         record['properties'].update(dict(zip(list(variables.keys()), data)))
-                        
+
                         layer_records.append(record)
                         feature_index += 1
 
@@ -286,7 +286,8 @@ class HFR_Range:
         # write queued features to their respective layers
         schema = {
             'geometry': 'Point', 'properties': {
-                'u': 'float', 'v': 'float', 'lat': 'float', 'lon': 'float', 'dop_lat': 'float', 'dop_lon': 'float'
+                'u': 'float', 'v': 'float', 'lat': 'float', 'lon': 'float', 'dop_lat': 'float',
+                'dop_lon': 'float'
             }
         }
 
@@ -352,11 +353,11 @@ class HFR_Range:
             self.logger.info(f'Writing {output_filename}')
         with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_WGS84) as layer:
             layer.writerecords(layer_records)
-    
+
     def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = '',
                       variables: list = None, start_datetime: datetime.datetime = None,
                       end_datetime: datetime.datetime = None, vector_components: bool = False,
-                      fill_value: float = -9999, drivers: list = ['GTiff'], dop_threshold: float = 0.5):
+                      fill_value: float = -9999, driver: str = 'GTiff', dop_threshold: float = 0.5):
         """
         Write average of HFR data for all hours in the given time interval to rasters.
 
@@ -368,13 +369,13 @@ class HFR_Range:
         :param end_datetime: End of time interval.
         :param vector_components: Whether to write direction and magnitude rasters.
         :param fill_value: Desired fill value of output.
-        :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
+        :param driver: String of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
         :param dop_threshold: Threshold for dilution of precision above which data is not useable.
         """
 
         if variables is None:
             variables = DATA_VARIABLES
-        
+
         if filename_suffix is not '':
             filename_suffix = f'_{filename_suffix}'
 
@@ -391,7 +392,7 @@ class HFR_Range:
                 v_data = variable_means['ssv']
             else:
                 v_data = self.data_average('ssv', start_datetime, end_datetime, dop_threshold)
-            
+
             # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
             variable_means['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (180 / numpy.pi)
             variable_means['mag'] = numpy.sqrt(numpy.square(u_data) + numpy.square(v_data))
@@ -405,42 +406,41 @@ class HFR_Range:
                 'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
             }
 
-            for driver in drivers:
-                if driver == 'AAIGrid':
-                    file_extension = 'asc'
+            if driver == 'AAIGrid':
+                file_extension = 'asc'
 
-                    # interpolate to regular grid in case of ASCII grid
-                    mean_cell_length = numpy.min(self.cell_size())
-                    west, north, east, south = self.bounds()
+                # interpolate to regular grid in case of ASCII grid
+                mean_cell_length = numpy.min(self.cell_size())
+                west, north, east, south = self.bounds()
 
-                    input_lon, input_lat = numpy.meshgrid(self.netcdf_dataset['lon'], self.netcdf_dataset['lat'])
-                    output_lon = numpy.arange(west, east, mean_cell_length)[None, :]
-                    output_lat = numpy.arange(south, north, mean_cell_length)[:, None]
+                input_lon, input_lat = numpy.meshgrid(self.netcdf_dataset['lon'], self.netcdf_dataset['lat'])
+                output_lon = numpy.arange(west, east, mean_cell_length)[None, :]
+                output_lat = numpy.arange(south, north, mean_cell_length)[:, None]
 
-                    raster_data = scipy.interpolate.griddata((input_lon.flatten(), input_lat.flatten()),
-                                                             raster_data.flatten(), (output_lon, output_lat),
-                                                             method='nearest', fill_value=fill_value).astype(
-                        raster_data.dtype)
+                raster_data = scipy.interpolate.griddata((input_lon.flatten(), input_lat.flatten()),
+                                                         raster_data.flatten(), (output_lon, output_lat),
+                                                         method='nearest', fill_value=fill_value).astype(
+                    raster_data.dtype)
 
-                    gdal_args.update({
-                        'height': raster_data.shape[0], 'width': raster_data.shape[1], 'FORCE_CELLSIZE': 'YES',
-                        'transform': rasterio.transform.from_origin(numpy.min(output_lon), numpy.max(output_lat),
-                                                                    numpy.max(numpy.diff(output_lon)),
-                                                                    numpy.max(numpy.diff(output_lon)))
-                    })
-                elif driver == 'GPKG':
-                    file_extension = 'gpkg'
-                else:
-                    file_extension = 'tiff'
+                gdal_args.update({
+                    'height': raster_data.shape[0], 'width': raster_data.shape[1], 'FORCE_CELLSIZE': 'YES',
+                    'transform': rasterio.transform.from_origin(numpy.min(output_lon), numpy.max(output_lat),
+                                                                numpy.max(numpy.diff(output_lon)),
+                                                                numpy.max(numpy.diff(output_lon)))
+                })
+            elif driver == 'GPKG':
+                file_extension = 'gpkg'
+            else:
+                file_extension = 'tiff'
 
-                output_filename = os.path.join(output_dir,
-                                               f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
+            output_filename = os.path.join(output_dir,
+                                           f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
 
-                if self.logger is not None:
-                    self.logger.info(f'Writing {output_filename}')
-                with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
-                    output_raster.write(numpy.flipud(raster_data), 1)
-    
+            if self.logger is not None:
+                self.logger.info(f'Writing {output_filename}')
+            with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
+                output_raster.write(numpy.flipud(raster_data), 1)
+
     def to_xarray(self, variables: list = None, mean: bool = True) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
@@ -457,13 +457,15 @@ class HFR_Range:
 
         if mean:
             for variable in variables:
-                data_arrays[variable] = xarray.DataArray(numpy.mean(self.data[variable], axis=0),
-                                                         coords={'lat': self.coords['lat'], 'lon': self.coords['lon']},
+                data_arrays[variable] = xarray.DataArray(numpy.mean(self.data_average(variable), axis=0),
+                                                         coords={'lat': self.netcdf_dataset['lat'],
+                                                                 'lon': self.netcdf_dataset['lon']},
                                                          dims=('lat', 'lon'))
         else:
             for variable in variables:
-                data_arrays[variable] = xarray.DataArray(self.data[variable],
-                                                         coords=self.coords,
+                data_arrays[variable] = xarray.DataArray(self.data_average(variable),
+                                                         coords={'lat': self.netcdf_dataset['lat'],
+                                                                 'lon': self.netcdf_dataset['lon']},
                                                          dims=('time', 'lat', 'lon'))
 
         return xarray.Dataset(data_vars=data_arrays)

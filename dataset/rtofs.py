@@ -18,8 +18,8 @@ import rasterio.control
 import rasterio.features
 import rasterio.mask
 import rasterio.warp
-from shapely import geometry
 import xarray
+from shapely import geometry
 
 from dataset import _utilities
 from main import DATA_DIR
@@ -31,7 +31,7 @@ except ImportError:
         def __init__(self, name, level=0):
             self.name = name
             self.level = level
-        
+
         debug = info = warn = warning = notice = error = exception = \
             critical = log = lambda *a, **kw: None
 
@@ -76,7 +76,7 @@ class RTOFS_Dataset:
     """
     Real-Time Ocean Forecasting System (RTOFS) NetCDF dataset.
     """
-    
+
     def __init__(self, model_date: datetime.datetime, source: str = '2ds', time_interval: str = 'daily',
                  study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, logger: Logger = None):
         """
@@ -90,70 +90,70 @@ class RTOFS_Dataset:
         """
 
         self.logger = logger
-        
+
         self.model_datetime = model_date.replace(hour=0, minute=0, second=0, microsecond=0)
         self.source = source
         self.time_interval = time_interval
-        
+
         self.study_area_polygon_filename, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
-        
+
         if study_area_polygon_layer_name == '':
             study_area_polygon_layer_name = None
-        
+
         # get first record in layer
         with fiona.open(self.study_area_polygon_filename,
                         layer=study_area_polygon_layer_name) as vector_layer:
             self.study_area_geojson = next(iter(vector_layer))['geometry']
-        
+
         self.netcdf_datasets = {}
         self.dataset_locks = {}
-        
+
         date_string = self.model_datetime.strftime('%Y%m%d')
-        
+
         if self.time_interval == 'daily':
             for forecast_direction, datasets in DATASET_STRUCTURE[self.source].items():
                 self.netcdf_datasets[forecast_direction] = {}
                 self.dataset_locks[forecast_direction] = {}
-                
+
                 date_dir = f'rtofs_global{date_string}'
-                
+
                 for dataset_name in datasets:
                     filename = f'rtofs_glo_{self.source}_{forecast_direction}_{self.time_interval}_{dataset_name}'
                     url = f'{SOURCE_URL}/{date_dir}/{filename}'
-                    
+
                     try:
                         dataset = xarray.open_dataset(url)
-                        
+
                         self.netcdf_datasets[forecast_direction][dataset_name] = dataset
                         self.dataset_locks[forecast_direction][dataset_name] = threading.Lock()
                     except OSError as error:
                         if self.logger is not None:
                             self.logger.error(f'Error collecting RTOFS: {error}')
-        
+
         if (len(self.netcdf_datasets['nowcast']) + len(self.netcdf_datasets['forecast'])) > 0:
             if len(self.netcdf_datasets['nowcast']) > 0:
                 sample_dataset = next(iter(self.netcdf_datasets['nowcast'].values()))
             else:
                 sample_dataset = next(iter(self.netcdf_datasets['forecast'].values()))
-            
+
             # for some reason RTOFS has longitude values shifted by 360
             self.raw_lon = sample_dataset['lon'].values
             self.lon = self.raw_lon - 180 - numpy.min(self.raw_lon)
-            
+
             self.lat = sample_dataset['lat'].values
-            
+
             lon_pixel_size = sample_dataset['lon'].resolution
             lat_pixel_size = sample_dataset['lat'].resolution
-            
+
             self.global_west = numpy.min(self.lon)
             self.global_north = numpy.max(self.lat)
-            
+
             self.global_grid_transform = rasterio.transform.from_origin(self.global_west, self.global_north,
                                                                         lon_pixel_size, lat_pixel_size)
-            
+
             self.study_area_west, self.study_area_south, self.study_area_east, self.study_area_north = geometry.shape(
                 self.study_area_geojson).bounds
-            
+
             self.study_area_transform = rasterio.transform.from_origin(self.study_area_west, self.study_area_north,
                                                                        lon_pixel_size, lat_pixel_size)
         else:
@@ -176,7 +176,7 @@ class RTOFS_Dataset:
 
         if self.time_interval == 'daily':
             time = time.replace(hour=0, minute=0, second=0, microsecond=0)
-        
+
         if direction in DATASET_STRUCTURE[self.source]:
             if len(self.netcdf_datasets[direction]) > 0:
                 if variable in DATA_VARIABLES:
@@ -186,7 +186,7 @@ class RTOFS_Dataset:
                     with self.dataset_locks[direction][dataset_name]:
                         data_variable = self.netcdf_datasets[direction][dataset_name][
                             DATA_VARIABLES[variable][self.source][dataset_name]]
-                        
+
                         # TODO study areas that cross over longitude +74.16 may have problems here
                         if crop:
                             selection = data_variable.sel(time=time,
@@ -210,14 +210,14 @@ class RTOFS_Dataset:
                     raise ValueError(f'Variable must be not one of {list(DATA_VARIABLES.keys())}.')
             else:
                 if self.logger is not None:
-                    self.logger.warn(
-                        f'{direction} does not exist in RTOFS dataset for {self.model_datetime.strftime("%Y%m%d")}.')
+                    self.logger.warn(f'{direction} does not exist in ' + \
+                                     f'RTOFS dataset for {self.model_datetime.strftime("%Y%m%d")}.')
         else:
             raise ValueError(f'Direction must be one of {list(DATASET_STRUCTURE[self.source].keys())}.')
 
     def write_rasters(self, output_dir: str, variables: list, time: datetime.datetime, filename_prefix: str = None,
                       filename_suffix: str = None, vector_components: bool = False, fill_value=-9999,
-                      drivers: list = ['GTiff'], crop: bool = True):
+                      driver: str = 'GTiff', crop: bool = True):
         """
         Write averaged raster data of given variables to given output directory.
 
@@ -228,7 +228,7 @@ class RTOFS_Dataset:
         :param filename_suffix: Suffix for filenames.
         :param vector_components: Whether to write direction and magnitude rasters.
         :param fill_value: Desired fill value of output.
-        :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
+        :param driver: Strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
         :param crop: Whether to crop to study area extent.
         """
 
@@ -250,11 +250,11 @@ class RTOFS_Dataset:
 
         for variable in variables:
             variable_means[variable] = self.data(variable, time, crop)
-        
+
         if vector_components:
             u_name = 'ssu'
             v_name = 'ssv'
-            
+
             if u_name not in variable_means:
                 u_data = self.data(u_name, time, crop)
             else:
@@ -276,10 +276,11 @@ class RTOFS_Dataset:
                     transform = self.study_area_transform
                 else:
                     transform = self.global_grid_transform
-                
+
                 gdal_args = {
                     'transform': transform, 'height': variable_mean.shape[0],
-                    'width': variable_mean.shape[1], 'count': 1, 'dtype': rasterio.float32, 'crs': RASTERIO_WGS84,
+                    'width': variable_mean.shape[1], 'count': 1, 'dtype': rasterio.float32,
+                    'crs': RASTERIO_WGS84,
                     'nodata': numpy.array([fill_value]).astype(variable_mean.dtype).item()
                 }
 
@@ -287,24 +288,23 @@ class RTOFS_Dataset:
                                   f'_{time_delta_string}{filename_suffix}'
                 output_filename = os.path.join(output_dir, output_filename)
 
-                for driver in drivers:
-                    if driver == 'AAIGrid':
-                        file_extension = '.asc'
-                        gdal_args.update({'FORCE_CELLSIZE': 'YES'})
-                    elif driver == 'GPKG':
-                        file_extension = '.gpkg'
-                    else:
-                        file_extension = '.tiff'
+                if driver == 'AAIGrid':
+                    file_extension = 'asc'
+                    gdal_args.update({'FORCE_CELLSIZE': 'YES'})
+                elif driver == 'GPKG':
+                    file_extension = 'gpkg'
+                else:
+                    file_extension = 'tiff'
 
-                    output_filename = f'{os.path.splitext(output_filename)[0]}{file_extension}'
+                output_filename = f'{os.path.splitext(output_filename)[0]}.{file_extension}'
 
-                    if self.logger is not None:
-                        self.logger.info(f'Writing {output_filename}')
-                    with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
-                        output_raster.write(variable_mean, 1)
+                if self.logger is not None:
+                    self.logger.info(f'Writing {output_filename}')
+                with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
+                    output_raster.write(variable_mean, 1)
 
     def write_raster(self, output_filename: str, variable: str, time: datetime.datetime, fill_value=-9999,
-                     drivers: list = ['GTiff'], crop: bool = True):
+                     driver: str = 'GTiff', crop: bool = True):
         """
         Writes interpolated raster of given variable to output path.
 
@@ -312,60 +312,59 @@ class RTOFS_Dataset:
         :param variable: Name of variable.
         :param time: Time from which to retrieve data.
         :param fill_value: Desired fill value of output.
-        :param drivers: List of strings of valid GDAL drivers (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
+        :param driver: Strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
         :param crop: Whether to crop to study area extent.
         """
 
         output_data = self.data(variable, time, crop)
-        
+
         if output_data is not None:
             if crop:
                 transform = self.study_area_transform
             else:
                 transform = self.global_grid_transform
-            
+
             gdal_args = {
                 'transform': transform, 'height': output_data.shape[0], 'width': output_data.shape[1],
                 'count': 1, 'dtype': rasterio.float32, 'crs': RASTERIO_WGS84,
                 'nodata': numpy.array([fill_value]).astype(output_data.dtype).item()
             }
 
-            for driver in drivers:
-                if driver == 'AAIGrid':
-                    file_extension = '.asc'
-                    gdal_args.update({'FORCE_CELLSIZE': 'YES'})
-                elif driver == 'GPKG':
-                    file_extension = '.gpkg'
-                else:
-                    file_extension = '.tiff'
-                
-                output_filename = f'{os.path.splitext(output_filename)[0]}{file_extension}'
+            if driver == 'AAIGrid':
+                file_extension = 'asc'
+                gdal_args.update({'FORCE_CELLSIZE': 'YES'})
+            elif driver == 'GPKG':
+                file_extension = 'gpkg'
+            else:
+                file_extension = 'tiff'
 
-                if self.logger is not None:
-                    self.logger.info(f'Writing {output_filename}')
-                with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
-                    output_raster.write(output_data, 1)
-    
+            output_filename = f'{os.path.splitext(output_filename)[0]}.{file_extension}'
+
+            if self.logger is not None:
+                self.logger.info(f'Writing {output_filename}')
+            with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
+                output_raster.write(output_data, 1)
+
     def __repr__(self):
         used_params = [self.model_datetime.__repr__()]
         optional_params = [self.source, self.time_interval, self.study_area_polygon_filename]
-        
+
         for param in optional_params:
             if param is not None:
                 if 'str' in str(type(param)):
                     param = f'"{param}"'
                 else:
                     param = str(param)
-                
+
                 used_params.append(param)
-        
+
         return f'{self.__class__.__name__}({str(", ".join(used_params))})'
 
 
 if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIR, r'output\test')
-    
+
     rtofs_dataset = RTOFS_Dataset(datetime.datetime.now())
     rtofs_dataset.write_raster(os.path.join(output_dir, 'rtofs_ssh.tiff'), 'ssh', datetime.datetime.now())
-    
+
     print('done')

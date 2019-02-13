@@ -40,7 +40,7 @@ def write_observation(output_dir: str, observation_date: datetime.datetime,
                       observation: str, logger: logbook.Logger = None):
     """
     Writes daily average of observational data on given date.
-    
+
     :param output_dir: output directory to write files
     :param observation_date: fate of observation
     :param observation: observation to write
@@ -70,7 +70,7 @@ def write_observation(output_dir: str, observation_date: datetime.datetime,
 
             hfr_range = hfr.HFR_Range(start_of_day_hfr_time, end_of_day_hfr_time, logger=logger)
             hfr_range.write_rasters(observation_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}',
-                                    variables=['ssu', 'ssv'], vector_components=True, drivers=['AAIGrid'],
+                                    variables=['ssu', 'ssv'], vector_components=True, driver='AAIGrid',
                                     fill_value=LEAFLET_NODATA_VALUE)
             del hfr_range
         elif observation == 'viirs':
@@ -82,18 +82,18 @@ def write_observation(output_dir: str, observation_date: datetime.datetime,
 
             viirs_range.write_raster(observation_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_morning',
                                      start_datetime=start_of_day_in_utc, end_datetime=noon_in_utc,
-                                     fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=False,
+                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', sses_correction=False,
                                      variables=['sst'])
             viirs_range.write_raster(observation_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_night',
                                      start_datetime=noon_in_utc, end_datetime=end_of_day_in_utc,
-                                     fill_value=LEAFLET_NODATA_VALUE, drivers=['GTiff'], sses_correction=False,
+                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', sses_correction=False,
                                      variables=['sst'])
             del viirs_range
         elif observation == 'smap':
             smap_dataset = smap.SMAP_Dataset(logger=logger)
 
             smap_dataset.write_rasters(observation_dir, data_datetime=start_of_day, fill_value=LEAFLET_NODATA_VALUE,
-                                       drivers=['GTiff'], variables=['sss'])
+                                       driver='GTiff', variables=['sss'])
             del smap_dataset
     except _utilities.NoDataError as error:
         logger.warn(error)
@@ -115,7 +115,8 @@ def write_rtofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
 
     # define directories to which output rasters will be written
     output_dirs = {
-        day_delta: os.path.join(output_dir, (model_run_date + datetime.timedelta(days=day_delta)).strftime("%Y%m%d"))
+        day_delta: os.path.join(output_dir,
+                                (model_run_date + datetime.timedelta(days=day_delta)).strftime("%Y%m%d"))
         for day_delta in day_deltas}
 
     for day_delta, daily_average_dir in output_dirs.items():
@@ -130,13 +131,14 @@ def write_rtofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
             if day_delta in MODEL_DAY_DELTAS['RTOFS']:
                 time_delta_string = f'{"f" if day_delta >= 0 else "n"}' + \
                                     f'{abs(day_delta) + 1 if day_delta >= 0 else abs(day_delta):03}'
+
                 day_of_forecast = model_run_date + datetime.timedelta(days=day_delta)
 
                 existing_files = os.listdir(daily_average_dir)
                 existing_files = [filename for filename in existing_files if
                                   'rtofs' in filename and time_delta_string in filename]
 
-                if rtofs_dataset is None and not any(
+                if rtofs_dataset is None and not all(
                         any(variable in filename for filename in existing_files) for variable in
                         ['sst', 'ssu', 'ssv', 'sss', 'ssh']):
                     rtofs_dataset = rtofs.RTOFS_Dataset(model_run_date, source='2ds', time_interval='daily',
@@ -145,14 +147,14 @@ def write_rtofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
                 for variable in ['sst', 'sss', 'ssh']:
                     if not any(variable in filename for filename in existing_files):
                         rtofs_dataset.write_rasters(daily_average_dir, variables=[variable], time=day_of_forecast,
-                                                    drivers=['GTiff'])
+                                                    driver='GTiff')
                     else:
                         logger.info(f'Skipping RTOFS day {day_delta} {variable}')
 
                 if not any('ssu' in filename for filename in existing_files) or not any(
                         'ssv' in filename for filename in existing_files):
                     rtofs_dataset.write_rasters(daily_average_dir, variables=['ssu', 'ssv'], time=day_of_forecast,
-                                                vector_components=True, drivers=['AAIGrid'])
+                                                vector_components=True, driver='AAIGrid')
                 else:
                     logger.info(f'Skipping RTOFS day {day_delta} uv')
         del rtofs_dataset
@@ -179,7 +181,8 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
 
     # define directories to which output rasters will be written
     output_dirs = {
-        day_delta: os.path.join(output_dir, (model_run_date + datetime.timedelta(days=day_delta)).strftime("%Y%m%d"))
+        day_delta: os.path.join(output_dir,
+                                (model_run_date + datetime.timedelta(days=day_delta)).strftime("%Y%m%d"))
         for day_delta in day_deltas}
 
     for day_delta, daily_average_dir in output_dirs.items():
@@ -218,7 +221,7 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
                     existing_files = [filename for filename in existing_files if
                                       'wcofs' in filename and time_delta_string in filename and 'noDA' in filename and f'{grid_size_km}km' in filename]
 
-                if wcofs_dataset is None and not any(
+                if wcofs_dataset is None and not all(
                         any(variable in filename for filename in existing_files) for variable in
                         ['sst', 'ssu', 'ssv', 'sss', 'ssh']):
                     if grid_size_km == 4:
@@ -235,7 +238,7 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
                         wcofs_dataset.write_rasters(daily_average_dir, [variable],
                                                     filename_suffix=wcofs_filename_suffix,
                                                     time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
-                                                    drivers=['GTiff'])
+                                                    driver='GTiff')
                     else:
                         logger.info(f'Skipping WCOFS day {day_delta} {variable}')
 
@@ -244,7 +247,7 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
                     wcofs_dataset.write_rasters(daily_average_dir, ['ssu', 'ssv'],
                                                 filename_suffix=wcofs_filename_suffix,
                                                 time_deltas=[day_delta], vector_components=True,
-                                                fill_value=LEAFLET_NODATA_VALUE, drivers=['AAIGrid'])
+                                                fill_value=LEAFLET_NODATA_VALUE, driver='AAIGrid')
                 else:
                     logger.info(f'Skipping WCOFS day {day_delta} uv')
         del wcofs_dataset
@@ -259,7 +262,7 @@ def write_daily_average(output_dir: str, output_date: datetime.datetime, day_del
                         logger: logbook.Logger = None):
     """
     Writes daily average of observational data and model output on given date.
-    
+
     :param output_dir: output directory to write files
     :param output_date: date of data run
     :param day_deltas: time deltas for which to write model output
