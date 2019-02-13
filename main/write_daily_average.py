@@ -9,7 +9,6 @@ Created on Aug 21, 2018
 import datetime
 import os
 import sys
-import typing
 
 import logbook
 import pytz
@@ -37,7 +36,7 @@ LEAFLET_NODATA_VALUE = -9999
 MODEL_DAY_DELTAS = {'WCOFS': range(-1, 2 + 1), 'RTOFS': range(-3, 8 + 1)}
 
 
-def write_observation(output_dir: str, observation_date: typing.Union[datetime.date, datetime.datetime],
+def write_observation(output_dir: str, observation_date: datetime.datetime,
                       observation: str, logger: logbook.Logger = None):
     """
     Writes daily average of observational data on given date.
@@ -55,7 +54,7 @@ def write_observation(output_dir: str, observation_date: typing.Union[datetime.d
         start_of_day = observation_date.replace(hour=0, minute=0, second=0, microsecond=0)
     else:
         start_of_day = observation_date
-    
+
     end_of_day = start_of_day + datetime.timedelta(days=1)
 
     # write observational data to directory for specified date
@@ -110,20 +109,20 @@ def write_rtofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
     :param logger: logbook logger
     :raise _utilities.NoDataError: if no data found
     """
-    
+
     if 'datetime.date' in str(type(model_run_date)):
         model_run_date = datetime.datetime.combine(model_run_date, datetime.datetime.min.time())
-    
+
     # define directories to which output rasters will be written
     output_dirs = {
         day_delta: os.path.join(output_dir, (model_run_date + datetime.timedelta(days=day_delta)).strftime("%Y%m%d"))
         for day_delta in day_deltas}
-    
+
     for day_delta, daily_average_dir in output_dirs.items():
         # ensure output directory exists
         if not os.path.isdir(daily_average_dir):
             os.mkdir(daily_average_dir)
-    
+
     try:
         rtofs_dataset = None
 
@@ -174,22 +173,22 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
     :param logger: logbook logger
     :raise _utilities.NoDataError: if no data found
     """
-    
+
     if 'datetime.date' in str(type(model_run_date)):
         model_run_date = datetime.datetime.combine(model_run_date, datetime.datetime.min.time())
-    
+
     # define directories to which output rasters will be written
     output_dirs = {
         day_delta: os.path.join(output_dir, (model_run_date + datetime.timedelta(days=day_delta)).strftime("%Y%m%d"))
         for day_delta in day_deltas}
-    
+
     for day_delta, daily_average_dir in output_dirs.items():
         # ensure output directory exists
         if not os.path.isdir(daily_average_dir):
             os.mkdir(daily_average_dir)
 
     wcofs_string = 'wcofs'
-    
+
     if grid_size_km == 4:
         grid_filename = wcofs.WCOFS_4KM_GRID_FILENAME
         if not data_assimilation:
@@ -198,7 +197,7 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
         grid_filename = wcofs.WCOFS_2KM_GRID_FILENAME
         wcofs_string = 'wcofs2'
         wcofs.reset_dataset_grid()
-    
+
     try:
         wcofs_dataset = None
 
@@ -282,7 +281,7 @@ def write_daily_average(output_dir: str, output_date: datetime.datetime, day_del
     logger.notice('Processing WCOFS noDA...')
     write_wcofs(output_dir, output_date, day_deltas, data_assimilation=False, logger=logbook.Logger('WCOFS noDA'))
     logger.notice(f'Wrote models to {output_dir}')
-    
+
     # populate JSON file with new directory structure so that JavaScript application can see it
     json_dir_structure.populate_json(OUTPUT_DIR, JSON_PATH)
 
@@ -292,18 +291,18 @@ if __name__ == '__main__':
     for dir_path in [OUTPUT_DIR, DAILY_AVERAGES_DIR, LOG_DIR]:
         if not os.path.isdir(dir_path):
             os.mkdir(dir_path)
-    
+
     start_time = datetime.datetime.now()
-    
+
     log_path = os.path.join(LOG_DIR, f'{start_time.strftime("%Y%m%d")}_conversion.log')
 
     logbook.StreamHandler(sys.stdout, level='DEBUG', bubble=True).push_application()
     logbook.FileHandler(log_path, level='NOTICE', bubble=True).push_application()
     logger = logbook.Logger('PyOFS')
-    
+
     # write initial message
     logger.notice('Starting file conversion...')
-    
+
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = MODEL_DAY_DELTAS['WCOFS']
 
@@ -311,11 +310,11 @@ if __name__ == '__main__':
     #                                          datetime.datetime.now() - datetime.timedelta(days=3))
     # for model_run_date in model_run_dates:
     #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, logger=logger)
-    
+
     model_run_date = datetime.date.today()
     write_daily_average(DAILY_AVERAGES_DIR, model_run_date, day_deltas, logger=logger)
-    
+
     logger.notice(f'Finished writing files. Total time: ' + \
                   f'{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
-    
+
     print('done')
