@@ -47,7 +47,7 @@ WCOFS_NDBC_STATIONS_FILENAME = os.path.join(DATA_DIR, r"reference\ndbc_stations.
 SOURCE_URL = 'https://dods.ndbc.noaa.gov/thredds/catalog/data/ocean/catalog.html'
 
 
-class NDBC_Station:
+class NDBCStation:
     """
     Buoy data of ocean variables within a time interval.
     """
@@ -109,7 +109,7 @@ class NDBC_Station:
         return f'{self.__class__.__name__}({self.station_name})'
 
 
-class NDBC_Range:
+class NDBCRange:
     """
     Buoy data of ocean variables within a time interval.
     """
@@ -136,7 +136,7 @@ class NDBC_Range:
 
         # concurrently populate dictionary with datasets for each station within given time interval
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            running_futures = {concurrency_pool.submit(NDBC_Station, station_name): station_name for station_name in
+            running_futures = {concurrency_pool.submit(NDBCStation, station_name): station_name for station_name in
                                self.station_names}
 
             for completed_future in futures.as_completed(running_futures):
@@ -276,7 +276,7 @@ if __name__ == '__main__':
     end_datetime = datetime.datetime.now()
     date_interval_string = f'{start_datetime.strftime("%m%d%H")}_{end_datetime.strftime("%m%d%H")}'
 
-    ndbc_range = NDBC_Range(start_datetime, end_datetime, stations=wcofs_stations)
+    ndbc_range = NDBCRange(start_datetime, end_datetime, stations=wcofs_stations)
     ndbc_range.write_vector(os.path.join(output_dir, 'ndbc.gpkg'), f'NDBC_{date_interval_string}')
 
     print('done')

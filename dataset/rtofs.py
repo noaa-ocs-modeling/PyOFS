@@ -72,7 +72,7 @@ SOURCE_URL = 'https://nomads.ncep.noaa.gov:9090/dods/rtofs'
 GLOBAL_LOCK = threading.Lock()
 
 
-class RTOFS_Dataset:
+class RTOFSDataset:
     """
     Real-Time Ocean Forecasting System (RTOFS) NetCDF dataset.
     """
@@ -210,7 +210,7 @@ class RTOFS_Dataset:
                     raise ValueError(f'Variable must be not one of {list(DATA_VARIABLES.keys())}.')
             else:
                 if self.logger is not None:
-                    self.logger.warn(f'{direction} does not exist in ' + \
+                    self.logger.warn(f'{direction} does not exist in ' +
                                      f'RTOFS dataset for {self.model_datetime.strftime("%Y%m%d")}.')
         else:
             raise ValueError(f'Direction must be one of {list(DATASET_STRUCTURE[self.source].keys())}.')
@@ -364,7 +364,7 @@ class RTOFS_Dataset:
 if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIR, r'output\test')
 
-    rtofs_dataset = RTOFS_Dataset(datetime.datetime.now())
+    rtofs_dataset = RTOFSDataset(datetime.datetime.now())
     rtofs_dataset.write_raster(os.path.join(output_dir, 'rtofs_ssh.tiff'), 'ssh', datetime.datetime.now())
 
     print('done')

@@ -58,7 +58,7 @@ SOURCE_URLS = OrderedDict({
 })
 
 
-class VIIRS_Dataset:
+class VIIRSDataset:
     study_area_transform = None
     study_area_extent = None
     study_area_bounds = None
@@ -218,29 +218,29 @@ class VIIRS_Dataset:
         lon_pixel_size = self.netcdf_dataset.geospatial_lon_resolution
         lat_pixel_size = self.netcdf_dataset.geospatial_lat_resolution
 
-        if VIIRS_Dataset.study_area_extent is None:
+        if VIIRSDataset.study_area_extent is None:
             if self.logger is not None:
                 self.logger.debug(f'Calculating indices and transform from granule at {self.granule_datetime} UTC...')
 
             # get first record in layer
             with fiona.open(self.study_area_polygon_filename, layer=study_area_polygon_layer_name) as vector_layer:
-                VIIRS_Dataset.study_area_extent = shapely.geometry.MultiPolygon(
+                VIIRSDataset.study_area_extent = shapely.geometry.MultiPolygon(
                     [shapely.geometry.Polygon(polygon[0]) for polygon in
                      next(iter(vector_layer))['geometry']['coordinates']])
 
-            VIIRS_Dataset.study_area_bounds = VIIRS_Dataset.study_area_extent.bounds
-            VIIRS_Dataset.study_area_transform = rasterio.transform.from_origin(VIIRS_Dataset.study_area_bounds[0],
-                                                                                VIIRS_Dataset.study_area_bounds[3],
-                                                                                lon_pixel_size, lat_pixel_size)
+            VIIRSDataset.study_area_bounds = VIIRSDataset.study_area_extent.bounds
+            VIIRSDataset.study_area_transform = rasterio.transform.from_origin(VIIRSDataset.study_area_bounds[0],
+                                                                               VIIRSDataset.study_area_bounds[3],
+                                                                               lon_pixel_size, lat_pixel_size)
 
-        if VIIRS_Dataset.study_area_bounds is not None:
-            self.netcdf_dataset = self.netcdf_dataset.isel(time=0).sel(lon=slice(VIIRS_Dataset.study_area_bounds[0],
-                                                                                 VIIRS_Dataset.study_area_bounds[2]),
-                                                                       lat=slice(VIIRS_Dataset.study_area_bounds[3],
-                                                                                 VIIRS_Dataset.study_area_bounds[1]))
+        if VIIRSDataset.study_area_bounds is not None:
+            self.netcdf_dataset = self.netcdf_dataset.isel(time=0).sel(lon=slice(VIIRSDataset.study_area_bounds[0],
+                                                                                 VIIRSDataset.study_area_bounds[2]),
+                                                                       lat=slice(VIIRSDataset.study_area_bounds[3],
+                                                                                 VIIRSDataset.study_area_bounds[1]))
 
-        if VIIRS_Dataset.study_area_coordinates is None:
-            VIIRS_Dataset.study_area_coordinates = {
+        if VIIRSDataset.study_area_coordinates is None:
+            VIIRSDataset.study_area_coordinates = {
                 'lon': self.netcdf_dataset['lon'], 'lat': self.netcdf_dataset['lat']
             }
 
@@ -351,7 +351,7 @@ class VIIRS_Dataset:
                 gdal_args = {
                     'height': input_data.shape[0], 'width': input_data.shape[1], 'count': 1,
                     'dtype': rasterio.float32,
-                    'crs': RASTERIO_WGS84, 'transform': VIIRS_Dataset.study_area_transform, 'nodata': fill_value
+                    'crs': RASTERIO_WGS84, 'transform': VIIRSDataset.study_area_transform, 'nodata': fill_value
                 }
 
                 if driver == 'AAIGrid':
@@ -387,7 +387,7 @@ class VIIRS_Dataset:
         return f'{self.__class__.__name__}({str(", ".join(used_params))})'
 
 
-class VIIRS_Range:
+class VIIRSRange:
     """
     Range of VIIRS dataset.
     """
@@ -433,7 +433,7 @@ class VIIRS_Range:
 
         if len(self.pass_times) > 0:
             if self.logger is not None:
-                self.logger.info(f'Collecting VIIRS data from {len(self.pass_times)} passes between ' + \
+                self.logger.info(f'Collecting VIIRS data from {len(self.pass_times)} passes between ' +
                                  f'{numpy.min(self.pass_times)} UTC and {numpy.max(self.pass_times)} UTC...')
 
             # create dictionary to store scenes
@@ -444,7 +444,7 @@ class VIIRS_Range:
                     running_futures = {}
 
                     for pass_time in self.pass_times:
-                        running_future = concurrency_pool.submit(VIIRS_Dataset, granule_datetime=pass_time,
+                        running_future = concurrency_pool.submit(VIIRSDataset, granule_datetime=pass_time,
                                                                  study_area_polygon_filename=self.study_area_polygon_filename,
                                                                  algorithm=self.algorithm, version=self.version,
                                                                  satellite=satellite, logger=logger)
@@ -462,9 +462,9 @@ class VIIRS_Range:
                     del running_futures
 
             if len(self.datasets) > 0:
-                VIIRS_Range.study_area_transform = VIIRS_Dataset.study_area_transform
-                VIIRS_Range.study_area_extent = VIIRS_Dataset.study_area_extent
-                VIIRS_Range.study_area_bounds = VIIRS_Dataset.study_area_bounds
+                VIIRSRange.study_area_transform = VIIRSDataset.study_area_transform
+                VIIRSRange.study_area_extent = VIIRSDataset.study_area_extent
+                VIIRSRange.study_area_bounds = VIIRSDataset.study_area_bounds
 
                 if self.logger is not None:
                     self.logger.debug(f'VIIRS data was found in {len(self.datasets)} passes.')
@@ -535,8 +535,8 @@ class VIIRS_Range:
                         scenes_data.append(scene_data)
 
             variable_data = numpy.empty(
-                (VIIRS_Dataset.study_area_coordinates['lat'].shape[0],
-                 VIIRS_Dataset.study_area_coordinates['lon'].shape[0]))
+                (VIIRSDataset.study_area_coordinates['lat'].shape[0],
+                 VIIRSDataset.study_area_coordinates['lon'].shape[0]))
             variable_data[:] = numpy.nan
 
             if len(scenes_data) > 0:
@@ -576,7 +576,7 @@ class VIIRS_Range:
                     dataset = self.datasets[dataset_datetime][current_satellite]
 
                     concurrency_pool.submit(dataset.write_rasters, output_dir, variables=variables,
-                                            filename_prefix=f'{filename_prefix}_' + \
+                                            filename_prefix=f'{filename_prefix}_' +
                                                             f'{dataset_datetime.strftime("%Y%m%d%H%M%S")}',
                                             fill_value=fill_value, drivers=driver, sses_correction=sses_correction)
 
@@ -617,7 +617,7 @@ class VIIRS_Range:
                 gdal_args = {
                     'height': output_data.shape[0], 'width': output_data.shape[1], 'count': 1,
                     'crs': RASTERIO_WGS84,
-                    'transform': VIIRS_Range.study_area_transform
+                    'transform': VIIRSRange.study_area_transform
                 }
 
                 if driver == 'AAIGrid':
@@ -691,8 +691,8 @@ class VIIRS_Range:
         data_arrays = {}
 
         coordinates = OrderedDict({
-            'lat': VIIRS_Dataset.study_area_coordinates['lat'],
-            'lon': VIIRS_Dataset.study_area_coordinates['lon']
+            'lat': VIIRSDataset.study_area_coordinates['lat'],
+            'lon': VIIRSDataset.study_area_coordinates['lon']
         })
 
         if satellites is not None:
@@ -771,7 +771,7 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
     end_datetime = _utilities.round_to_ten_minutes(start_datetime + (VIIRS_PERIOD * num_periods))
 
     print(
-        f'Getting pass times between {start_datetime.strftime("%Y-%m-%d %H:%M:%S")} and ' + \
+        f'Getting pass times between {start_datetime.strftime("%Y-%m-%d %H:%M:%S")} and ' +
         f'{end_datetime.strftime("%Y-%m-%d %H:%M:%S")}')
 
     datetime_range = _utilities.ten_minute_range(start_datetime, end_datetime)
@@ -801,8 +801,8 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
 
             try:
                 # get dataset of new datetime
-                dataset = VIIRS_Dataset(cycle_datetime, study_area_polygon_filename, data_source, subskin,
-                                        acspo_version)
+                dataset = VIIRSDataset(cycle_datetime, study_area_polygon_filename, data_source, subskin,
+                                       acspo_version)
 
                 # check if dataset falls within polygon extent
                 if dataset.data_extent.is_valid:
@@ -811,7 +811,7 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
                         cycle_duration = cycle_datetime - (start_datetime + cycle_offset)
 
                         print(
-                            f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")} {cycle_duration.total_seconds()}: ' + \
+                            f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")} {cycle_duration.total_seconds()}: ' +
                             f'valid scene (checked {cycle_index + 1} cycle(s))')
                         lines.append(f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")},{cycle_duration.total_seconds()}')
 
@@ -882,7 +882,7 @@ if __name__ == '__main__':
     start_datetime = datetime.datetime.utcnow() - datetime.timedelta(days=1)
     end_datetime = start_datetime + datetime.timedelta(days=1)
 
-    viirs_range = VIIRS_Range(start_datetime, end_datetime)
+    viirs_range = VIIRSRange(start_datetime, end_datetime)
     viirs_range.write_raster(output_dir, filename_prefix='viirs_npp', satellite='NPP')
     viirs_range.write_raster(output_dir, filename_prefix='viirs_n20', satellite='N20')
 
