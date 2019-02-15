@@ -369,6 +369,8 @@ class WCOFSDataset:
         :param driver: Strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
         """
 
+        start_time = datetime.datetime.now()
+
         if variables is None:
             variables = list(DATA_VARIABLES.keys())
 
@@ -448,7 +450,7 @@ class WCOFSDataset:
 
         if self.logger is not None:
             self.logger.debug('parallel data aggregation took ' +
-                              '{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+                              f'{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
         start_time = datetime.datetime.now()
 
