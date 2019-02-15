@@ -361,8 +361,8 @@ class HFRRange:
 
     def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = '',
                       variables: list = None, start_datetime: datetime.datetime = None,
-                      end_datetime: datetime.datetime = None, vector_components: bool = False,
-                      fill_value: float = -9999, driver: str = 'GTiff', dop_threshold: float = 0.5):
+                      end_datetime: datetime.datetime = None, fill_value: float = -9999, driver: str = 'GTiff',
+                      dop_threshold: float = 0.5):
         """
         Write average of HFR data for all hours in the given time interval to rasters.
 
@@ -372,7 +372,6 @@ class HFRRange:
         :param variables: List of variable names to use.
         :param start_datetime: Beginning of time interval.
         :param end_datetime: End of time interval.
-        :param vector_components: Whether to write direction and magnitude rasters.
         :param fill_value: Desired fill value of output.
         :param driver: String of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
         :param dop_threshold: Threshold for dilution of precision above which data is not useable.
@@ -385,9 +384,9 @@ class HFRRange:
             filename_suffix = f'_{filename_suffix}'
 
         variable_means = {variable: self.data_average(variable, start_datetime, end_datetime, dop_threshold) for
-                          variable in variables}
+                          variable in variables if variable not in ['dir', 'mag']}
 
-        if vector_components:
+        if 'dir' in variables or 'mag' in variables:
             if 'ssu' in variables:
                 u_data = variable_means['ssu']
             else:

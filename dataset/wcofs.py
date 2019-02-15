@@ -353,7 +353,7 @@ class WCOFSDataset:
 
     def write_rasters(self, output_dir: str, variables: list = None, filename_suffix: str = None,
                       time_deltas: list = None, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
-                      vector_components: bool = False, x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999,
+                      x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999,
                       driver: str = 'GTiff'):
         """
         Write averaged raster data of given variables to given output directory.
@@ -363,7 +363,6 @@ class WCOFSDataset:
         :param time_deltas: List of time indices to write.
         :param filename_suffix: Suffix for filenames.
         :param study_area_polygon_filename: Path to vector file containing study area boundary.
-        :param vector_components: Whether to write direction and magnitude rasters.
         :param x_size: Cell size of output grid in X direction.
         :param y_size: Cell size of output grid in Y direction.
         :param fill_value: Desired fill value of output.
@@ -394,7 +393,7 @@ class WCOFSDataset:
 
         grid_variables = list(variables)
 
-        if vector_components:
+        if 'dir' in variables or 'mag' in variables:
             self.variable_grids['dir'] = 'rho'
             self.variable_grids['mag'] = 'rho'
             grid_variables += ['dir', 'mag']
@@ -419,11 +418,8 @@ class WCOFSDataset:
 
         # concurrently populate dictionary with averaged data within given time interval for each variable
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            running_futures = {}
-
-            for variable in variables:
-                running_future = concurrency_pool.submit(self.data_average, variable, time_deltas)
-                running_futures[running_future] = variable
+            running_futures = {concurrency_pool.submit(self.data_average, variable, time_deltas): variable for variable
+                               in variables if variable not in ['dir', 'mag']}
 
             for completed_future in futures.as_completed(running_futures):
                 variable = running_futures[completed_future]
@@ -434,7 +430,7 @@ class WCOFSDataset:
 
             del running_futures
 
-        if vector_components:
+        if 'dir' in variables or 'mag' in variables:
             u_name = 'ssu'
             v_name = 'ssv'
 
@@ -490,8 +486,11 @@ class WCOFSDataset:
 
                 del running_futures
 
-            if vector_components:
+            if 'dir' in variables or 'mag' in variables:
                 if 'ssu' in interpolated_data and 'ssv' in interpolated_data:
+                    u_name = 'ssu'
+                    v_name = 'ssv'
+
                     interpolated_data['dir'] = {}
                     interpolated_data['mag'] = {}
 
@@ -971,8 +970,7 @@ class WCOFSRange:
     def write_rasters(self, output_dir: str, variables: list = None, filename_suffix: str = None,
                       study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
                       start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
-                      vector_components: bool = False, x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999,
-                      driver: str = 'GTiff'):
+                      x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999, driver: str = 'GTiff'):
         """
         Write raster data of given variables to given output directory, averaged over given time interval.
 
@@ -982,7 +980,6 @@ class WCOFSRange:
         :param study_area_polygon_filename: Path to vector file containing study area boundary.
         :param start_datetime: Beginning of time interval.
         :param end_datetime: End of time interval.
-        :param vector_components: Whether to write direction and magnitude rasters.
         :param x_size: Cell size of output grid in X direction.
         :param y_size: Cell size of output grid in Y direction.
         :param fill_value: Desired fill value of output.
@@ -1011,7 +1008,7 @@ class WCOFSRange:
 
         filename_suffix = f'_{filename_suffix}' if filename_suffix is not None else ''
 
-        if vector_components:
+        if 'dir' in variables or 'mag' in variables:
             self.variable_grids['dir'] = 'rho'
             self.variable_grids['mag'] = 'rho'
             grid_variables = variables + ['dir', 'mag']
@@ -1042,7 +1039,7 @@ class WCOFSRange:
         with futures.ThreadPoolExecutor() as concurrency_pool:
             running_futures = {
                 concurrency_pool.submit(self.data_averages, variable, start_datetime, end_datetime): variable for
-                variable in variables}
+                variable in variables if variable not in ['dir', 'mag']}
 
             for completed_future in futures.as_completed(running_futures):
                 variable = running_futures[completed_future]
@@ -1050,7 +1047,7 @@ class WCOFSRange:
 
             del running_futures
 
-        if vector_components:
+        if 'dir' in variables or 'mag' in variables:
             u_name = 'ssu'
             v_name = 'ssv'
 
@@ -1101,7 +1098,10 @@ class WCOFSRange:
 
             del running_futures
 
-        if vector_components:
+        if 'dir' in variables or 'mag' in variables:
+            u_name = 'ssu'
+            v_name = 'ssv'
+
             interpolated_data['dir'] = {}
             interpolated_data['mag'] = {}
 
