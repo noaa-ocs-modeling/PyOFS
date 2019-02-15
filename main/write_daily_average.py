@@ -221,12 +221,20 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
 
                 existing_files = os.listdir(daily_average_dir)
 
-                if grid_size_km == 4:
-                    existing_files = [filename for filename in existing_files if
-                                      'wcofs' in filename and time_delta_string in filename and 'noDA' not in filename]
+                if data_assimilation:
+                    if grid_size_km == 4:
+                        existing_files = [filename for filename in existing_files if
+                                          'wcofs' in filename and time_delta_string in filename and 'noDA' not in filename]
+                    else:
+                        existing_files = [filename for filename in existing_files if
+                                          'wcofs' in filename and time_delta_string in filename and 'noDA' not in filename and f'{grid_size_km}km' in filename]
                 else:
-                    existing_files = [filename for filename in existing_files if
-                                      'wcofs' in filename and time_delta_string in filename and 'noDA' in filename and f'{grid_size_km}km' in filename]
+                    if grid_size_km == 4:
+                        existing_files = [filename for filename in existing_files if
+                                          'wcofs' in filename and time_delta_string in filename and 'noDA' in filename]
+                    else:
+                        existing_files = [filename for filename in existing_files if
+                                          'wcofs' in filename and time_delta_string in filename and 'noDA' in filename and f'{grid_size_km}km' in filename]
 
                 if wcofs_dataset is None and not all(
                         any(variable in filename for filename in existing_files) for variable in
@@ -276,16 +284,16 @@ def write_daily_average(output_dir: str, output_date: datetime.datetime, day_del
     :param logger: logging object
     """
 
-    logger.notice('Processing HFR SSUV...')
-    write_observation(output_dir, output_date, 'hfr', logger=logbook.Logger('HFR'))
-    logger.notice('Processing VIIRS SST...')
-    write_observation(output_dir, output_date, 'viirs', logger=logbook.Logger('VIIRS'))
-    logger.notice('Processing SMAP SSS...')
-    write_observation(output_dir, output_date, 'smap', logger=logbook.Logger('SMAP'))
-    logger.notice(f'Wrote observations to {output_dir}')
+    # logger.notice('Processing HFR SSUV...')
+    # write_observation(output_dir, output_date, 'hfr', logger=logbook.Logger('HFR'))
+    # logger.notice('Processing VIIRS SST...')
+    # write_observation(output_dir, output_date, 'viirs', logger=logbook.Logger('VIIRS'))
+    # logger.notice('Processing SMAP SSS...')
+    # write_observation(output_dir, output_date, 'smap', logger=logbook.Logger('SMAP'))
+    # logger.notice(f'Wrote observations to {output_dir}')
 
-    logger.notice('Processing RTOFS...')
-    write_rtofs(output_dir, output_date, day_deltas, logger=logbook.Logger('RTOFS'))
+    # logger.notice('Processing RTOFS...')
+    # write_rtofs(output_dir, output_date, day_deltas, logger=logbook.Logger('RTOFS'))
     logger.notice('Processing WCOFS...')
     write_wcofs(output_dir, output_date, day_deltas, logger=logbook.Logger('WCOFS'))
     logger.notice('Processing WCOFS noDA...')

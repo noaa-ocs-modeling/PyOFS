@@ -400,6 +400,10 @@ class WCOFSDataset:
             self.variable_grids['mag'] = 'rho'
             grid_variables += ['dir', 'mag']
 
+            for required_variable in ['ssu', 'ssv']:
+                if required_variable not in grid_variables:
+                    grid_variables.append(required_variable)
+
         output_grid_coordinates = {}
 
         for variable in grid_variables:
@@ -1010,10 +1014,16 @@ class WCOFSRange:
 
         filename_suffix = f'_{filename_suffix}' if filename_suffix is not None else ''
 
+        grid_variables = list(variables)
+
         if 'dir' in variables or 'mag' in variables:
             self.variable_grids['dir'] = 'rho'
             self.variable_grids['mag'] = 'rho'
-            grid_variables = variables + ['dir', 'mag']
+            grid_variables += ['dir', 'mag']
+
+            for required_variable in ['ssu', 'ssv']:
+                if required_variable not in grid_variables:
+                    grid_variables.append(required_variable)
         else:
             grid_variables = variables
 
