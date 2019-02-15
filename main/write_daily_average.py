@@ -95,7 +95,7 @@ def write_observation(output_dir: str, observation_date: datetime.datetime,
             smap_dataset.write_rasters(observation_dir, data_datetime=start_of_day, fill_value=LEAFLET_NODATA_VALUE,
                                        driver='GTiff', variables=['sss'])
             del smap_dataset
-    except _utilities.NoDataError as error:
+    except Exception as error:
         logger.warn(error)
 
 
@@ -148,12 +148,15 @@ def write_rtofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
                     rtofs_dataset = rtofs.RTOFSDataset(model_run_date, source='2ds', time_interval='daily',
                                                        logger=logger)
 
-                for variable in scalar_variables:
-                    if not any(variable in filename for filename in existing_files):
-                        rtofs_dataset.write_rasters(daily_average_dir, variables=[variable], time=day_of_forecast,
-                                                    driver='GTiff')
-                    else:
-                        logger.info(f'Skipping RTOFS day {day_delta} {variable}')
+                scalar_variables_to_write = [variable for variable in scalar_variables if
+                                             not any(variable in filename for filename in existing_files)]
+
+                if len(scalar_variables_to_write) > 0:
+                    rtofs_dataset.write_rasters(daily_average_dir, variables=scalar_variables_to_write,
+                                                time=day_of_forecast,
+                                                driver='GTiff')
+                else:
+                    logger.info(f'Skipping RTOFS day {day_delta} scalar variables')
 
                 if not all(any(vector_variable in filename for filename in existing_files) for vector_variable in
                            vector_variables):
@@ -162,7 +165,7 @@ def write_rtofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
                 else:
                     logger.info(f'Skipping RTOFS day {day_delta} uv')
         del rtofs_dataset
-    except _utilities.NoDataError as error:
+    except Exception as error:
         logger.warn(error)
 
 
@@ -217,7 +220,13 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
                 time_delta_string = f'{wcofs_direction[0]}' + \
                                     f'{abs(day_delta) + 1 if wcofs_direction == "forecast" else abs(day_delta):03}'
 
-                wcofs_filename_suffix = f'{time_delta_string}{f"_noDA_{grid_size_km}km" if grid_size_km == 2 else ""}'
+                wcofs_filename_suffix = time_delta_string
+
+                if not data_assimilation:
+                    wcofs_filename_suffix = f'{wcofs_filename_suffix}_noDA'
+
+                if not data_assimilation or grid_size_km == 2:
+                    wcofs_filename_suffix = f'{wcofs_filename_suffix}_{grid_size_km}km'
 
                 existing_files = os.listdir(daily_average_dir)
 
@@ -248,14 +257,16 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
                                                            source_url=os.path.join(DATA_DIR, 'input/wcofs/avg'),
                                                            wcofs_string=wcofs_string, logger=logger)
 
-                for variable in scalar_variables:
-                    if not any(variable in filename for filename in existing_files):
-                        wcofs_dataset.write_rasters(daily_average_dir, [variable],
-                                                    filename_suffix=wcofs_filename_suffix,
-                                                    time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
-                                                    driver='GTiff')
-                    else:
-                        logger.info(f'Skipping WCOFS day {day_delta} {variable}')
+                scalar_variables_to_write = [variable for variable in scalar_variables if
+                                             not any(variable in filename for filename in existing_files)]
+
+                if len(scalar_variables_to_write) > 0:
+                    wcofs_dataset.write_rasters(daily_average_dir, scalar_variables_to_write,
+                                                filename_suffix=wcofs_filename_suffix,
+                                                time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
+                                                driver='GTiff')
+                else:
+                    logger.info(f'Skipping WCOFS day {day_delta} scalar variables')
 
                 if not all(any(vector_variable in filename for filename in existing_files) for vector_variable in
                            vector_variables):
@@ -269,7 +280,7 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
 
         if grid_size_km == 2:
             wcofs.reset_dataset_grid()
-    except _utilities.NoDataError as error:
+    except Exception as error:
         logger.warn(error)
 
 
@@ -326,7 +337,7 @@ if __name__ == '__main__':
     day_deltas = MODEL_DAY_DELTAS['WCOFS']
 
     # model_run_dates = _utilities.range_daily(datetime.datetime.now(),
-    #                                          datetime.datetime(2019, 12, 1))
+    #                                          datetime.datetime(2018, 12, 1))
     # for model_run_date in model_run_dates:
     #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, logger=logger)
 
