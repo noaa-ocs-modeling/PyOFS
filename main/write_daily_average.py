@@ -95,7 +95,7 @@ def write_observation(output_dir: str, observation_date: datetime.datetime,
             smap_dataset.write_rasters(observation_dir, data_datetime=start_of_day, fill_value=LEAFLET_NODATA_VALUE,
                                        driver='GTiff', variables=['sss'])
             del smap_dataset
-    except _utilities.NoDataError as error:
+    except Exception as error:
         logger.warn(error)
 
 
@@ -162,7 +162,7 @@ def write_rtofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
                 else:
                     logger.info(f'Skipping RTOFS day {day_delta} uv')
         del rtofs_dataset
-    except _utilities.NoDataError as error:
+    except Exception as error:
         logger.warn(error)
 
 
@@ -269,7 +269,7 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
 
         if grid_size_km == 2:
             wcofs.reset_dataset_grid()
-    except _utilities.NoDataError as error:
+    except Exception as error:
         logger.warn(error)
 
 
