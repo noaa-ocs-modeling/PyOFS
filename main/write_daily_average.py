@@ -70,7 +70,7 @@ def write_observation(output_dir: str, observation_date: datetime.datetime,
 
             hfr_range = hfr.HFRRange(start_of_day_hfr_time, end_of_day_hfr_time, logger=logger)
             hfr_range.write_rasters(observation_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}',
-                                    variables=['ssu', 'ssv'], vector_components=True, driver='AAIGrid',
+                                    variables=['dir', 'mag'], driver='AAIGrid',
                                     fill_value=LEAFLET_NODATA_VALUE)
             del hfr_range
         elif observation == 'viirs':
@@ -99,13 +99,17 @@ def write_observation(output_dir: str, observation_date: datetime.datetime,
         logger.warn(error)
 
 
-def write_rtofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: list, logger: logbook.Logger = None):
+def write_rtofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: list,
+                scalar_variables: list = ('sst', 'sss', 'ssh'), vector_variables: list = ('dir', 'mag'),
+                logger: logbook.Logger = None):
     """
     Writes daily average of RTOFS output on given date.
 
     :param output_dir: output directory to write files
     :param model_run_date: date of model run
     :param day_deltas: time deltas for which to write model output
+    :param scalar_variables: list of scalar variables to use
+    :param vector_variables: list of vector variables to use
     :param logger: logbook logger
     :raise _utilities.NoDataError: if no data found
     """
@@ -140,21 +144,21 @@ def write_rtofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
 
                 if rtofs_dataset is None and not all(
                         any(variable in filename for filename in existing_files) for variable in
-                        ['sst', 'ssu', 'ssv', 'sss', 'ssh']):
+                        list(scalar_variables) + list(vector_variables)):
                     rtofs_dataset = rtofs.RTOFSDataset(model_run_date, source='2ds', time_interval='daily',
                                                        logger=logger)
 
-                for variable in ['sst', 'sss', 'ssh']:
+                for variable in scalar_variables:
                     if not any(variable in filename for filename in existing_files):
                         rtofs_dataset.write_rasters(daily_average_dir, variables=[variable], time=day_of_forecast,
                                                     driver='GTiff')
                     else:
                         logger.info(f'Skipping RTOFS day {day_delta} {variable}')
 
-                if not any('ssu' in filename for filename in existing_files) or not any(
-                        'ssv' in filename for filename in existing_files):
-                    rtofs_dataset.write_rasters(daily_average_dir, variables=['ssu', 'ssv'], time=day_of_forecast,
-                                                vector_components=True, driver='AAIGrid')
+                if not all(any(vector_variable in filename for filename in existing_files) for vector_variable in
+                           vector_variables):
+                    rtofs_dataset.write_rasters(daily_average_dir, variables=vector_variables, time=day_of_forecast,
+                                                driver='AAIGrid')
                 else:
                     logger.info(f'Skipping RTOFS day {day_delta} uv')
         del rtofs_dataset
@@ -162,14 +166,17 @@ def write_rtofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
         logger.warn(error)
 
 
-def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: list, data_assimilation: bool = True,
-                grid_size_km: int = 4, logger: logbook.Logger = None):
+def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: list,
+                scalar_variables: list = ('sst', 'sss', 'ssh'), vector_variables: list = ('dir', 'mag'),
+                data_assimilation: bool = True, grid_size_km: int = 4, logger: logbook.Logger = None):
     """
     Writes daily average of model output on given date.
 
     :param output_dir: output directory to write files
     :param model_run_date: date of model run
     :param day_deltas: time deltas for which to write model output
+    :param scalar_variables: list of scalar variables to use
+    :param vector_variables: list of vector variables to use
     :param data_assimilation: whether to retrieve model with data assimilation
     :param grid_size_km: cell size in km
     :param logger: logbook logger
@@ -190,11 +197,11 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
         if not os.path.isdir(daily_average_dir):
             os.mkdir(daily_average_dir)
 
-    wcofs_string = 'wcofs'
-
     if grid_size_km == 4:
         grid_filename = wcofs.WCOFS_4KM_GRID_FILENAME
-        if not data_assimilation:
+        if data_assimilation:
+            wcofs_string = 'wcofs'
+        else:
             wcofs_string = 'wcofs4'
     else:
         grid_filename = wcofs.WCOFS_2KM_GRID_FILENAME
@@ -214,26 +221,34 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
 
                 existing_files = os.listdir(daily_average_dir)
 
-                if grid_size_km == 4:
-                    existing_files = [filename for filename in existing_files if
-                                      'wcofs' in filename and time_delta_string in filename and 'noDA' not in filename]
+                if data_assimilation:
+                    if grid_size_km == 4:
+                        existing_files = [filename for filename in existing_files if
+                                          'wcofs' in filename and time_delta_string in filename and 'noDA' not in filename]
+                    else:
+                        existing_files = [filename for filename in existing_files if
+                                          'wcofs' in filename and time_delta_string in filename and 'noDA' not in filename and f'{grid_size_km}km' in filename]
                 else:
-                    existing_files = [filename for filename in existing_files if
-                                      'wcofs' in filename and time_delta_string in filename and 'noDA' in filename and f'{grid_size_km}km' in filename]
+                    if grid_size_km == 4:
+                        existing_files = [filename for filename in existing_files if
+                                          'wcofs' in filename and time_delta_string in filename and 'noDA' in filename]
+                    else:
+                        existing_files = [filename for filename in existing_files if
+                                          'wcofs' in filename and time_delta_string in filename and 'noDA' in filename and f'{grid_size_km}km' in filename]
 
                 if wcofs_dataset is None and not all(
                         any(variable in filename for filename in existing_files) for variable in
-                        ['sst', 'ssu', 'ssv', 'sss', 'ssh']):
+                        list(scalar_variables) + list(vector_variables)):
                     if grid_size_km == 4:
-                        wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg', logger=logger)
+                        wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg', wcofs_string=wcofs_string,
+                                                           logger=logger)
                     else:
                         wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg',
                                                            grid_filename=grid_filename,
-                                                           source_url=os.path.join(DATA_DIR,
-                                                                                    'input/wcofs/avg'),
+                                                           source_url=os.path.join(DATA_DIR, 'input/wcofs/avg'),
                                                            wcofs_string=wcofs_string, logger=logger)
 
-                for variable in ['sst', 'sss', 'ssh']:
+                for variable in scalar_variables:
                     if not any(variable in filename for filename in existing_files):
                         wcofs_dataset.write_rasters(daily_average_dir, [variable],
                                                     filename_suffix=wcofs_filename_suffix,
@@ -242,12 +257,12 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
                     else:
                         logger.info(f'Skipping WCOFS day {day_delta} {variable}')
 
-                if not any('ssu' in filename for filename in existing_files) or not any(
-                        'ssv' in filename for filename in existing_files):
-                    wcofs_dataset.write_rasters(daily_average_dir, ['ssu', 'ssv'],
+                if not all(any(vector_variable in filename for filename in existing_files) for vector_variable in
+                           vector_variables):
+                    wcofs_dataset.write_rasters(daily_average_dir, vector_variables,
                                                 filename_suffix=wcofs_filename_suffix,
-                                                time_deltas=[day_delta], vector_components=True,
-                                                fill_value=LEAFLET_NODATA_VALUE, driver='AAIGrid')
+                                                time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
+                                                driver='AAIGrid')
                 else:
                     logger.info(f'Skipping WCOFS day {day_delta} uv')
         del wcofs_dataset
@@ -282,7 +297,8 @@ def write_daily_average(output_dir: str, output_date: datetime.datetime, day_del
     logger.notice('Processing WCOFS...')
     write_wcofs(output_dir, output_date, day_deltas, logger=logbook.Logger('WCOFS'))
     logger.notice('Processing WCOFS noDA...')
-    write_wcofs(output_dir, output_date, day_deltas, data_assimilation=False, logger=logbook.Logger('WCOFS noDA'))
+    write_wcofs(output_dir, output_date, day_deltas, data_assimilation=False,
+                logger=logbook.Logger('WCOFS noDA'))
     logger.notice(f'Wrote models to {output_dir}')
 
     # populate JSON file with new directory structure so that JavaScript application can see it
@@ -310,7 +326,7 @@ if __name__ == '__main__':
     day_deltas = MODEL_DAY_DELTAS['WCOFS']
 
     # model_run_dates = _utilities.range_daily(datetime.datetime.now(),
-    #                                          datetime.datetime.now() - datetime.timedelta(days=3))
+    #                                          datetime.datetime(2019, 12, 1))
     # for model_run_date in model_run_dates:
     #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, logger=logger)
 

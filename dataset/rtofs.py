@@ -216,8 +216,7 @@ class RTOFSDataset:
             raise ValueError(f'Direction must be one of {list(DATASET_STRUCTURE[self.source].keys())}.')
 
     def write_rasters(self, output_dir: str, variables: list, time: datetime.datetime, filename_prefix: str = None,
-                      filename_suffix: str = None, vector_components: bool = False, fill_value=-9999,
-                      driver: str = 'GTiff', crop: bool = True):
+                      filename_suffix: str = None, fill_value=-9999, driver: str = 'GTiff', crop: bool = True):
         """
         Write averaged raster data of given variables to given output directory.
 
@@ -226,7 +225,6 @@ class RTOFSDataset:
         :param time: Time from which to retrieve data.
         :param filename_prefix: Prefix for filenames.
         :param filename_suffix: Suffix for filenames.
-        :param vector_components: Whether to write direction and magnitude rasters.
         :param fill_value: Desired fill value of output.
         :param driver: Strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
         :param crop: Whether to crop to study area extent.
@@ -246,12 +244,10 @@ class RTOFSDataset:
         direction = 'forecast' if time_delta >= 0 else 'nowcast'
         time_delta_string = f'{direction[0]}{abs(time_delta) + 1 if direction == "forecast" else abs(time_delta):03}'
 
-        variable_means = {}
+        variable_means = {variable: self.data(variable, time, crop) for variable in variables if
+                          variable not in ['dir', 'mag']}
 
-        for variable in variables:
-            variable_means[variable] = self.data(variable, time, crop)
-
-        if vector_components:
+        if 'dir' in variables or 'mag' in variables:
             u_name = 'ssu'
             v_name = 'ssv'
 
