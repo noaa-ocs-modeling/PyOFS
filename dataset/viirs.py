@@ -23,19 +23,9 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
+from dataset import CRS_EPSG, Logger
 from dataset import _utilities
 from main import DATA_DIR
-
-try:
-    from logbook import Logger
-except ImportError:
-    class Logger(object):
-        def __init__(self, name, level=0):
-            self.name = name
-            self.level = level
-
-        debug = info = warn = warning = notice = error = exception = \
-            critical = log = lambda *a, **kw: None
 
 VIIRS_START_DATETIME = datetime.datetime.strptime('2012-03-01 00:10:00', '%Y-%m-%d %H:%M:%S')
 VIIRS_PERIOD = datetime.timedelta(days=16)
@@ -43,7 +33,7 @@ VIIRS_PERIOD = datetime.timedelta(days=16)
 PASS_TIMES_FILENAME = os.path.join(DATA_DIR, r"reference\viirs_pass_times.txt")
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 
-RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
+RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 
 NRT_DELAY = datetime.timedelta(hours=2)
 
@@ -351,7 +341,7 @@ class VIIRSDataset:
                 gdal_args = {
                     'height': input_data.shape[0], 'width': input_data.shape[1], 'count': 1,
                     'dtype': rasterio.float32,
-                    'crs': RASTERIO_WGS84, 'transform': VIIRSDataset.study_area_transform, 'nodata': fill_value
+                    'crs': RASTERIO_CRS, 'transform': VIIRSDataset.study_area_transform, 'nodata': fill_value
                 }
 
                 if driver == 'AAIGrid':
@@ -489,7 +479,7 @@ class VIIRSRange:
                 sample_dataset.netcdf_dataset.geospatial_lat_resolution)
 
     def data(self, start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
-             average: bool = False, sses_correction: bool = False, variables: list = tuple('sst'),
+             average: bool = False, sses_correction: bool = False, variables: list = tuple(['sst']),
              satellite: str = None) -> dict:
         """
         Get VIIRS data (either overlapped or averaged) from the given time interval.
@@ -583,7 +573,7 @@ class VIIRSRange:
     def write_raster(self, output_dir: str, filename_prefix: str = None, filename_suffix: str = None,
                      start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
                      average: bool = False, fill_value: float = -9999, driver: str = 'GTiff',
-                     sses_correction: bool = False, variables: list = tuple('sst'), satellite: str = None):
+                     sses_correction: bool = False, variables: list = tuple(['sst']), satellite: str = None):
 
         """
         Write VIIRS raster of SST data (either overlapped or averaged) from the given time interval.
@@ -601,13 +591,13 @@ class VIIRSRange:
         :param satellite: VIIRS platform to retrieve. Default: per-granule averages of platform datasets.
         """
 
-        variable_data = self.data(start_datetime, end_datetime, average, sses_correction, variables, satellite)
-
         if start_datetime is None:
             start_datetime = self.start_datetime
 
         if end_datetime is None:
             end_datetime = self.end_datetime
+
+        variable_data = self.data(start_datetime, end_datetime, average, sses_correction, variables, satellite)
 
         for variable, output_data in variable_data.items():
             if output_data is not None and numpy.any(~numpy.isnan(output_data)):
@@ -616,7 +606,7 @@ class VIIRSRange:
                 # define arguments to GDAL driver
                 gdal_args = {
                     'height': output_data.shape[0], 'width': output_data.shape[1], 'count': 1,
-                    'crs': RASTERIO_WGS84,
+                    'crs': RASTERIO_CRS,
                     'transform': VIIRSRange.study_area_transform
                 }
 
@@ -637,8 +627,7 @@ class VIIRSRange:
                     raster_data = ((gpkg_fill_value - 1) * (output_data - numpy.min(output_data)) / numpy.ptp(
                         output_data)).astype(gpkg_dtype)
                     gdal_args.update({
-                        'dtype': gpkg_dtype, 'nodata': gpkg_fill_value
-                    })  # , 'TILE_FORMAT': 'PNG8'})
+                        'dtype': gpkg_dtype, 'nodata': gpkg_fill_value, 'TILE_FORMAT': 'TIFF'})
                 else:
                     file_extension = 'tiff'
                     raster_data = output_data.astype(rasterio.float32)
@@ -883,7 +872,6 @@ if __name__ == '__main__':
     end_datetime = start_datetime + datetime.timedelta(days=1)
 
     viirs_range = VIIRSRange(start_datetime, end_datetime)
-    viirs_range.write_raster(output_dir, filename_prefix='viirs_npp', satellite='NPP')
-    viirs_range.write_raster(output_dir, filename_prefix='viirs_n20', satellite='N20')
+    viirs_range.write_raster(output_dir, driver='GPKG')
 
     print('done')

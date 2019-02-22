@@ -17,24 +17,14 @@ import rasterio
 import scipy.interpolate
 import xarray
 
+from dataset import CRS_EPSG, Logger
 from dataset import _utilities
 from main import DATA_DIR
 
-try:
-    from logbook import Logger
-except ImportError:
-    class Logger(object):
-        def __init__(self, name, level=0):
-            self.name = name
-            self.level = level
-
-        debug = info = warn = warning = notice = error = exception = \
-            critical = log = lambda *a, **kw: None
-
 DATA_VARIABLES = {'ssu': 'u', 'ssv': 'v', 'dopx': 'DOPx', 'dopy': 'DOPy'}
 
-FIONA_WGS84 = fiona.crs.from_epsg(4326)
-RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
+RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
+FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
 NRT_DELAY = datetime.timedelta(hours=1)
 
@@ -219,7 +209,7 @@ class HFRRange:
             }
         }
 
-        with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_WGS84) as layer:
+        with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_CRS) as layer:
             layer.writerecords(layer_records)
 
     def write_vectors(self, output_filename: str, variables: list = None, start_datetime: datetime.datetime = None,
@@ -297,7 +287,7 @@ class HFRRange:
         }
 
         for layer_name, layer_records in layers.items():
-            with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_WGS84) as layer:
+            with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_CRS) as layer:
                 layer.writerecords(layer_records)
 
     def write_vector(self, output_filename: str, layer_name: str = 'ssuv', variables: list = None,
@@ -356,7 +346,7 @@ class HFRRange:
         # write queued features to layer
         if self.logger is not None:
             self.logger.info(f'Writing {output_filename}')
-        with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_WGS84) as layer:
+        with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_CRS) as layer:
             layer.writerecords(layer_records)
 
     def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = '',
@@ -406,7 +396,7 @@ class HFRRange:
 
             gdal_args = {
                 'height': raster_data.shape[0], 'width': raster_data.shape[1], 'count': 1,
-                'dtype': raster_data.dtype, 'crs': RASTERIO_WGS84, 'transform': self.grid_transform,
+                'dtype': raster_data.dtype, 'crs': RASTERIO_CRS, 'transform': self.grid_transform,
                 'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
             }
 

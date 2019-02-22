@@ -20,23 +20,13 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
+from dataset import CRS_EPSG, Logger
 from dataset import _utilities
 from main import DATA_DIR
 
-try:
-    from logbook import Logger
-except ImportError:
-    class Logger(object):
-        def __init__(self, name, level=0):
-            self.name = name
-            self.level = level
-
-        debug = info = warn = warning = notice = error = exception = \
-            critical = log = lambda *a, **kw: None
-
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 
-RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
+RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 
 SOURCE_URLS = OrderedDict({
     'OpenDAP': OrderedDict({
@@ -168,7 +158,7 @@ class SMAPDataset:
         else:
             raise _utilities.NoDataError(f'No data exists for {data_datetime.strftime("%Y%m%dT%H%M%S")}.')
 
-    def write_rasters(self, output_dir: str, data_datetime: datetime.datetime, variables: list = tuple('sss'),
+    def write_rasters(self, output_dir: str, data_datetime: datetime.datetime, variables: list = tuple(['sss']),
                       filename_prefix: str = 'smos', fill_value: float = -9999.0, driver: str = 'GTiff'):
         """
         Write SMOS rasters to file using data from given variables.
@@ -191,7 +181,7 @@ class SMAPDataset:
                 gdal_args = {
                     'height': input_data.shape[0], 'width': input_data.shape[1], 'count': 1,
                     'dtype': rasterio.float32,
-                    'crs': RASTERIO_WGS84, 'transform': SMAPDataset.study_area_transform, 'nodata': fill_value
+                    'crs': RASTERIO_CRS, 'transform': SMAPDataset.study_area_transform, 'nodata': fill_value
                 }
 
                 if driver == 'AAIGrid':

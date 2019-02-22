@@ -21,22 +21,12 @@ import rasterio.warp
 import xarray
 from shapely import geometry
 
+from dataset import CRS_EPSG, Logger
 from dataset import _utilities
 from main import DATA_DIR
 
-try:
-    from logbook import Logger
-except ImportError:
-    class Logger(object):
-        def __init__(self, name, level=0):
-            self.name = name
-            self.level = level
-
-        debug = info = warn = warning = notice = error = exception = \
-            critical = log = lambda *a, **kw: None
-
-RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
-FIONA_WGS84 = fiona.crs.from_epsg(4326)
+RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
+FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
 COORDINATE_VARIABLES = ['time', 'lev', 'lat', 'lon']
 
@@ -276,7 +266,7 @@ class RTOFSDataset:
                 gdal_args = {
                     'transform': transform, 'height': variable_mean.shape[0],
                     'width': variable_mean.shape[1], 'count': 1, 'dtype': rasterio.float32,
-                    'crs': RASTERIO_WGS84,
+                    'crs': RASTERIO_CRS,
                     'nodata': numpy.array([fill_value]).astype(variable_mean.dtype).item()
                 }
 
@@ -322,7 +312,7 @@ class RTOFSDataset:
 
             gdal_args = {
                 'transform': transform, 'height': output_data.shape[0], 'width': output_data.shape[1],
-                'count': 1, 'dtype': rasterio.float32, 'crs': RASTERIO_WGS84,
+                'count': 1, 'dtype': rasterio.float32, 'crs': RASTERIO_CRS,
                 'nodata': numpy.array([fill_value]).astype(output_data.dtype).item()
             }
 

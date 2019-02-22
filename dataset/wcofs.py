@@ -23,22 +23,12 @@ import xarray
 from rasterio.io import MemoryFile
 from scipy import interpolate
 
+from dataset import CRS_EPSG, Logger
 from dataset import _utilities
 from main import DATA_DIR
 
-try:
-    from logbook import Logger
-except ImportError:
-    class Logger(object):
-        def __init__(self, name, level=0):
-            self.name = name
-            self.level = level
-
-        debug = info = warn = warning = notice = error = exception = \
-            critical = log = lambda *a, **kw: None
-
-RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
-FIONA_WGS84 = fiona.crs.from_epsg(4326)
+RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
+FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
 GRID_LOCATIONS = {'face': 'rho', 'edge1': 'u', 'edge2': 'v', 'node': 'psi'}
 COORDINATE_VARIABLES = ['grid', 'ocean_time', 'lon_rho', 'lat_rho', 'lon_u', 'lat_u', 'lon_v', 'lat_v', 'lon_psi',
@@ -535,7 +525,7 @@ class WCOFSDataset:
 
             gdal_args = {
                 'width': raster_data.shape[1], 'height': raster_data.shape[0], 'count': 1,
-                'crs': RASTERIO_WGS84, 'transform': grid_transform, 'dtype': raster_data.dtype,
+                'crs': RASTERIO_CRS, 'transform': grid_transform, 'dtype': raster_data.dtype,
                 'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
             }
 
@@ -646,7 +636,7 @@ class WCOFSDataset:
             self.logger.info(f'Writing {output_filename}:{layer_name}')
 
         # create layer
-        with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_WGS84,
+        with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_CRS,
                         layer=layer_name) as output_vector_file:
             output_vector_file.writerecords(layer_records)
 
@@ -1158,7 +1148,7 @@ class WCOFSRange:
 
                     gdal_args = {
                         'width': raster_data.shape[1], 'height': raster_data.shape[0], 'count': 1,
-                        'crs': RASTERIO_WGS84, 'transform': grid_transform, 'dtype': raster_data.dtype,
+                        'crs': RASTERIO_CRS, 'transform': grid_transform, 'dtype': raster_data.dtype,
                         'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
                     }
 
@@ -1272,7 +1262,7 @@ class WCOFSRange:
         for layer_name, layer_records in layers.items():
             if self.logger is not None:
                 self.logger.info(f'Writing {output_filename}:{layer_name}')
-            with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_WGS84,
+            with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_CRS,
                             layer=layer_name) as layer:
                 layer.writerecords(layer_records)
 
@@ -1473,7 +1463,7 @@ def write_convex_hull(netcdf_dataset: xarray.Dataset, output_filename: str, grid
 
     schema = {'geometry': 'Polygon', 'properties': {'name': 'str'}}
 
-    with fiona.open(output_filename, 'w', 'GPKG', schema=schema, crs=FIONA_WGS84, layer=layer_name) as vector_file:
+    with fiona.open(output_filename, 'w', 'GPKG', schema=schema, crs=FIONA_CRS, layer=layer_name) as vector_file:
         vector_file.write({'properties': {'name': layer_name}, 'geometry': shapely.geometry.mapping(polygon)})
 
 

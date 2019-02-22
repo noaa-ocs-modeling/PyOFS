@@ -21,25 +21,15 @@ import shapely
 import shapely.geometry
 import xarray
 
+from dataset import CRS_EPSG, Logger
 from dataset import _utilities
 from main import DATA_DIR
-
-try:
-    from logbook import Logger
-except ImportError:
-    class Logger(object):
-        def __init__(self, name, level=0):
-            self.name = name
-            self.level = level
-
-        debug = info = warn = warning = notice = error = exception = \
-            critical = log = lambda *a, **kw: None
 
 MEASUREMENT_VARIABLES = ['water_temperature', 'conductivity', 'salinity', 'o2_saturation', 'dissolved_oxygen',
                          'chlorophyll_concentration', 'turbidity', 'water_ph', 'water_eh']
 
-FIONA_WGS84 = fiona.crs.from_epsg(4326)
-RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
+RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
+FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 WCOFS_NDBC_STATIONS_FILENAME = os.path.join(DATA_DIR, r"reference\ndbc_stations.txt")
@@ -191,7 +181,7 @@ class NDBCRange:
             }
         }
 
-        with fiona.open(output_filename, 'w', 'GPKG', schema, FIONA_WGS84, layer=layer_name) as layer:
+        with fiona.open(output_filename, 'w', 'GPKG', schema, FIONA_CRS, layer=layer_name) as layer:
             if self.logger is not None:
                 self.logger.debug('Creating features...')
 

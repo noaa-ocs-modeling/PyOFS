@@ -15,7 +15,7 @@ import pytz
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
-from dataset import _utilities, hfr, viirs, rtofs, wcofs, smap
+from dataset import hfr, viirs, rtofs, wcofs, smap
 
 from main import json_dir_structure, DATA_DIR
 
@@ -82,18 +82,18 @@ def write_observation(output_dir: str, observation_date: datetime.datetime,
 
             viirs_range.write_raster(observation_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_morning',
                                      start_datetime=start_of_day_in_utc, end_datetime=noon_in_utc,
-                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', sses_correction=False,
+                                     fill_value=LEAFLET_NODATA_VALUE, driver='GPKG', sses_correction=False,
                                      variables=['sst'])
             viirs_range.write_raster(observation_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_night',
                                      start_datetime=noon_in_utc, end_datetime=end_of_day_in_utc,
-                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', sses_correction=False,
+                                     fill_value=LEAFLET_NODATA_VALUE, driver='GPKG', sses_correction=False,
                                      variables=['sst'])
             del viirs_range
         elif observation == 'smap':
             smap_dataset = smap.SMAPDataset(logger=logger)
 
             smap_dataset.write_rasters(observation_dir, data_datetime=start_of_day, fill_value=LEAFLET_NODATA_VALUE,
-                                       driver='GTiff', variables=['sss'])
+                                       driver='GPKG', variables=['sss'])
             del smap_dataset
     except Exception as error:
         logger.warn(error)
@@ -154,7 +154,7 @@ def write_rtofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
                 if len(scalar_variables_to_write) > 0:
                     rtofs_dataset.write_rasters(daily_average_dir, variables=scalar_variables_to_write,
                                                 time=day_of_forecast,
-                                                driver='GTiff')
+                                                driver='GPKG')
                 else:
                     logger.info(f'Skipping RTOFS day {day_delta} scalar variables')
 
@@ -264,7 +264,7 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
                     wcofs_dataset.write_rasters(daily_average_dir, scalar_variables_to_write,
                                                 filename_suffix=wcofs_filename_suffix,
                                                 time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
-                                                driver='GTiff')
+                                                driver='GPKG')
                 else:
                     logger.info(f'Skipping WCOFS day {day_delta} scalar variables')
 
