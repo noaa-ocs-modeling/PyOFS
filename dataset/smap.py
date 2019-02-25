@@ -191,6 +191,9 @@ class SMAPDataset:
                     file_extension = 'gpkg'
                 else:
                     file_extension = 'tiff'
+                    gdal_args.update({
+                        'TILED': 'YES'
+                    })
 
                 output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
 

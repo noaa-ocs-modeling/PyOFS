@@ -545,6 +545,9 @@ class WCOFSDataset:
                 file_extension = 'gpkg'
             else:
                 file_extension = 'tiff'
+                gdal_args.update({
+                    'TILED': 'YES'
+                })
 
             output_filename = os.path.join(output_dir,
                                            f'wcofs_{variable}_{self.model_datetime.strftime("%Y%m%d")}' +

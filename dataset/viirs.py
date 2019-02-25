@@ -351,6 +351,9 @@ class VIIRSDataset:
                     file_extension = 'gpkg'
                 else:
                     file_extension = 'tiff'
+                    gdal_args.update({
+                        'TILED': 'YES'
+                    })
 
                 output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
 
@@ -633,7 +636,8 @@ class VIIRSRange:
                     raster_data = output_data.astype(rasterio.float32)
                     gdal_args.update({
                         'dtype': raster_data.dtype,
-                        'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
+                        'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item(),
+                        'TILED': 'YES'
                     })
 
                 if filename_prefix is None:
@@ -872,6 +876,6 @@ if __name__ == '__main__':
     end_datetime = start_datetime + datetime.timedelta(days=1)
 
     viirs_range = VIIRSRange(start_datetime, end_datetime)
-    viirs_range.write_raster(output_dir, driver='GPKG')
+    viirs_range.write_raster(output_dir)
 
     print('done')

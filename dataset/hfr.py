@@ -426,6 +426,9 @@ class HFRRange:
                 file_extension = 'gpkg'
             else:
                 file_extension = 'tiff'
+                gdal_args.update({
+                    'TILED': 'YES'
+                })
 
             output_filename = os.path.join(output_dir,
                                            f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
