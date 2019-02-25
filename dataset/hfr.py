@@ -438,12 +438,13 @@ class HFRRange:
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(numpy.flipud(raster_data), 1)
 
-    def to_xarray(self, variables: list = None, mean: bool = True) -> xarray.Dataset:
+    def to_xarray(self, variables: list = None, mean: bool = True, dop_threshold: float = 0.5) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
 
         :param variables: List of variables to use.
         :param mean: Whether to average all time indices.
+        :param dop_threshold: Threshold for Dilution of Precision (DOP) above which data should be discarded.
         :return: xarray Dataset of given variables.
         """
 
@@ -454,14 +455,23 @@ class HFRRange:
 
         if mean:
             for variable in variables:
-                data_arrays[variable] = xarray.DataArray(numpy.mean(self.data_average(variable), axis=0),
-                                                         coords={'lat': self.netcdf_dataset['lat'],
-                                                                 'lon': self.netcdf_dataset['lon']},
-                                                         dims=('lat', 'lon'))
+                data_arrays[variable] = xarray.DataArray(
+                    numpy.mean(self.data_average(variable, dop_threshold=dop_threshold), axis=0),
+                    coords={'lat': self.netcdf_dataset['lat'],
+                            'lon': self.netcdf_dataset['lon']},
+                    dims=('lat', 'lon'))
         else:
             for variable in variables:
-                data_arrays[variable] = xarray.DataArray(self.data_average(variable),
-                                                         coords={'lat': self.netcdf_dataset['lat'],
+                output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].values
+
+                if dop_threshold is not None:
+                    dop_mask = ((self.netcdf_dataset['DOPx'] <= dop_threshold) | (
+                            self.netcdf_dataset['DOPy'] <= dop_threshold)).values
+                    output_data[~dop_mask] = numpy.nan
+
+                data_arrays[variable] = xarray.DataArray(output_data,
+                                                         coords={'time': self.netcdf_dataset['time'],
+                                                                 'lat': self.netcdf_dataset['lat'],
                                                                  'lon': self.netcdf_dataset['lon']},
                                                          dims=('time', 'lat', 'lon'))
 

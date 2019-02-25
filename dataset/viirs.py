@@ -606,37 +606,26 @@ class VIIRSRange:
             if output_data is not None and numpy.any(~numpy.isnan(output_data)):
                 output_data[numpy.isnan(output_data)] = fill_value
 
+                raster_data = output_data.astype(rasterio.float32)
+
                 # define arguments to GDAL driver
                 gdal_args = {
-                    'height': output_data.shape[0], 'width': output_data.shape[1], 'count': 1,
-                    'crs': RASTERIO_CRS,
+                    'height': raster_data.shape[0], 'width': raster_data.shape[1], 'count': 1,
+                    'crs': RASTERIO_CRS, 'dtype': raster_data.dtype,
+                    'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item(),
                     'transform': VIIRSRange.study_area_transform
                 }
 
                 if driver == 'AAIGrid':
                     file_extension = 'asc'
-                    raster_data = output_data.astype(rasterio.float32)
                     gdal_args.update({
-                        'dtype': raster_data.dtype,
-                        'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item(),
                         'FORCE_CELLSIZE': 'YES'
                     })
                 elif driver == 'GPKG':
                     file_extension = 'gpkg'
-                    gpkg_dtype = rasterio.uint8
-                    gpkg_fill_value = numpy.iinfo(gpkg_dtype).max
-                    output_data[output_data == fill_value] = gpkg_fill_value
-                    # scale data to within range of uint8
-                    raster_data = ((gpkg_fill_value - 1) * (output_data - numpy.min(output_data)) / numpy.ptp(
-                        output_data)).astype(gpkg_dtype)
-                    gdal_args.update({
-                        'dtype': gpkg_dtype, 'nodata': gpkg_fill_value, 'TILE_FORMAT': 'TIFF'})
                 else:
                     file_extension = 'tiff'
-                    raster_data = output_data.astype(rasterio.float32)
                     gdal_args.update({
-                        'dtype': raster_data.dtype,
-                        'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item(),
                         'TILED': 'YES'
                     })
 

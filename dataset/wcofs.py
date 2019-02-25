@@ -495,7 +495,7 @@ class WCOFSDataset:
 
                     # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
                     interpolated_data['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (180 / numpy.pi)
-                    interpolated_data['mag'] = numpy.sqrt(numpy.square(u_data) + numpy.square(v_data))
+                    interpolated_data['mag'] = numpy.sqrt(u_data ** 2 + v_data ** 2)
 
                     if u_name not in variables:
                         del interpolated_data[u_name]
@@ -664,6 +664,56 @@ class WCOFSDataset:
             record['properties'][variable] = float(variable_means[variable][row, col])
 
         return record
+
+    def to_xarray(self, variables: list = None) -> xarray.Dataset:
+        """
+        Converts to xarray Dataset.
+
+        :param variables: List of variables to use.
+        :return: xarray Dataset of given variables.
+        """
+
+        data_arrays = {}
+
+        if variables is None:
+            variables = list(DATA_VARIABLES.keys())
+
+        for variable in variables:
+            if self.source is 'avg':
+                times = [self.model_datetime + datetime.timedelta(days=time_delta) for time_delta in self.time_deltas]
+            else:
+                times = [self.model_datetime + datetime.timedelta(hours=time_delta) for time_delta in self.time_deltas]
+
+            grid = self.variable_grids[variable]
+            data_stack = numpy.stack([self.data(variable, time_delta) for time_delta in self.time_deltas], 0)
+            data_array = xarray.DataArray(data_stack,
+                                          coords={
+                                              'time': times,
+                                              'lon': ((f'{grid}_eta', f'{grid}_xi'),
+                                                      self.data_coordinates[grid]['lon']),
+                                              'lat': ((f'{grid}_eta', f'{grid}_xi'),
+                                                      self.data_coordinates[grid]['lat'])
+                                          },
+                                          dims=('time', f'{grid}_eta', f'{grid}_xi'))
+
+            data_array.attrs['grid'] = grid
+            data_arrays[variable] = data_array
+
+        output_dataset = xarray.Dataset(data_arrays)
+
+        del data_arrays
+
+        return output_dataset
+
+    def to_netcdf(self, output_file: str, variables: list = None):
+        """
+        Writes to NetCDF file.
+
+        :param output_file: Output file to write.
+        :param variables: List of variables to use.
+        """
+
+        self.to_xarray(variables).to_netcdf(output_file)
 
     def __repr__(self):
         used_params = [self.model_datetime.__repr__()]
