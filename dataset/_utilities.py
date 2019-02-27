@@ -198,6 +198,17 @@ def write_gpkg_subdataset(input_data: numpy.ndarray, output_filename: str, layer
         output_raster.write(input_data.astype(dtype), 1)
 
 
+def datetime64_to_datetime(datetime64: numpy.datetime64) -> datetime.datetime:
+    """
+    Convert numpy.datetime64 object to native Python datetime.datetime object
+
+    :param datetime64: numpy datetime
+    :return: python datetime
+    """
+
+    return datetime.datetime.fromtimestamp(datetime64.values.astype(datetime.datetime) * 1e-9)
+
+
 class NoDataError(Exception):
     """
     Error for no data found.

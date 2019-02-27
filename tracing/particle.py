@@ -1,7 +1,11 @@
 import datetime
 import math
+
+import numpy
 import pyproj
 import xarray
+
+from dataset import _utilities
 
 WGS84_LONLAT = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
 WEB_MERCATOR = pyproj.Proj(
@@ -9,26 +13,43 @@ WEB_MERCATOR = pyproj.Proj(
 
 
 class VelocityField:
-    def __init__(self, field: xarray.Dataset, u_name: str = 'u', v_name: str = 'v'):
-        self.field = field.rename({'lon': 'x', 'lat': 'y'})
+    """
+    Matrix of velocity vectors (u and v).
+    """
 
-        x_dims = field['lon'].dims
-        y_dims = field['lat'].dims
+    def __init__(self, field: xarray.Dataset, u_name: str = 'u', v_name: str = 'v', x_name: str = 'lon',
+                 y_name: str = 'lat'):
+        """
+        Create new velocity field from given dataset.
 
-        x = self.field['x']
-        y = self.field['y']
+        :param field: dataset
+        :param u_name: name of u variable
+        :param v_name: name of v variable
+        :param x_name: name of x coordinate
+        :param y_name: name of y coordinate
+        """
+
+        self.field = field.rename({x_name: 'x', y_name: 'y'})
+
+        x_dims = self.field['x'].dims
+        y_dims = self.field['y'].dims
+
+        lon = self.field['x'].values
+        lat = self.field['y'].values
 
         if len(x_dims) == 1 or len(y_dims) == 1:
-            x, y = numpy.meshgrid(self.field['x'], self.field['y'])
+            lon, lat = numpy.meshgrid(lon, lat)
 
-        x, y = WEB_MERCATOR(x, y)
+        x, y = WEB_MERCATOR(lon, lat)
 
         if len(x_dims) == 1 or len(y_dims) == 1:
             x = x[0, :]
             y = y[:, 0]
+            self.has_multidim_coords = False
         else:
             x = (x_dims, x)
             y = (y_dims, y)
+            self.has_multidim_coords = True
 
         self.field['x'], self.field['y'] = x, y
 
@@ -39,16 +60,54 @@ class VelocityField:
         self.x_delta = float(numpy.nanmean(numpy.diff(self.field['x'])))
         self.y_delta = float(numpy.nanmean(numpy.diff(self.field['y'])))
 
-    def u(self, time: datetime.datetime, lon: float, lat: float):
-        return self.field[self.u_name].sel(time=time, lon=lon, lat=lat, method='nearest')
+    def u(self, time: datetime.datetime, lon: float, lat: float) -> float:
+        """
+        u velocity in m/s at coordinates
 
-    def v(self, time: datetime.datetime, lon: float, lat: float):
-        return self.field[self.v_name].sel(time=time, lon=lon, lat=lat, method='nearest')
+        :param time: time
+        :param lon: longitude
+        :param lat: latitude
+        :return: u value at coordinate in m/s
+        """
 
-    def velocity(self, time: datetime.datetime, lon: float, lat: float):
+        x, y = WEB_MERCATOR(lon, lat)
+        return self.field[self.u_name].sel(time=time, x=x, y=y, method='nearest').values.item()
+
+    def v(self, time: datetime.datetime, lon: float, lat: float) -> float:
+        """
+        v velocity in m/s at coordinates
+
+        :param time: time
+        :param lon: longitude
+        :param lat: latitude
+        :return: v value at coordinate in m/s
+        """
+
+        x, y = WEB_MERCATOR(lon, lat)
+        return self.field[self.v_name].sel(time=time, x=x, y=y, method='nearest').values.item()
+
+    def velocity(self, time: datetime.datetime, lon: float, lat: float) -> float:
+        """
+        absolute velocity in m/s at coordinate
+
+        :param time: time
+        :param lon: longitude
+        :param lat: latitude
+        :return: magnitude of uv vector in m/s
+        """
+
         return math.sqrt(self.u(time, lon, lat) ** 2 + self.v(time, lon, lat) ** 2)
 
-    def direction(self, time: datetime.datetime, lon: float, lat: float):
+    def direction(self, time: datetime.datetime, lon: float, lat: float) -> float:
+        """
+        angle of uv vector
+
+        :param time: time
+        :param lon: longitude
+        :param lat: latitude
+        :return: degree from north of uv vector
+        """
+
         return (math.atan2(self.u(time, lon, lat), self.v(time, lon, lat)) + math.pi) * (180 / math.pi)
 
     def __getitem__(self, time: datetime.datetime, lon: float, lat: float):
@@ -61,8 +120,7 @@ class VelocityField:
 class Particle:
     def __init__(self, field: VelocityField, time: datetime.datetime, lon: float, lat: float):
         self.field = field
-        x, y = WEB_MERCATOR(lon, lat)
-        self.set(time, x, y)
+        self.set(time, lon, lat)
 
     def step(self, t_delta: datetime.timedelta = None):
         if t_delta is None:
@@ -76,24 +134,35 @@ class Particle:
 
         self.time += t_delta
 
-        self.set(self.time, self.x, self.y)
+        self.set(self.time, *WGS84_LONLAT(self.x, self.y))
 
-    def set(self, time: datetime.datetime, x: float, y: float) -> bool:
-        nearest_cell = self.field.field.sel(time=numpy.datetime64(time), x=x, y=y, method='nearest')
-        self.time = datetime.datetime.utcfromtimestamp(nearest_cell['time'].values.astype(datetime.datetime) * 1e-9)
+    def set(self, time: datetime.datetime, lon: float, lat: float) -> bool:
+        x, y = WEB_MERCATOR(lon, lat)
 
-        self.x = nearest_cell['x'].item()
-        self.y = nearest_cell['y'].item()
-        self.u = nearest_cell['ssu'].item()
-        self.v = nearest_cell['ssv'].item()
+        if self.field.has_multidim_coords:
+            x_delta = self.field.x_delta
+            y_delta = self.field.y_delta
 
-        return nearest_cell['time'] == self.field.field['time'][-1].item()
+            nearest_time = self.field.field.sel(time=numpy.datetime64(time), method='nearest')
+            cell = nearest_time.interp(x=x, y=y)
+        else:
+            cell = self.field.field.sel(time=numpy.datetime64(time), x=x, y=y, method='nearest')
 
-    def coords(self):
+        self.time = _utilities.datetime64_to_datetime(cell['time'])
+
+        self.x = cell['x'].item()
+        self.y = cell['y'].item()
+        self.u = cell['ssu'].item()
+        self.v = cell['ssv'].item()
+
+    def coordinates(self):
         return WGS84_LONLAT(self.x, self.y)
 
+    def velocity(self):
+        return (self.u, self.v)
+
     def __str__(self):
-        return f'{self.time} ({self.x}, {self.y}) -> ({self.u}, {self.v})'
+        return f'{self.time} {self.coordinates()} -> {self.velocity()}'
 
 
 class Contour:
@@ -106,20 +175,19 @@ class CircleContour(Contour):
 
 if __name__ == '__main__':
     from dataset import hfr
-    import numpy
 
-    model_datetime = datetime.datetime.now()
-    model_datetime.replace(hour=3, minute=0, second=0, microsecond=0)
+    model_datetime = datetime.datetime(2019, 2, 25)
+    # model_datetime.replace(hour=3, minute=0, second=0, microsecond=0)
 
-    # data = wcofs.WCOFSDataset(model_datetime, source='avg')
-    data = hfr.HFRRange(model_datetime, model_datetime + datetime.timedelta(days=1))
+    # data = wcofs.WCOFSDataset(model_datetime, source='avg').to_xarray(variables=('ssu', 'ssv'))
+    data = hfr.HFRRange(model_datetime, model_datetime + datetime.timedelta(days=1)).to_xarray(variables=('ssu', 'ssv'))
 
-    velocity_field = VelocityField(data.to_xarray(variables=('ssu', 'ssv'), mean=False))
+    velocity_field = VelocityField(data, u_name='ssu', v_name='ssv')
 
     particle = Particle(velocity_field,
                         datetime.datetime.utcfromtimestamp(velocity_field.field['time'][0].item() * 1e-9),
-                        lon=float(numpy.mean(data.netcdf_dataset['lon'])),
-                        lat=float(numpy.mean(data.netcdf_dataset['lat'])))
+                        lon=float(numpy.mean(data['lon'])),
+                        lat=float(numpy.mean(data['lat'])))
 
     for t_delta in numpy.diff(velocity_field.field['time']):
         timedelta = datetime.timedelta(seconds=int(t_delta) * 1e-9)
