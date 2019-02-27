@@ -118,11 +118,30 @@ class VelocityField:
 
 
 class Particle:
+    """
+    Particle simulation.
+    """
+
     def __init__(self, field: VelocityField, time: datetime.datetime, lon: float, lat: float):
+        """
+        Create new particle within in the given velocity field.
+
+        :param field: velocity field
+        :param time: starting time
+        :param lon: starting longitude
+        :param lat: starting latitude
+        """
+
         self.field = field
         self.set(time, lon, lat)
 
     def step(self, t_delta: datetime.timedelta = None):
+        """
+        Step particle by given time delta.
+
+        :param t_delta: time delta
+        """
+
         if t_delta is None:
             t_delta = self.field.t_delta
 
@@ -136,7 +155,15 @@ class Particle:
 
         self.set(self.time, *WGS84_LONLAT(self.x, self.y))
 
-    def set(self, time: datetime.datetime, lon: float, lat: float) -> bool:
+    def set(self, time: datetime.datetime, lon: float, lat: float):
+        """
+        Set particle to given time and coordinates within velocity field.
+
+        :param time: time
+        :param lon: longitude
+        :param lat: latitude
+        """
+
         x, y = WEB_MERCATOR(lon, lat)
 
         if self.field.has_multidim_coords:
@@ -155,10 +182,20 @@ class Particle:
         self.u = cell['ssu'].item()
         self.v = cell['ssv'].item()
 
-    def coordinates(self):
+    def coordinates(self) -> tuple:
+        """
+        current coordinates
+        :return tuple of GCS coordinates
+        """
+
         return WGS84_LONLAT(self.x, self.y)
 
     def velocity(self):
+        """
+        current velocity within velocity field
+        :return: tuple of velocity vector (u, v)
+        """
+
         return (self.u, self.v)
 
     def __str__(self):
@@ -166,11 +203,53 @@ class Particle:
 
 
 class Contour:
-    pass
+    def __init__(self, field: VelocityField, time: datetime.datetime, points: list):
+        """
+        Create contour given list of points.
+
+        :param field: velocity field
+        :param time: starting time
+        :param points: list of coordinate tuples (x, y)
+        """
+
+        self.particles = []
+
+        for point in points:
+            self.particles.append(Particle(field, time, *point))
 
 
 class CircleContour(Contour):
-    pass
+    def __init__(self, field: VelocityField, time: datetime.datetime, center: tuple, radius: float, interval: float):
+        """
+        Circle contour with given interval between points.
+
+        :param field: velocity field
+        :param time: starting time
+        :param center: central point (x, y)
+        :param radius: radius in m
+        :param interval: interval between points in m
+        """
+
+        points = []
+        super().__init__(field, time, points)
+
+
+class SquareContour(Contour):
+    def __init__(self, field: VelocityField, time: datetime.datetime, x_min: float, x_max: float, y_min: float,
+                 y_max: float):
+        """
+        Orthogonal square contour with given bounds.
+
+        :param field: velocity field
+        :param time: starting time
+        :param x_min: minimum longitude
+        :param x_max: maximum longitude
+        :param y_min: minimum latitude
+        :param y_max: maximum latitude
+        """
+
+        points = [(x_min, y_min), (x_min, y_max), (x_max, y_max), (x_max, y_min)]
+        super().__init__(field, time, points)
 
 
 if __name__ == '__main__':
