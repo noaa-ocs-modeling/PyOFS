@@ -7,9 +7,9 @@ Created on Feb 6, 2019
 @author: zachary.burnett
 """
 
+from collections import OrderedDict
 import datetime
 import os
-from collections import OrderedDict
 
 import fiona
 import numpy
@@ -20,8 +20,7 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-from dataset import CRS_EPSG, Logger
-from dataset import _utilities
+from dataset import CRS_EPSG, Logger, _utilities
 from main import DATA_DIR
 
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
@@ -47,7 +46,7 @@ class SMAPDataset:
 
         :param study_area_polygon_filename: filename of vector file containing study area boundary
         :param logger: logbook logger
-        :raises NoDataError: if dataset does not exist.
+        :raises NoDataError: if dataset does not exist
         """
 
         self.logger = logger
@@ -112,7 +111,7 @@ class SMAPDataset:
         """
         Get coordinate bounds of dataset.
 
-        :return: Tuple of bounds (west, south, east, north)
+        :return: tuple of bounds (west, south, east, north)
         """
 
         return self.data_extent.bounds
@@ -121,7 +120,7 @@ class SMAPDataset:
         """
         Get cell sizes of dataset.
 
-        :return: Tuple of cell sizes (x_size, y_size)
+        :return: tuple of cell sizes (x_size, y_size)
         """
 
         return self.netcdf_dataset.geospatial_lon_resolution, self.netcdf_dataset.geospatial_lat_resolution

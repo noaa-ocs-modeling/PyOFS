@@ -7,10 +7,10 @@ Created on Aug 1, 2018
 @author: zachary.burnett
 """
 
+from concurrent import futures
 import datetime
 import os
 import re
-from concurrent import futures
 
 import fiona
 import fiona.crs
@@ -21,8 +21,7 @@ import shapely
 import shapely.geometry
 import xarray
 
-from dataset import CRS_EPSG, Logger
-from dataset import _utilities
+from dataset import CRS_EPSG, Logger, _utilities
 from main import DATA_DIR
 
 MEASUREMENT_VARIABLES = ['water_temperature', 'conductivity', 'salinity', 'o2_saturation', 'dissolved_oxygen',
@@ -46,9 +45,9 @@ class NDBCStation:
         """
         Creates new dataset object.
 
-        :param str station: Station name.
+        :param str station: station name
         :param logger: logbook logger
-        :raises NoDataError: if dataset does not exist.
+        :raises NoDataError: if dataset does not exist
         """
 
         self.logger = logger
@@ -72,9 +71,9 @@ class NDBCStation:
         """
         Collects data from given station in the given time interval.
 
-        :param datetime.datetime start_datetime: Beginning of time interval.
-        :param datetime.datetime end_datetime: End of time interval.
-        :return: Dictionary of data from the given station over the given time interval.
+        :param datetime.datetime start_datetime: beginning of time interval
+        :param datetime.datetime end_datetime: end of time interval
+        :return: dictionary of data from the given station over the given time interval
         """
 
         if self.logger is not None:
@@ -108,10 +107,10 @@ class NDBCRange:
         """
         Creates new dataset object.
 
-        :param start_datetime: Beginning of time interval.
-        :param end_datetime: End of time interval.
-        :param stations: List of station names.
-        :raises NoDataError: if data does not exist.
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
+        :param stations: list of station names
+        :raises NoDataError: if data does not exist
         """
 
         self.start_datetime = start_datetime
@@ -149,10 +148,10 @@ class NDBCRange:
         """
         Write average of buoy data for all hours in the given time interval to a single layer of the provided output file.
 
-        :param start_datetime: Beginning of time interval.
-        :param end_datetime: End of time interval.
-        :param output_filename: Path to output file.
-        :param layer_name: Name of layer to write.
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
+        :param output_filename: path to output file
+        :param layer_name: name of layer to write
         """
 
         start_datetime = start_datetime if start_datetime is not None else self.start_datetime
@@ -237,8 +236,8 @@ def check_station(dataset: xarray.Dataset, study_area_polygon_filename: str) -> 
     Check whether station exists within the given study area.
 
     :param dataset: NetCDF Dataset
-    :param study_area_polygon_filename:
-    :return: Whether station is within study area.
+    :param study_area_polygon_filename: vector file containing study area boundary
+    :return: whether station is within study area
     """
 
     study_area_polygon_filename, layer_name = study_area_polygon_filename.split(':')
