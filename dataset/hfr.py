@@ -449,18 +449,18 @@ class HFRRange:
         :return: xarray dataset of given variables
         """
 
-        data_arrays = {}
+        output_dataset = xarray.Dataset()
 
         if variables is None:
             variables = DATA_VARIABLES
 
         if mean:
             for variable in variables:
-                data_arrays[variable] = xarray.DataArray(
+                output_dataset.update({variable: xarray.DataArray(
                     numpy.mean(self.data_average(variable, dop_threshold=dop_threshold), axis=0),
                     coords={'lat': self.netcdf_dataset['lat'],
                             'lon': self.netcdf_dataset['lon']},
-                    dims=('lat', 'lon'))
+                    dims=('lat', 'lon'))})
         else:
             for variable in variables:
                 output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].values
@@ -470,13 +470,13 @@ class HFRRange:
                             self.netcdf_dataset['DOPy'] <= dop_threshold)).values
                     output_data[~dop_mask] = numpy.nan
 
-                data_arrays[variable] = xarray.DataArray(output_data,
-                                                         coords={'time': self.netcdf_dataset['time'],
-                                                                 'lat': self.netcdf_dataset['lat'],
-                                                                 'lon': self.netcdf_dataset['lon']},
-                                                         dims=('time', 'lat', 'lon'))
+                output_dataset.update({variable: xarray.DataArray(output_data,
+                                                                  coords={'time': self.netcdf_dataset['time'],
+                                                                          'lat': self.netcdf_dataset['lat'],
+                                                                          'lon': self.netcdf_dataset['lon']},
+                                                                  dims=('time', 'lat', 'lon'))})
 
-        return xarray.Dataset(data_vars=data_arrays)
+        return output_dataset
 
     def to_netcdf(self, output_file: str, variables: list = None, mean: bool = True):
         """

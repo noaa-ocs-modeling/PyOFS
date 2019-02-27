@@ -676,7 +676,7 @@ class VIIRSRange:
         :return: xarray dataset of given variables
         """
 
-        data_arrays = {}
+        output_dataset = xarray.Dataset()
 
         coordinates = OrderedDict({
             'lat': VIIRSDataset.study_area_coordinates['lat'],
@@ -699,11 +699,8 @@ class VIIRSRange:
             variables_data = self.data(average=mean, sses_correction=sses_correction, variables=variables)
 
         for variable, variable_data in variables_data.items():
-            data_arrays[variable] = xarray.DataArray(variable_data, coords=coordinates, dims=tuple(coordinates.keys()))
-
-        output_dataset = xarray.Dataset(data_vars=data_arrays)
-
-        del data_arrays
+            output_dataset.update(
+                {variable: xarray.DataArray(variable_data, coords=coordinates, dims=tuple(coordinates.keys()))})
 
         return output_dataset
 
