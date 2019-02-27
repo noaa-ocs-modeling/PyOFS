@@ -14,7 +14,7 @@ WEB_MERCATOR = pyproj.Proj(
 
 class VelocityField:
     """
-    Matrix of velocity vectors (u and v).
+    Velocity field of u and v vectors in m/s.
     """
 
     def __init__(self, field: xarray.Dataset, u_name: str = 'u', v_name: str = 'v', x_name: str = 'lon',
@@ -203,6 +203,10 @@ class Particle:
 
 
 class Contour:
+    """
+    Contour of points within a velocity field.
+    """
+
     def __init__(self, field: VelocityField, time: datetime.datetime, points: list):
         """
         Create contour given list of points.
@@ -221,7 +225,7 @@ class Contour:
 class CircleContour(Contour):
     def __init__(self, field: VelocityField, time: datetime.datetime, center: tuple, radius: float, interval: float):
         """
-        Circle contour with given interval between points.
+        Create circle contour with given interval between points.
 
         :param field: velocity field
         :param time: starting time
@@ -238,7 +242,7 @@ class SquareContour(Contour):
     def __init__(self, field: VelocityField, time: datetime.datetime, x_min: float, x_max: float, y_min: float,
                  y_max: float):
         """
-        Orthogonal square contour with given bounds.
+        Create orthogonal square contour with given bounds.
 
         :param field: velocity field
         :param time: starting time
