@@ -3,12 +3,13 @@ import math
 
 import numpy
 import pyproj
+import shapely.geometry
 import xarray
 
 from dataset import _utilities
 
-WGS84_LONLAT = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
-WEB_MERCATOR = pyproj.Proj(
+GCS = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
+PCS = pyproj.Proj(
     '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs')
 
 
@@ -40,7 +41,7 @@ class VelocityField:
         if len(x_dims) == 1 or len(y_dims) == 1:
             lon, lat = numpy.meshgrid(lon, lat)
 
-        x, y = WEB_MERCATOR(lon, lat)
+        x, y = PCS(lon, lat)
 
         if len(x_dims) == 1 or len(y_dims) == 1:
             x = x[0, :]
@@ -70,7 +71,7 @@ class VelocityField:
         :return: u value at coordinate in m/s
         """
 
-        x, y = WEB_MERCATOR(lon, lat)
+        x, y = PCS(lon, lat)
         return self.field[self.u_name].sel(time=time, x=x, y=y, method='nearest').values.item()
 
     def v(self, time: datetime.datetime, lon: float, lat: float) -> float:
@@ -83,7 +84,7 @@ class VelocityField:
         :return: v value at coordinate in m/s
         """
 
-        x, y = WEB_MERCATOR(lon, lat)
+        x, y = PCS(lon, lat)
         return self.field[self.v_name].sel(time=time, x=x, y=y, method='nearest').values.item()
 
     def velocity(self, time: datetime.datetime, lon: float, lat: float) -> float:
@@ -153,7 +154,7 @@ class Particle:
 
         self.time += t_delta
 
-        self.set(self.time, *WGS84_LONLAT(self.x, self.y))
+        self.set(self.time, *GCS(self.x, self.y))
 
     def set(self, time: datetime.datetime, lon: float, lat: float):
         """
@@ -164,7 +165,7 @@ class Particle:
         :param lat: latitude
         """
 
-        x, y = WEB_MERCATOR(lon, lat)
+        x, y = PCS(lon, lat)
 
         if self.field.has_multidim_coords:
             x_delta = self.field.x_delta
@@ -188,7 +189,7 @@ class Particle:
         :return tuple of GCS coordinates
         """
 
-        return WGS84_LONLAT(self.x, self.y)
+        return GCS(self.x, self.y)
 
     def velocity(self):
         """
@@ -221,9 +222,32 @@ class Contour:
         for point in points:
             self.particles.append(Particle(field, time, *point))
 
+    def step(self, t_delta: datetime.datetime = None):
+        """
+        Step particle by given time delta.
+
+        :param t_delta: time delta
+        """
+
+        for particle in self.particles:
+            particle.step(t_delta)
+
+    def polygon(self):
+        return shapely.geometry.Polygon([(particle.x, particle.y) for particle in self.particles])
+
+    def area(self):
+        return self.polygon().area
+
+    def bounds(self):
+        return self.polygon().bounds
+
+    def __str__(self):
+        return f'contour with bounds {self.bounds()} and area of {self.area()} m^2'
+
 
 class CircleContour(Contour):
-    def __init__(self, field: VelocityField, time: datetime.datetime, center: tuple, radius: float, interval: float):
+    def __init__(self, field: VelocityField, time: datetime.datetime, center: tuple, radius: float,
+                 interval: float = 500):
         """
         Create circle contour with given interval between points.
 
@@ -238,21 +262,52 @@ class CircleContour(Contour):
         super().__init__(field, time, points)
 
 
-class SquareContour(Contour):
-    def __init__(self, field: VelocityField, time: datetime.datetime, x_min: float, x_max: float, y_min: float,
-                 y_max: float):
+class RectangleContour(Contour):
+    def __init__(self, field: VelocityField, time: datetime.datetime, west_lon: float, east_lon: float,
+                 south_lat: float,
+                 north_lat: float, interval: float = 500):
         """
         Create orthogonal square contour with given bounds.
 
         :param field: velocity field
         :param time: starting time
-        :param x_min: minimum longitude
-        :param x_max: maximum longitude
-        :param y_min: minimum latitude
-        :param y_max: maximum latitude
+        :param west_lon: minimum longitude
+        :param east_lon: maximum longitude
+        :param south_lat: minimum latitude
+        :param north_lat: maximum latitude
+        :param interval: interval between points in meters
         """
 
-        points = [(x_min, y_min), (x_min, y_max), (x_max, y_max), (x_max, y_min)]
+        corners = {'sw': (west_lon, south_lat), 'nw': (west_lon, north_lat), 'ne': (east_lon, north_lat),
+                   'se': (east_lon, south_lat)}
+        points = []
+
+        for corner_name, corner in corners.items():
+            points.append(corner)
+
+            if corner_name is 'sw':
+                edge_length = PCS(*corners['nw'])[1] - PCS(*corners['sw'])[1]
+            elif corner_name is 'nw':
+                edge_length = PCS(*corners['ne'])[0] - PCS(*corners['nw'])[0]
+            elif corner_name is 'ne':
+                edge_length = PCS(*corners['ne'])[1] - PCS(*corners['se'])[1]
+            elif corner_name is 'se':
+                edge_length = PCS(*corners['se'])[0] - PCS(*corners['sw'])[0]
+
+            for stride in range(int(edge_length / interval)):
+                x, y = PCS(*corner)
+
+                if corner_name is 'sw':
+                    y += stride
+                elif corner_name is 'nw':
+                    x += stride
+                elif corner_name is 'ne':
+                    y -= stride
+                elif corner_name is 'se':
+                    x -= stride
+
+                points.append(GCS(x, y))
+
         super().__init__(field, time, points)
 
 
@@ -263,20 +318,20 @@ if __name__ == '__main__':
     # model_datetime.replace(hour=3, minute=0, second=0, microsecond=0)
 
     # data = wcofs.WCOFSDataset(model_datetime, source='avg').to_xarray(variables=('ssu', 'ssv'))
-    data = hfr.HFRRange(model_datetime, model_datetime + datetime.timedelta(days=1)).to_xarray(variables=('ssu', 'ssv'))
+    data = hfr.HFRRange(model_datetime, model_datetime + datetime.timedelta(days=1), source='UCSD').to_xarray(
+        variables=('ssu', 'ssv'), mean=False)
 
     velocity_field = VelocityField(data, u_name='ssu', v_name='ssv')
 
-    particle = Particle(velocity_field,
-                        datetime.datetime.utcfromtimestamp(velocity_field.field['time'][0].item() * 1e-9),
-                        lon=float(numpy.mean(data['lon'])),
-                        lat=float(numpy.mean(data['lat'])))
+    contour = RectangleContour(velocity_field,
+                               datetime.datetime.utcfromtimestamp(velocity_field.field['time'][0].item() * 1e-9),
+                               west_lon=-122.99451, east_lon=-122.73859, south_lat=36.82880, north_lat=36.93911)
 
     for t_delta in numpy.diff(velocity_field.field['time']):
         timedelta = datetime.timedelta(seconds=int(t_delta) * 1e-9)
 
         print(f'Time step: {timedelta}')
-        particle.step(timedelta)
-        print(f'New state: {particle}')
+        contour.step(timedelta)
+        print(f'New state: {contour}')
 
     print('done')

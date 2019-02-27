@@ -444,6 +444,8 @@ class HFRRange:
         Converts to xarray Dataset.
 
         :param variables: list of variables to use
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
         :param mean: whether to average all time indices
         :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
         :return: xarray dataset of given variables
@@ -454,16 +456,25 @@ class HFRRange:
         if variables is None:
             variables = DATA_VARIABLES
 
+        if start_datetime is None:
+            start_datetime = self.start_datetime
+
+        if end_datetime is None:
+            end_datetime = self.end_datetime
+
         if mean:
             for variable in variables:
-                output_dataset.update({variable: xarray.DataArray(
-                    numpy.mean(self.data_average(variable, dop_threshold=dop_threshold), axis=0),
-                    coords={'lat': self.netcdf_dataset['lat'],
-                            'lon': self.netcdf_dataset['lon']},
-                    dims=('lat', 'lon'))})
+                output_data = self.data_average(variable, start_datetime=start_datetime,
+                                                end_datetime=end_datetime, dop_threshold=dop_threshold)
+
+                output_dataset.update({variable: xarray.DataArray(output_data,
+                                                                  coords={'lat': self.netcdf_dataset['lat'],
+                                                                          'lon': self.netcdf_dataset['lon']},
+                                                                  dims=('lat', 'lon'))})
         else:
             for variable in variables:
-                output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].values
+                output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(
+                    time=slice(start_datetime, end_datetime)).values
 
                 if dop_threshold is not None:
                     dop_mask = ((self.netcdf_dataset['DOPx'] <= dop_threshold) | (
@@ -478,16 +489,19 @@ class HFRRange:
 
         return output_dataset
 
-    def to_netcdf(self, output_file: str, variables: list = None, mean: bool = True):
+    def to_netcdf(self, output_file: str, variables: list = None, start_datetime: datetime.datetime = None,
+                  end_datetime: datetime.datetime = None, mean: bool = True):
         """
         Writes to NetCDF file.
 
         :param output_file: output file to write
         :param variables: list of variables to use
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
         :param mean: whether to average all time indices
         """
 
-        self.to_xarray(variables, mean).to_netcdf(output_file)
+        self.to_xarray(variables, start_datetime, end_datetime, mean).to_netcdf(output_file)
 
     def __repr__(self):
         used_params = [self.start_datetime.__repr__(), self.end_datetime.__repr__()]
