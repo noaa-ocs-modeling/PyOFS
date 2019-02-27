@@ -264,8 +264,7 @@ class CircleContour(Contour):
 
 class RectangleContour(Contour):
     def __init__(self, field: VelocityField, time: datetime.datetime, west_lon: float, east_lon: float,
-                 south_lat: float,
-                 north_lat: float, interval: float = 500):
+                 south_lat: float, north_lat: float, interval: float = 500):
         """
         Create orthogonal square contour with given bounds.
 
