@@ -9,6 +9,7 @@ Created on Jun 13, 2018
 
 import datetime
 import os
+from typing import Collection
 
 import fiona
 import fiona.crs
@@ -17,24 +18,13 @@ import rasterio
 import scipy.interpolate
 import xarray
 
-from dataset import _utilities
+from dataset import CRS_EPSG, Logger, _utilities
 from main import DATA_DIR
-
-try:
-    from logbook import Logger
-except ImportError:
-    class Logger(object):
-        def __init__(self, name, level=0):
-            self.name = name
-            self.level = level
-
-        debug = info = warn = warning = notice = error = exception = \
-            critical = log = lambda *a, **kw: None
 
 DATA_VARIABLES = {'ssu': 'u', 'ssv': 'v', 'dopx': 'DOPx', 'dopy': 'DOPy'}
 
-FIONA_WGS84 = fiona.crs.from_epsg(4326)
-RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
+RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
+FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
 NRT_DELAY = datetime.timedelta(hours=1)
 
@@ -56,10 +46,10 @@ class HFRRange:
         """
         Creates new dataset object from source.
 
-        :param start_datetime: Beginning of time interval.
-        :param end_datetime: End of time interval.
-        :param resolution: Desired dataset resolution in kilometers.
-        :param source: Either UCSD (University of California San Diego) or NDBC (National Data Buoy Center). NDBC has a larger extent but only for the past 4 days.
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
+        :param resolution: desired dataset resolution in kilometers
+        :param source: either UCSD (University of California San Diego) or NDBC (National Data Buoy Center); NDBC has larger extent but only for the past 4 days
         :param logger: logbook logger
         :raises NoDataError: if dataset does not exist.
         """
@@ -126,10 +116,10 @@ class HFRRange:
         """
         Get data for the specified variable at a single time.
 
-        :param variable: Variable name.
-        :param time: Time to retrieve.
-        :param dop_threshold: Threshold for Dilution of Precision (DOP) above which data should be discarded.
-        :return: Array of data.
+        :param variable: variable name
+        :param time: time to retrieve
+        :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
+        :return: array of data.
         """
 
         output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(time).values
@@ -146,11 +136,11 @@ class HFRRange:
         """
         Get data for the specified variable at a single time.
 
-        :param variable: Variable name.
-        :param start_datetime: Start of time interval.
-        :param end_datetime: End of time interval.
-        :param dop_threshold: Threshold for Dilution of Precision (DOP) above which data should be discarded.
-        :return: Array of data.
+        :param variable: variable name
+        :param start_datetime: start of time interval
+        :param end_datetime: end of time interval
+        :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
+        :return: array of data
         """
 
         if start_datetime is None:
@@ -174,7 +164,7 @@ class HFRRange:
         """
         Get coordinate bounds of dataset.
 
-        :return: Tuple of bounds (west, north, east, south)
+        :return: tuple of bounds (west, north, east, south)
         """
 
         return (self.netcdf_dataset.geospatial_lon_min, self.netcdf_dataset.geospatial_lat_max,
@@ -184,7 +174,7 @@ class HFRRange:
         """
         Get cell sizes of dataset.
 
-        :return: Tuple of cell sizes (x, y)
+        :return: tuple of cell sizes (x, y)
         """
 
         return abs(self.mean_x_size), abs(self.mean_y_size)
@@ -193,8 +183,8 @@ class HFRRange:
         """
         Writes HFR radar facility locations to specified file and layer.
 
-        :param output_filename: Path to output file.
-        :param layer_name: Name of layer to write.
+        :param output_filename: path to output file
+        :param layer_name: name of layer to write
         """
 
         layer_records = []
@@ -219,19 +209,20 @@ class HFRRange:
             }
         }
 
-        with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_WGS84) as layer:
+        with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_CRS) as layer:
             layer.writerecords(layer_records)
 
-    def write_vectors(self, output_filename: str, variables: list = None, start_datetime: datetime.datetime = None,
-                      end_datetime: datetime.datetime = None, dop_threshold: float = 0.5):
+    def write_vectors(self, output_filename: str, variables: Collection[str] = None,
+                      start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
+                      dop_threshold: float = 0.5):
         """
         Write HFR data to a layer of the provided output file for every hour in the given time interval.
 
-        :param output_filename: Path to output file.
-        :param variables: List of variable names to use.
-        :param start_datetime: Beginning of time interval.
-        :param end_datetime: End of time interval.
-        :param dop_threshold: Threshold for Dilution of Precision (DOP) above which data should be discarded.
+        :param output_filename: path to output file
+        :param variables: variable names to use
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
+        :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
         """
 
         if variables is None:
@@ -297,21 +288,21 @@ class HFRRange:
         }
 
         for layer_name, layer_records in layers.items():
-            with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_WGS84) as layer:
+            with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_CRS) as layer:
                 layer.writerecords(layer_records)
 
-    def write_vector(self, output_filename: str, layer_name: str = 'ssuv', variables: list = None,
+    def write_vector(self, output_filename: str, layer_name: str = 'ssuv', variables: Collection[str] = None,
                      start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
                      dop_threshold: float = 0.5):
         """
         Write average of HFR data for all hours in the given time interval to a single layer of the provided output file.
 
-        :param output_filename: Path to output file.
-        :param layer_name: Name of layer to write.
-        :param variables: List of variable names to use.
-        :param start_datetime: Beginning of time interval.
-        :param end_datetime: End of time interval.
-        :param dop_threshold: Threshold for Dilution of Precision (DOP) above which data should be discarded.
+        :param output_filename: path to output file
+        :param layer_name: name of layer to write
+        :param variables: variable names to use
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
+        :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
         """
 
         if variables is None:
@@ -356,25 +347,25 @@ class HFRRange:
         # write queued features to layer
         if self.logger is not None:
             self.logger.info(f'Writing {output_filename}')
-        with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_WGS84) as layer:
+        with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_CRS) as layer:
             layer.writerecords(layer_records)
 
     def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = '',
-                      variables: list = None, start_datetime: datetime.datetime = None,
+                      variables: Collection[str] = None, start_datetime: datetime.datetime = None,
                       end_datetime: datetime.datetime = None, fill_value: float = -9999, driver: str = 'GTiff',
-                      dop_threshold: float = 0.5):
+                      dop_threshold: float = None):
         """
         Write average of HFR data for all hours in the given time interval to rasters.
 
-        :param output_dir: Path to output directory.
-        :param filename_prefix: Prefix for output filenames.
-        :param filename_suffix: Suffix for output filenames.
-        :param variables: List of variable names to use.
-        :param start_datetime: Beginning of time interval.
-        :param end_datetime: End of time interval.
-        :param fill_value: Desired fill value of output.
-        :param driver: String of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
-        :param dop_threshold: Threshold for dilution of precision above which data is not useable.
+        :param output_dir: path to output directory
+        :param filename_prefix: prefix for output filenames
+        :param filename_suffix: suffix for output filenames
+        :param variables: variable names to use
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
+        :param fill_value: desired fill value of output
+        :param driver: string of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
+        :param dop_threshold: threshold for dilution of precision above which data is not useable
         """
 
         if variables is None:
@@ -406,7 +397,7 @@ class HFRRange:
 
             gdal_args = {
                 'height': raster_data.shape[0], 'width': raster_data.shape[1], 'count': 1,
-                'dtype': raster_data.dtype, 'crs': RASTERIO_WGS84, 'transform': self.grid_transform,
+                'dtype': raster_data.dtype, 'crs': RASTERIO_CRS, 'transform': self.grid_transform,
                 'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
             }
 
@@ -436,6 +427,9 @@ class HFRRange:
                 file_extension = 'gpkg'
             else:
                 file_extension = 'tiff'
+                gdal_args.update({
+                    'TILED': 'YES'
+                })
 
             output_filename = os.path.join(output_dir,
                                            f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
@@ -445,45 +439,71 @@ class HFRRange:
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(numpy.flipud(raster_data), 1)
 
-    def to_xarray(self, variables: list = None, mean: bool = True) -> xarray.Dataset:
+    def to_xarray(self, variables: Collection[str] = None, start_datetime: datetime.datetime = None,
+                  end_datetime: datetime.datetime = None, mean: bool = True,
+                  dop_threshold: float = 0.5) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
 
-        :param variables: List of variables to use.
-        :param mean: Whether to average all time indices.
-        :return: xarray Dataset of given variables.
+        :param variables: variables to use
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
+        :param mean: whether to average all time indices
+        :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
+        :return: xarray dataset of given variables
         """
 
-        data_arrays = {}
+        output_dataset = xarray.Dataset()
 
         if variables is None:
             variables = DATA_VARIABLES
 
+        if start_datetime is None:
+            start_datetime = self.start_datetime
+
+        if end_datetime is None:
+            end_datetime = self.end_datetime
+
         if mean:
             for variable in variables:
-                data_arrays[variable] = xarray.DataArray(numpy.mean(self.data_average(variable), axis=0),
-                                                         coords={'lat': self.netcdf_dataset['lat'],
-                                                                 'lon': self.netcdf_dataset['lon']},
-                                                         dims=('lat', 'lon'))
+                output_data = self.data_average(variable, start_datetime=start_datetime,
+                                                end_datetime=end_datetime, dop_threshold=dop_threshold)
+
+                output_dataset.update({variable: xarray.DataArray(output_data,
+                                                                  coords={'lat': self.netcdf_dataset['lat'],
+                                                                          'lon': self.netcdf_dataset['lon']},
+                                                                  dims=('lat', 'lon'))})
         else:
             for variable in variables:
-                data_arrays[variable] = xarray.DataArray(self.data_average(variable),
-                                                         coords={'lat': self.netcdf_dataset['lat'],
-                                                                 'lon': self.netcdf_dataset['lon']},
-                                                         dims=('time', 'lat', 'lon'))
+                output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(
+                    time=slice(start_datetime, end_datetime)).values
 
-        return xarray.Dataset(data_vars=data_arrays)
+                if dop_threshold is not None:
+                    dop_mask = ((self.netcdf_dataset['DOPx'] <= dop_threshold) & (
+                            self.netcdf_dataset['DOPy'] <= dop_threshold)).values
+                    output_data[~dop_mask] = numpy.nan
 
-    def to_netcdf(self, output_file: str, variables: list = None, mean: bool = True):
+                output_dataset.update({variable: xarray.DataArray(output_data,
+                                                                  coords={'time': self.netcdf_dataset['time'],
+                                                                          'lat': self.netcdf_dataset['lat'],
+                                                                          'lon': self.netcdf_dataset['lon']},
+                                                                  dims=('time', 'lat', 'lon'))})
+
+        return output_dataset
+
+    def to_netcdf(self, output_file: str, variables: Collection[str] = None, start_datetime: datetime.datetime = None,
+                  end_datetime: datetime.datetime = None, mean: bool = True):
         """
         Writes to NetCDF file.
 
-        :param output_file: Output file to write.
-        :param variables: List of variables to use.
-        :param mean: Whether to average all time indices.
+        :param output_file: output file to write
+        :param variables: variables to use
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
+        :param mean: whether to average all time indices
         """
 
-        self.to_xarray(variables, mean).to_netcdf(output_file)
+        self.to_xarray(variables, start_datetime, end_datetime, mean).to_netcdf(output_file)
 
     def __repr__(self):
         used_params = [self.start_datetime.__repr__(), self.end_datetime.__repr__()]
@@ -504,10 +524,12 @@ class HFRRange:
 if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIR, r'output\test')
 
-    start_datetime = datetime.datetime(2018, 11, 15)
+    start_datetime = datetime.datetime(2019, 2, 6)
     end_datetime = start_datetime + datetime.timedelta(days=1)
 
     hfr_range = HFRRange(start_datetime, end_datetime)
-    hfr_range.write_rasters(output_dir)
+    hfr_range.write_vector(os.path.join(output_dir, 'hfr_no_DOP.gpkg'))
+    hfr_range.write_vector(os.path.join(output_dir, 'hfr_0.5_DOP.gpkg'), dop_threshold=0.5)
+    hfr_range.write_vector(os.path.join(output_dir, 'hfr_0.1_DOP.gpkg'), dop_threshold=0.1)
 
     print('done')

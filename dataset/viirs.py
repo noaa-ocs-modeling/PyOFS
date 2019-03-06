@@ -7,12 +7,13 @@ Created on Jun 13, 2018
 @author: zachary.burnett
 """
 
+from collections import OrderedDict
+from concurrent import futures
 import datetime
 import ftplib
 import math
 import os
-from collections import OrderedDict
-from concurrent import futures
+from typing import Collection
 
 import fiona
 import numpy
@@ -23,19 +24,8 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-from dataset import _utilities
+from dataset import CRS_EPSG, Logger, _utilities
 from main import DATA_DIR
-
-try:
-    from logbook import Logger
-except ImportError:
-    class Logger(object):
-        def __init__(self, name, level=0):
-            self.name = name
-            self.level = level
-
-        debug = info = warn = warning = notice = error = exception = \
-            critical = log = lambda *a, **kw: None
 
 VIIRS_START_DATETIME = datetime.datetime.strptime('2012-03-01 00:10:00', '%Y-%m-%d %H:%M:%S')
 VIIRS_PERIOD = datetime.timedelta(days=16)
@@ -43,7 +33,7 @@ VIIRS_PERIOD = datetime.timedelta(days=16)
 PASS_TIMES_FILENAME = os.path.join(DATA_DIR, r"reference\viirs_pass_times.txt")
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 
-RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
+RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 
 NRT_DELAY = datetime.timedelta(hours=2)
 
@@ -70,13 +60,13 @@ class VIIRSDataset:
         """
         Retrieve VIIRS NetCDF dataset from NOAA with given datetime.
 
-        :param granule_datetime: Dataset datetime.
-        :param satellite: VIIRS platform.
-        :param study_area_polygon_filename: Filename of vector file containing study area boundary.
-        :param algorithm: Either 'STAR' or 'OSPO'.
-        :param version: ACSPO algorithm version.
+        :param granule_datetime: dataset datetime
+        :param satellite: VIIRS platform
+        :param study_area_polygon_filename: filename of vector file containing study area boundary
+        :param algorithm: either 'STAR' or 'OSPO'
+        :param version: ACSPO algorithm version
         :param logger: logbook logger
-        :raises NoDataError: if dataset does not exist.
+        :raises NoDataError: if dataset does not exist
         """
 
         self.logger = logger
@@ -248,7 +238,7 @@ class VIIRSDataset:
         """
         Get coordinate bounds of dataset.
 
-        :return: Tuple of bounds (west, south, east, north)
+        :return: tuple of bounds (west, south, east, north)
         """
 
         return self.data_extent.bounds
@@ -257,24 +247,31 @@ class VIIRSDataset:
         """
         Get cell sizes of dataset.
 
-        :return: Tuple of cell sizes (x_size, y_size)
+        :return: tuple of cell sizes (x_size, y_size)
         """
 
         return self.netcdf_dataset.geospatial_lon_resolution, self.netcdf_dataset.geospatial_lat_resolution
 
-    def data(self, variable: str = 'sst', sses_correction: bool = False) -> numpy.ndarray:
-        if variable == 'sst':
-            output_data = self._sst(sses_correction)
-        elif variable == 'sses':
-            output_data = self._sses()
+    def data(self, variable: str = 'sst') -> numpy.ndarray:
+        """
+        Retrieve data of given variable. Use 'sst_sses' to retrieve SST corrected with sensor-specific error statistic (SSES)
 
-        return output_data
+        :param variable: variable name (one of 'sst', 'sses', or 'sst_sses')
+        :return: matrix of data in Celsius
+        """
+
+        if variable == 'sst':
+            return self._sst()
+        if variable == 'sst':
+            return self._sst(sses_correction=True)
+        elif variable == 'sses':
+            return self._sses()
 
     def _sst(self, sses_correction: bool = False) -> numpy.ndarray:
         """
         Return matrix of sea surface temperature.
 
-        :return: Matrix of SST in Celsius.
+        :return: matrix of SST in Celsius
         """
 
         # dataset SST data (masked array) using vertically reflected VIIRS grid
@@ -311,7 +308,7 @@ class VIIRSDataset:
         """
         Return matrix of sensor-specific error statistics.
 
-        :return: Array of SSES bias in Celsius.
+        :return: array of SSES bias in Celsius
         """
 
         # dataset bias values using vertically reflected VIIRS grid
@@ -325,17 +322,18 @@ class VIIRSDataset:
 
         return sses_data
 
-    def write_rasters(self, output_dir: str, variables: list = ('sst', 'sses'), filename_prefix: str = 'viirs',
+    def write_rasters(self, output_dir: str, variables: Collection[str] = ('sst', 'sses'),
+                      filename_prefix: str = 'viirs',
                       fill_value: float = -9999.0, driver: str = 'GTiff', sses_correction: bool = False):
         """
         Write VIIRS rasters to file using data from given variables.
 
-        :param output_dir: Path to output directory.
-        :param variables: List of variable names to write.
-        :param filename_prefix: Prefix for output filenames.
-        :param fill_value: Desired fill value of output.
-        :param driver: Strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
-        :param sses_correction: Whether to subtract SSES bias from SST.
+        :param output_dir: path to output directory
+        :param variables: variable names to write
+        :param filename_prefix: prefix for output filenames
+        :param fill_value: desired fill value of output
+        :param driver: strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
+        :param sses_correction: whether to subtract SSES bias from SST
         """
 
         for variable in variables:
@@ -351,7 +349,7 @@ class VIIRSDataset:
                 gdal_args = {
                     'height': input_data.shape[0], 'width': input_data.shape[1], 'count': 1,
                     'dtype': rasterio.float32,
-                    'crs': RASTERIO_WGS84, 'transform': VIIRSDataset.study_area_transform, 'nodata': fill_value
+                    'crs': RASTERIO_CRS, 'transform': VIIRSDataset.study_area_transform, 'nodata': fill_value
                 }
 
                 if driver == 'AAIGrid':
@@ -361,6 +359,9 @@ class VIIRSDataset:
                     file_extension = 'gpkg'
                 else:
                     file_extension = 'tiff'
+                    gdal_args.update({
+                        'TILED': 'YES'
+                    })
 
                 output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
 
@@ -402,15 +403,15 @@ class VIIRSRange:
         """
         Collect VIIRS datasets within time interval.
 
-        :param start_datetime: Beginning of time interval (in UTC).
-        :param end_datetime: End of time interval (in UTC).
-        :param satellites: List of VIIRS platforms.
-        :param study_area_polygon_filename: Filename of vector file of study area boundary.
-        :param pass_times_filename: Path to text file with pass times.
-        :param algorithm: Either 'STAR' or 'OSPO'.
-        :param version: ACSPO algorithm version.
+        :param start_datetime: beginning of time interval (in UTC)
+        :param end_datetime: end of time interval (in UTC)
+        :param satellites: VIIRS platforms
+        :param study_area_polygon_filename: filename of vector file of study area boundary
+        :param pass_times_filename: path to text file with pass times
+        :param algorithm: either 'STAR' or 'OSPO'
+        :param version: ACSPO algorithm version
         :param logger: logbook logger
-        :raises NoDataError: if data does not exist.
+        :raises NoDataError: if data does not exist
         """
 
         self.logger = logger
@@ -480,7 +481,7 @@ class VIIRSRange:
         """
         Get cell sizes of dataset.
 
-        :return: Tuple of cell sizes (x_size, y_size)
+        :return: tuple of cell sizes (x_size, y_size)
         """
 
         sample_dataset = next(iter(self.datasets.values()))
@@ -489,18 +490,18 @@ class VIIRSRange:
                 sample_dataset.netcdf_dataset.geospatial_lat_resolution)
 
     def data(self, start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
-             average: bool = False, sses_correction: bool = False, variables: list = tuple('sst'),
+             average: bool = False, sses_correction: bool = False, variables: Collection[str] = tuple(['sst']),
              satellite: str = None) -> dict:
         """
         Get VIIRS data (either overlapped or averaged) from the given time interval.
 
-        :param start_datetime: Beginning of time interval (in UTC).
-        :param end_datetime: End of time interval (in UTC).
-        :param average: Whether to average rasters, otherwise overlap them.
-        :param sses_correction: Whether to subtract SSES bias from L3 sea surface temperature data.
-        :param variables: List of variables to write (either 'sst' or 'sses').
-        :param satellite: VIIRS platform to retrieve. Default: per-granule averages of platform datasets.
-        :return Dictionary of data per variable.
+        :param start_datetime: beginning of time interval (in UTC)
+        :param end_datetime: end of time interval (in UTC)
+        :param average: whether to average rasters, otherwise overlap them
+        :param sses_correction: whether to subtract SSES bias from L3 sea surface temperature data
+        :param variables: variables to write (either 'sst' or 'sses')
+        :param satellite: VIIRS platform to retrieve. Default: per-granule averages of platform datasets
+        :return dictionary of data per variable
         """
 
         start_datetime = start_datetime if start_datetime is not None else self.start_datetime
@@ -554,19 +555,20 @@ class VIIRSRange:
 
         return variables_data
 
-    def write_rasters(self, output_dir: str, variables: list = ('sst', 'sses'), filename_prefix: str = 'viirs',
+    def write_rasters(self, output_dir: str, variables: Collection[str] = ('sst', 'sses'),
+                      filename_prefix: str = 'viirs',
                       fill_value: float = None, driver: str = 'GTiff', sses_correction: bool = False,
                       satellite: str = None):
         """
         Write individual VIIRS rasters to directory.
 
-        :param output_dir: Path to output directory.
-        :param variables: List of variable names to write.
-        :param filename_prefix: Prefix for output filenames.
-        :param fill_value: Desired fill value of output.
-        :param driver: String of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
-        :param sses_correction: Whether to subtract SSES bias from L3 sea surface temperature data.
-        :param satellite: VIIRS platform to retrieve. Default: per-granule averages of platform datasets.
+        :param output_dir: path to output directory
+        :param variables: variable names to write
+        :param filename_prefix: prefix for output filenames
+        :param fill_value: desired fill value of output
+        :param driver: string of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
+        :param sses_correction: whether to subtract SSES bias from L3 sea surface temperature data
+        :param satellite: VIIRS platform to retrieve; if not specified, will average from both satellites
         """
 
         # write a raster for each pass retrieved scene
@@ -583,25 +585,23 @@ class VIIRSRange:
     def write_raster(self, output_dir: str, filename_prefix: str = None, filename_suffix: str = None,
                      start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
                      average: bool = False, fill_value: float = -9999, driver: str = 'GTiff',
-                     sses_correction: bool = False, variables: list = tuple('sst'), satellite: str = None):
+                     sses_correction: bool = False, variables: Collection[str] = tuple(['sst']), satellite: str = None):
 
         """
         Write VIIRS raster of SST data (either overlapped or averaged) from the given time interval.
 
-        :param output_dir: Path to output directory.
-        :param filename_prefix: Prefix for output filenames.
-        :param filename_suffix: Suffix for output filenames.
-        :param start_datetime: Beginning of time interval (in UTC).
-        :param end_datetime: End of time interval (in UTC).
-        :param average: Whether to average rasters, otherwise overlap them.
-        :param fill_value: Desired fill value of output.
-        :param driver: String of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
-        :param sses_correction: Whether to subtract SSES bias from L3 sea surface temperature data.
-        :param variables: List of variables to write (either 'sst' or 'sses').
-        :param satellite: VIIRS platform to retrieve. Default: per-granule averages of platform datasets.
+        :param output_dir: path to output directory
+        :param filename_prefix: prefix for output filenames
+        :param filename_suffix: suffix for output filenames
+        :param start_datetime: beginning of time interval (in UTC)
+        :param end_datetime: end of time interval (in UTC)
+        :param average: whether to average rasters, otherwise overlap them
+        :param fill_value: desired fill value of output
+        :param driver: string of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
+        :param sses_correction: whether to subtract SSES bias from L3 sea surface temperature data
+        :param variables: variables to write (either 'sst' or 'sses')
+        :param satellite: VIIRS platform to retrieve; if not specified, will average from both satellites
         """
-
-        variable_data = self.data(start_datetime, end_datetime, average, sses_correction, variables, satellite)
 
         if start_datetime is None:
             start_datetime = self.start_datetime
@@ -609,42 +609,33 @@ class VIIRSRange:
         if end_datetime is None:
             end_datetime = self.end_datetime
 
+        variable_data = self.data(start_datetime, end_datetime, average, sses_correction, variables, satellite)
+
         for variable, output_data in variable_data.items():
             if output_data is not None and numpy.any(~numpy.isnan(output_data)):
                 output_data[numpy.isnan(output_data)] = fill_value
 
+                raster_data = output_data.astype(rasterio.float32)
+
                 # define arguments to GDAL driver
                 gdal_args = {
-                    'height': output_data.shape[0], 'width': output_data.shape[1], 'count': 1,
-                    'crs': RASTERIO_WGS84,
+                    'height': raster_data.shape[0], 'width': raster_data.shape[1], 'count': 1,
+                    'crs': RASTERIO_CRS, 'dtype': raster_data.dtype,
+                    'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item(),
                     'transform': VIIRSRange.study_area_transform
                 }
 
                 if driver == 'AAIGrid':
                     file_extension = 'asc'
-                    raster_data = output_data.astype(rasterio.float32)
                     gdal_args.update({
-                        'dtype': raster_data.dtype,
-                        'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item(),
                         'FORCE_CELLSIZE': 'YES'
                     })
                 elif driver == 'GPKG':
                     file_extension = 'gpkg'
-                    gpkg_dtype = rasterio.uint8
-                    gpkg_fill_value = numpy.iinfo(gpkg_dtype).max
-                    output_data[output_data == fill_value] = gpkg_fill_value
-                    # scale data to within range of uint8
-                    raster_data = ((gpkg_fill_value - 1) * (output_data - numpy.min(output_data)) / numpy.ptp(
-                        output_data)).astype(gpkg_dtype)
-                    gdal_args.update({
-                        'dtype': gpkg_dtype, 'nodata': gpkg_fill_value
-                    })  # , 'TILE_FORMAT': 'PNG8'})
                 else:
                     file_extension = 'tiff'
-                    raster_data = output_data.astype(rasterio.float32)
                     gdal_args.update({
-                        'dtype': raster_data.dtype,
-                        'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
+                        'TILED': 'YES'
                     })
 
                 if filename_prefix is None:
@@ -676,19 +667,19 @@ class VIIRSRange:
                     self.logger.warning(
                         f'No {"VIIRS" if satellite is None else "VIIRS " + satellite} {variable} found between {start_datetime} and {end_datetime}.')
 
-    def to_xarray(self, variables: list = ('sst', 'sses'), mean: bool = True, sses_correction: bool = False,
+    def to_xarray(self, variables: Collection[str] = ('sst', 'sses'), mean: bool = True, sses_correction: bool = False,
                   satellites: list = None) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
 
-        :param variables: List of variables to use.
-        :param mean: Whether to average all time indices.
-        :param sses_correction: Whether to subtract SSES bias from L3 sea surface temperature data.
-        :param satellites: VIIRS platforms to retrieve. Default: per-granule averages of platform datasets.
-        :return: xarray Dataset of given variables.
+        :param variables: variables to use
+        :param mean: whether to average all time indices
+        :param sses_correction: whether to subtract SSES bias from L3 sea surface temperature data
+        :param satellites: VIIRS platforms to retrieve; if not specified, will average from both satellites
+        :return: xarray dataset of given variables
         """
 
-        data_arrays = {}
+        output_dataset = xarray.Dataset()
 
         coordinates = OrderedDict({
             'lat': VIIRSDataset.study_area_coordinates['lat'],
@@ -711,24 +702,22 @@ class VIIRSRange:
             variables_data = self.data(average=mean, sses_correction=sses_correction, variables=variables)
 
         for variable, variable_data in variables_data.items():
-            data_arrays[variable] = xarray.DataArray(variable_data, coords=coordinates, dims=tuple(coordinates.keys()))
-
-        output_dataset = xarray.Dataset(data_vars=data_arrays)
-
-        del data_arrays
+            output_dataset.update(
+                {variable: xarray.DataArray(variable_data, coords=coordinates, dims=tuple(coordinates.keys()))})
 
         return output_dataset
 
-    def to_netcdf(self, output_file: str, variables: list = None, mean: bool = True, sses_correction: bool = False,
+    def to_netcdf(self, output_file: str, variables: Collection[str] = None, mean: bool = True,
+                  sses_correction: bool = False,
                   satellites: list = None):
         """
         Writes to NetCDF file.
 
-        :param output_file: Output file to write.
-        :param variables: List of variables to use.
-        :param mean: Whether to average all time indices.
-        :param sses_correction: Whether to subtract SSES bias from L3 sea surface temperature data.
-        :param satellites: VIIRS platforms to retrieve. Default: per-granule averages of platform datasets.
+        :param output_file: output file to write
+        :param variables: variables to use
+        :param mean: whether to average all time indices
+        :param sses_correction: whether to subtract SSES bias from L3 sea surface temperature data
+        :param satellites: VIIRS platforms to retrieve; if not specified, will average from both satellites
         """
 
         self.to_xarray(variables, mean, sses_correction, satellites).to_netcdf(output_file)
@@ -834,9 +823,9 @@ def get_pass_times(start_datetime: datetime.datetime, end_datetime: datetime.dat
     """
     Retreive array of datetimes of VIIRS passes within the given time interval, given initial period durations.
 
-    :param start_datetime: Beginning of time interval (in UTC).
-    :param end_datetime: End of time interval (in UTC).
-    :param pass_times_filename: Filename of text file with durations of first VIIRS period.
+    :param start_datetime: beginning of time interval (in UTC)
+    :param end_datetime: end of time interval (in UTC)
+    :param pass_times_filename: filename of text file with durations of first VIIRS period
     :return:
     """
 
@@ -883,7 +872,6 @@ if __name__ == '__main__':
     end_datetime = start_datetime + datetime.timedelta(days=1)
 
     viirs_range = VIIRSRange(start_datetime, end_datetime)
-    viirs_range.write_raster(output_dir, filename_prefix='viirs_npp', satellite='NPP')
-    viirs_range.write_raster(output_dir, filename_prefix='viirs_n20', satellite='N20')
+    viirs_range.write_raster(output_dir)
 
     print('done')

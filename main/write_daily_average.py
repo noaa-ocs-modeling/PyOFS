@@ -15,14 +15,13 @@ import pytz
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
-from dataset import _utilities, hfr, viirs, rtofs, wcofs, smap
+from dataset import hfr, viirs, rtofs, wcofs, smap
 
 from main import json_dir_structure, DATA_DIR
 
 JSON_PATH = os.path.join(DATA_DIR, r'reference\model_dates.json')
 LOG_DIR = os.path.join(DATA_DIR, 'log')
 OUTPUT_DIR = os.path.join(DATA_DIR, 'output')
-DAILY_AVERAGES_DIR = os.path.join(OUTPUT_DIR, 'daily_averages')
 
 # offset from study area to UTC
 STUDY_AREA_TIMEZONE = 'US/Pacific'
@@ -57,29 +56,40 @@ def write_observation(output_dir: str, observation_date: datetime.datetime,
 
     end_of_day = start_of_day + datetime.timedelta(days=1)
 
-    # write observational data to directory for specified date
-    observation_dir = os.path.join(output_dir, observation_date.strftime("%Y%m%d"))
+    if observation is 'sss':
+        monthly_dir = os.path.join(output_dir, 'monthly_averages')
+
+        if not os.path.isdir(monthly_dir):
+            os.mkdir(monthly_dir)
+
+        observation_dir = os.path.join(monthly_dir, observation_date.strftime("%Y%m"))
+    else:
+        daily_dir = os.path.join(output_dir, 'daily_averages')
+
+        if not os.path.isdir(daily_dir):
+            os.mkdir(daily_dir)
+
+        observation_dir = os.path.join(daily_dir, observation_date.strftime("%Y%m%d"))
 
     if not os.path.isdir(observation_dir):
         os.mkdir(observation_dir)
 
     try:
-        if observation == 'hfr':
+        if observation == 'ssuv':
             start_of_day_hfr_time = start_of_day + datetime.timedelta(hours=2)
             end_of_day_hfr_time = end_of_day + datetime.timedelta(hours=2)
 
             hfr_range = hfr.HFRRange(start_of_day_hfr_time, end_of_day_hfr_time, logger=logger)
             hfr_range.write_rasters(observation_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}',
                                     variables=['dir', 'mag'], driver='AAIGrid',
-                                    fill_value=LEAFLET_NODATA_VALUE)
+                                    fill_value=LEAFLET_NODATA_VALUE, dop_threshold=0.5)
             del hfr_range
-        elif observation == 'viirs':
+        elif observation == 'sst':
             start_of_day_in_utc = start_of_day + STUDY_AREA_TO_UTC
             noon_in_utc = start_of_day + datetime.timedelta(hours=12) + STUDY_AREA_TO_UTC
             end_of_day_in_utc = start_of_day + datetime.timedelta(hours=24) + STUDY_AREA_TO_UTC
 
             viirs_range = viirs.VIIRSRange(start_of_day_in_utc, end_of_day_in_utc, logger=logger)
-
             viirs_range.write_raster(observation_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_morning',
                                      start_datetime=start_of_day_in_utc, end_datetime=noon_in_utc,
                                      fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', sses_correction=False,
@@ -89,9 +99,8 @@ def write_observation(output_dir: str, observation_date: datetime.datetime,
                                      fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', sses_correction=False,
                                      variables=['sst'])
             del viirs_range
-        elif observation == 'smap':
+        elif observation == 'sss':
             smap_dataset = smap.SMAPDataset(logger=logger)
-
             smap_dataset.write_rasters(observation_dir, data_datetime=start_of_day, fill_value=LEAFLET_NODATA_VALUE,
                                        driver='GTiff', variables=['sss'])
             del smap_dataset
@@ -117,11 +126,13 @@ def write_rtofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
     if 'datetime.date' in str(type(model_run_date)):
         model_run_date = datetime.datetime.combine(model_run_date, datetime.datetime.min.time())
 
+    daily_dir = os.path.join(output_dir, 'daily_averages')
+
     # define directories to which output rasters will be written
     output_dirs = {
-        day_delta: os.path.join(output_dir,
-                                (model_run_date + datetime.timedelta(days=day_delta)).strftime("%Y%m%d"))
-        for day_delta in day_deltas}
+        day_delta: os.path.join(daily_dir, (model_run_date + datetime.timedelta(days=day_delta)).strftime("%Y%m%d")) for
+        day_delta in day_deltas
+    }
 
     for day_delta, daily_average_dir in output_dirs.items():
         # ensure output directory exists
@@ -189,11 +200,13 @@ def write_wcofs(output_dir: str, model_run_date: datetime.datetime, day_deltas: 
     if 'datetime.date' in str(type(model_run_date)):
         model_run_date = datetime.datetime.combine(model_run_date, datetime.datetime.min.time())
 
+    daily_dir = os.path.join(output_dir, 'daily_averages')
+
     # define directories to which output rasters will be written
     output_dirs = {
-        day_delta: os.path.join(output_dir,
-                                (model_run_date + datetime.timedelta(days=day_delta)).strftime("%Y%m%d"))
-        for day_delta in day_deltas}
+        day_delta: os.path.join(daily_dir, (model_run_date + datetime.timedelta(days=day_delta)).strftime("%Y%m%d")) for
+        day_delta in day_deltas
+    }
 
     for day_delta, daily_average_dir in output_dirs.items():
         # ensure output directory exists
@@ -296,11 +309,11 @@ def write_daily_average(output_dir: str, output_date: datetime.datetime, day_del
     """
 
     logger.notice('Processing HFR SSUV...')
-    write_observation(output_dir, output_date, 'hfr', logger=logbook.Logger('HFR'))
+    write_observation(output_dir, output_date, 'ssuv', logger=logbook.Logger('HFR'))
     logger.notice('Processing VIIRS SST...')
-    write_observation(output_dir, output_date, 'viirs', logger=logbook.Logger('VIIRS'))
+    write_observation(output_dir, output_date, 'sst', logger=logbook.Logger('VIIRS'))
     logger.notice('Processing SMAP SSS...')
-    write_observation(output_dir, output_date, 'smap', logger=logbook.Logger('SMAP'))
+    write_observation(output_dir, output_date, 'sss', logger=logbook.Logger('SMAP'))
     logger.notice(f'Wrote observations to {output_dir}')
 
     logger.notice('Processing RTOFS...')
@@ -308,17 +321,13 @@ def write_daily_average(output_dir: str, output_date: datetime.datetime, day_del
     logger.notice('Processing WCOFS...')
     write_wcofs(output_dir, output_date, day_deltas, logger=logbook.Logger('WCOFS'))
     logger.notice('Processing WCOFS noDA...')
-    write_wcofs(output_dir, output_date, day_deltas, data_assimilation=False,
-                logger=logbook.Logger('WCOFS noDA'))
+    write_wcofs(output_dir, output_date, day_deltas, data_assimilation=False, logger=logbook.Logger('WCOFS noDA'))
     logger.notice(f'Wrote models to {output_dir}')
-
-    # populate JSON file with new directory structure so that JavaScript application can see it
-    json_dir_structure.populate_json(OUTPUT_DIR, JSON_PATH)
 
 
 if __name__ == '__main__':
     # create folders if they do not exist
-    for dir_path in [OUTPUT_DIR, DAILY_AVERAGES_DIR, LOG_DIR]:
+    for dir_path in [OUTPUT_DIR, LOG_DIR]:
         if not os.path.isdir(dir_path):
             os.mkdir(dir_path)
 
@@ -342,7 +351,10 @@ if __name__ == '__main__':
     #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, logger=logger)
 
     model_run_date = datetime.date.today()
-    write_daily_average(DAILY_AVERAGES_DIR, model_run_date, day_deltas, logger=logger)
+    write_daily_average(OUTPUT_DIR, model_run_date, day_deltas, logger=logger)
+
+    # populate JSON file with new directory structure so that JavaScript application can see it
+    json_dir_structure.populate_json(OUTPUT_DIR, JSON_PATH)
 
     logger.notice(f'Finished writing files. Total time: ' +
                   f'{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')

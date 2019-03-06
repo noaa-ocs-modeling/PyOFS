@@ -7,38 +7,28 @@ Created on Jun 25, 2018
 @author: zachary.burnett
 """
 
+from concurrent import futures
 import datetime
 import os
 import threading
-from concurrent import futures
+from typing import Collection
 
 import fiona
 import fiona.crs
 import numpy
 import rasterio.control
+from rasterio.io import MemoryFile
 import rasterio.mask
 import rasterio.warp
+from scipy import interpolate
 import shapely.geometry
 import xarray
-from rasterio.io import MemoryFile
-from scipy import interpolate
 
-from dataset import _utilities
+from dataset import CRS_EPSG, Logger, _utilities
 from main import DATA_DIR
 
-try:
-    from logbook import Logger
-except ImportError:
-    class Logger(object):
-        def __init__(self, name, level=0):
-            self.name = name
-            self.level = level
-
-        debug = info = warn = warning = notice = error = exception = \
-            critical = log = lambda *a, **kw: None
-
-RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
-FIONA_WGS84 = fiona.crs.from_epsg(4326)
+RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
+FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
 GRID_LOCATIONS = {'face': 'rho', 'edge1': 'u', 'edge2': 'v', 'node': 'psi'}
 COORDINATE_VARIABLES = ['grid', 'ocean_time', 'lon_rho', 'lat_rho', 'lon_u', 'lat_u', 'lon_v', 'lat_v', 'lon_psi',
@@ -85,17 +75,17 @@ class WCOFSDataset:
         """
         Creates new dataset object from datetime and given model parameters.
 
-        :param model_date: Model run date.
-        :param source: One of 'stations', 'fields', 'avg', or '2ds'.
-        :param time_deltas: List of integers of times from model start for which to retrieve data (days for avg, hours for others).
-        :param x_size: Size of cell in X direction.
-        :param y_size: Size of cell in Y direction.
-        :param grid_filename: Filename of NetCDF containing WCOFS grid coordinates.
-        :param source_url: Directory containing NetCDF files.
-        :param wcofs_string: WCOFS string in filename.
+        :param model_date: model run date
+        :param source: one of 'stations', 'fields', 'avg', or '2ds'
+        :param time_deltas: integers of times from model start for which to retrieve data (days for avg, hours for others)
+        :param x_size: size of cell in X direction
+        :param y_size: size of cell in Y direction
+        :param grid_filename: filename of NetCDF containing WCOFS grid coordinates
+        :param source_url: directory containing NetCDF files
+        :param wcofs_string: WCOFS string in filename
         :param logger: logbook logger
-        :raises ValueError: if source is not valid.
-        :raises NoDataError: if no datasets exist for the given model run.
+        :raises ValueError: if source is not valid
+        :raises NoDataError: if no datasets exist for the given model run
         """
 
         self.logger = logger
@@ -258,8 +248,8 @@ class WCOFSDataset:
         """
         Returns bounds of grid of given variable.
 
-        :param variable: Variable name.
-        :return: Tuple of (west, north, east, south)
+        :param variable: variable name
+        :return: tuple of (west, north, east, south)
         """
 
         grid_name = WCOFSDataset.variable_grids[variable]
@@ -269,9 +259,9 @@ class WCOFSDataset:
         """
         Get data of specified variable at specified hour.
 
-        :param variable: Name of variable to retrieve.
-        :param time_delta: Time index to retrieve (days for avg, hours for others).
-        :return: Array of data.
+        :param variable: name of variable to retrieve
+        :param time_delta: time index to retrieve (days for avg, hours for others)
+        :return: array of data
         """
 
         output_data = None
@@ -322,9 +312,9 @@ class WCOFSDataset:
         """
         Gets average of data from given time deltas.
 
-        :param variable: Variable to use.
-        :param time_deltas: List of integers of time indices to use in average (days for avg, hours for others).
-        :return: Array of data.
+        :param variable: variable to use
+        :param time_deltas: integers of time indices to use in average (days for avg, hours for others)
+        :return: array of data
         """
 
         time_deltas = time_deltas if time_deltas is not None else self.netcdf_datasets.keys()
@@ -351,22 +341,22 @@ class WCOFSDataset:
 
         return variable_data
 
-    def write_rasters(self, output_dir: str, variables: list = None, filename_suffix: str = None,
+    def write_rasters(self, output_dir: str, variables: Collection[str] = None, filename_suffix: str = None,
                       time_deltas: list = None, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
                       x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999,
                       driver: str = 'GTiff'):
         """
         Write averaged raster data of given variables to given output directory.
 
-        :param output_dir: Path to directory.
-        :param variables: Variable names to use.
-        :param time_deltas: List of time indices to write.
-        :param filename_suffix: Suffix for filenames.
-        :param study_area_polygon_filename: Path to vector file containing study area boundary.
-        :param x_size: Cell size of output grid in X direction.
-        :param y_size: Cell size of output grid in Y direction.
-        :param fill_value: Desired fill value of output.
-        :param driver: Strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
+        :param output_dir: path to directory
+        :param variables: variable names to use
+        :param time_deltas: time indices to write
+        :param filename_suffix: suffix for filenames
+        :param study_area_polygon_filename: path to vector file containing study area boundary
+        :param x_size: cell size of output grid in X direction
+        :param y_size: cell size of output grid in Y direction
+        :param fill_value: desired fill value of output
+        :param driver: strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
         """
 
         start_time = datetime.datetime.now()
@@ -505,7 +495,7 @@ class WCOFSDataset:
 
                     # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
                     interpolated_data['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (180 / numpy.pi)
-                    interpolated_data['mag'] = numpy.sqrt(numpy.square(u_data) + numpy.square(v_data))
+                    interpolated_data['mag'] = numpy.sqrt(u_data ** 2 + v_data ** 2)
 
                     if u_name not in variables:
                         del interpolated_data[u_name]
@@ -535,7 +525,7 @@ class WCOFSDataset:
 
             gdal_args = {
                 'width': raster_data.shape[1], 'height': raster_data.shape[0], 'count': 1,
-                'crs': RASTERIO_WGS84, 'transform': grid_transform, 'dtype': raster_data.dtype,
+                'crs': RASTERIO_CRS, 'transform': grid_transform, 'dtype': raster_data.dtype,
                 'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
             }
 
@@ -555,6 +545,9 @@ class WCOFSDataset:
                 file_extension = 'gpkg'
             else:
                 file_extension = 'tiff'
+                gdal_args.update({
+                    'TILED': 'YES'
+                })
 
             output_filename = os.path.join(output_dir,
                                            f'wcofs_{variable}_{self.model_datetime.strftime("%Y%m%d")}' +
@@ -572,9 +565,9 @@ class WCOFSDataset:
         """
         Write average of surface velocity vector data for all hours in the given time interval to the provided output file.
 
-        :param output_filename: Path to output file.
-        :param layer_name: Name of layer to write.
-        :param time_deltas: List of integers of hours to use in average.
+        :param output_filename: path to output file
+        :param layer_name: name of layer to write
+        :param time_deltas: integers of hours to use in average
         """
 
         variables = list(DATA_VARIABLES.keys())
@@ -646,7 +639,7 @@ class WCOFSDataset:
             self.logger.info(f'Writing {output_filename}:{layer_name}')
 
         # create layer
-        with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_WGS84,
+        with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_CRS,
                         layer=layer_name) as output_vector_file:
             output_vector_file.writerecords(layer_records)
 
@@ -671,6 +664,52 @@ class WCOFSDataset:
             record['properties'][variable] = float(variable_means[variable][row, col])
 
         return record
+
+    def to_xarray(self, variables: Collection[str] = None) -> xarray.Dataset:
+        """
+        Converts to xarray Dataset.
+
+        :param variables: variables to use
+        :return: xarray dataset of given variables
+        """
+
+        output_dataset = xarray.Dataset()
+
+        if variables is None:
+            variables = list(DATA_VARIABLES.keys())
+
+        for variable in variables:
+            if self.source is 'avg':
+                times = [self.model_datetime + datetime.timedelta(days=time_delta) for time_delta in self.time_deltas]
+            else:
+                times = [self.model_datetime + datetime.timedelta(hours=time_delta) for time_delta in self.time_deltas]
+
+            grid = self.variable_grids[variable]
+            data_stack = numpy.stack([self.data(variable, time_delta) for time_delta in self.time_deltas], 0)
+            data_array = xarray.DataArray(data_stack,
+                                          coords={
+                                              'time': times,
+                                              'lon': ((f'{grid}_eta', f'{grid}_xi'),
+                                                      self.data_coordinates[grid]['lon']),
+                                              'lat': ((f'{grid}_eta', f'{grid}_xi'),
+                                                      self.data_coordinates[grid]['lat'])
+                                          },
+                                          dims=('time', f'{grid}_eta', f'{grid}_xi'))
+
+            data_array.attrs['grid'] = grid
+            output_dataset = output_dataset.update({variable: data_array})
+
+        return output_dataset
+
+    def to_netcdf(self, output_file: str, variables: Collection[str] = None):
+        """
+        Writes to NetCDF file.
+
+        :param output_file: output file to write
+        :param variables: variables to use
+        """
+
+        self.to_xarray(variables).to_netcdf(output_file)
 
     def __repr__(self):
         used_params = [self.model_datetime.__repr__()]
@@ -700,17 +739,17 @@ class WCOFSRange:
         """
         Create range of WCOFS datasets from the given time interval.
 
-        :param start_datetime: Beginning of time interval.
-        :param end_datetime: End of time interval.
-        :param source: One of 'stations', 'fields', 'avg', or '2ds'.
-        :param time_deltas: List of time indices (nowcast or forecast) to retrieve.
-        :param x_size: Size of cell in X direction.
-        :param y_size: Size of cell in Y direction.
-        :param grid_filename: Filename of NetCDF containing WCOFS grid coordinates.
-        :param source_url: Directory containing NetCDF files.
-        :param wcofs_string: WCOFS string in filename.
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
+        :param source: one of 'stations', 'fields', 'avg', or '2ds'
+        :param time_deltas: time indices (nowcast or forecast) to retrieve
+        :param x_size: size of cell in X direction
+        :param y_size: size of cell in Y direction
+        :param grid_filename: filename of NetCDF containing WCOFS grid coordinates
+        :param source_url: directory containing NetCDF files
+        :param wcofs_string: WCOFS string in filename
         :param logger: logbook logger
-        :raises NoDataError: if data does not exist.
+        :raises NoDataError: if data does not exist
         """
 
         self.logger = logger
@@ -835,10 +874,10 @@ class WCOFSRange:
         """
         Return data from given model run at given variable and hour.
 
-        :param variable: Name of variable to use.
-        :param model_datetime: Datetime of start of model run.
-        :param time_delta: Index of time to retrieve (days for avg, hours for others).
-        :return: Matrix of data.
+        :param variable: name of variable to use
+        :param model_datetime: datetime of start of model run
+        :param time_delta: index of time to retrieve (days for avg, hours for others)
+        :return: matrix of data
         """
 
         return self.datasets[model_datetime].data(variable, time_delta)
@@ -847,9 +886,9 @@ class WCOFSRange:
         """
         Return dictionary of data for each model run within the given variable and datetime.
 
-        :param variable: Name of variable to use.
-        :param input_datetime: Datetime from which to retrieve data.
-        :return: Dictionary of data for every model in the given datetime.
+        :param variable: name of variable to use
+        :param input_datetime: datetime from which to retrieve data
+        :return: dictionary of data for every model in the given datetime
         """
 
         output_data = {}
@@ -892,10 +931,10 @@ class WCOFSRange:
         """
         Return dictionary of data for each model run within the given variable and datetime.
 
-        :param variable: Name of variable to use.
-        :param start_datetime: Beginning of time interval.
-        :param end_datetime: End of time interval.
-        :return: Dictionary of data for every model for every time in the given time interval.
+        :param variable: name of variable to use
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
+        :return: dictionary of data for every model for every time in the given time interval
         """
 
         if self.logger is not None:
@@ -934,10 +973,10 @@ class WCOFSRange:
         """
         Collect averaged data for every time index in given time interval.
 
-        :param variable: Name of variable to average.
-        :param start_datetime: Beginning of time interval.
-        :param end_datetime: End of time interval.
-        :return: Dictionary of data for every model in the given datetime.
+        :param variable: name of variable to average
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
+        :return: dictionary of data for every model in the given datetime
         """
 
         start_datetime = start_datetime if start_datetime is not None else self.start_datetime
@@ -973,23 +1012,23 @@ class WCOFSRange:
             del running_futures
         return output_data
 
-    def write_rasters(self, output_dir: str, variables: list = None, filename_suffix: str = None,
+    def write_rasters(self, output_dir: str, variables: Collection[str] = None, filename_suffix: str = None,
                       study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
                       start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
                       x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999, driver: str = 'GTiff'):
         """
         Write raster data of given variables to given output directory, averaged over given time interval.
 
-        :param output_dir: Path to output directory.
-        :param variables: List of variable names to use.
-        :param filename_suffix: Suffix for filenames.
-        :param study_area_polygon_filename: Path to vector file containing study area boundary.
-        :param start_datetime: Beginning of time interval.
-        :param end_datetime: End of time interval.
-        :param x_size: Cell size of output grid in X direction.
-        :param y_size: Cell size of output grid in Y direction.
-        :param fill_value: Desired fill value of output.
-        :param driver: String of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
+        :param output_dir: path to output directory
+        :param variables: variable names to use
+        :param filename_suffix: suffix for filenames
+        :param study_area_polygon_filename: path to vector file containing study area boundary
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
+        :param x_size: cell size of output grid in X direction
+        :param y_size: cell size of output grid in Y direction
+        :param fill_value: desired fill value of output
+        :param driver: string of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
         """
 
         if variables is None:
@@ -1158,7 +1197,7 @@ class WCOFSRange:
 
                     gdal_args = {
                         'width': raster_data.shape[1], 'height': raster_data.shape[0], 'count': 1,
-                        'crs': RASTERIO_WGS84, 'transform': grid_transform, 'dtype': raster_data.dtype,
+                        'crs': RASTERIO_CRS, 'transform': grid_transform, 'dtype': raster_data.dtype,
                         'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
                     }
 
@@ -1190,15 +1229,16 @@ class WCOFSRange:
                     with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
                         output_raster.write(masked_data, 1)
 
-    def write_vector(self, output_filename: str, variables: list = None, start_datetime: datetime.datetime = None,
+    def write_vector(self, output_filename: str, variables: Collection[str] = None,
+                     start_datetime: datetime.datetime = None,
                      end_datetime: datetime.datetime = None):
         """
         Write average of surface velocity vector data for all hours in the given time interval to a single layer of the provided output file.
 
-        :param output_filename: Path to output file.
-        :param variables: List of variable names to write to vector file.
-        :param start_datetime: Beginning of time interval.
-        :param end_datetime: End of time interval.
+        :param output_filename: path to output file
+        :param variables: variable names to write to vector file
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
         """
 
         if variables is None:
@@ -1272,17 +1312,17 @@ class WCOFSRange:
         for layer_name, layer_records in layers.items():
             if self.logger is not None:
                 self.logger.info(f'Writing {output_filename}:{layer_name}')
-            with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_WGS84,
+            with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_CRS,
                             layer=layer_name) as layer:
                 layer.writerecords(layer_records)
 
-    def to_xarray(self, variables: list = None, mean: bool = True) -> xarray.Dataset:
+    def to_xarray(self, variables: Collection[str] = None, mean: bool = True) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
 
-        :param variables: List of variables to use.
-        :param mean: Whether to average all time indices.
-        :return: xarray Dataset of given variables.
+        :param variables: variables to use
+        :param mean: whether to average all time indices
+        :return: xarray dataset of given variables
         """
 
         data_arrays = {}
@@ -1359,13 +1399,13 @@ class WCOFSRange:
 
         return output_dataset
 
-    def to_netcdf(self, output_file: str, variables: list = None, mean: bool = True):
+    def to_netcdf(self, output_file: str, variables: Collection[str] = None, mean: bool = True):
         """
         Writes to NetCDF file.
 
-        :param output_file: Output file to write.
-        :param variables: List of variables to use.
-        :param mean: Whether to average all time indices.
+        :param output_file: output file to write
+        :param variables: variables to use
+        :param mean: whether to average all time indices
         """
 
         self.to_xarray(variables, mean).to_netcdf(output_file)
@@ -1392,13 +1432,13 @@ def interpolate_grid(input_lon: numpy.ndarray, input_lat: numpy.ndarray, input_d
     """
     Interpolate the given data onto a coordinate grid.
 
-    :param input_lon: Matrix of X coordinates in original grid.
-    :param input_lat: Matrix of Y coordinates in original grid.
-    :param input_data: Masked array of data values in original grid.
-    :param output_lon: Longitude values of output grid.
-    :param output_lat: Latitude values of output grid.
-    :param method: Interpolation method.
-    :return: Interpolated values within output grid.
+    :param input_lon: matrix of X coordinates in original grid
+    :param input_lat: matrix of Y coordinates in original grid
+    :param input_data: masked array of data values in original grid
+    :param output_lon: longitude values of output grid
+    :param output_lat: latitude values of output grid
+    :param method: interpolation method
+    :return: interpolated values within output grid
     """
 
     # get unmasked values only
@@ -1436,9 +1476,9 @@ def write_convex_hull(netcdf_dataset: xarray.Dataset, output_filename: str, grid
     """
     Extract the convex hull from the coordinate values of the given WCOFS NetCDF dataset, and write it to a file.
 
-    :param netcdf_dataset: WCOFS format NetCDF dataset object.
-    :param output_filename: Path to output file.
-    :param grid_name: Name of grid. One of ('psi', 'rho', 'u', 'v').
+    :param netcdf_dataset: WCOFS format NetCDF dataset object
+    :param output_filename: path to output file
+    :param grid_name: name of grid. One of ('psi', 'rho', 'u', 'v')
     """
 
     output_filename, layer_name = output_filename.rsplit(':', 1)
@@ -1473,7 +1513,7 @@ def write_convex_hull(netcdf_dataset: xarray.Dataset, output_filename: str, grid
 
     schema = {'geometry': 'Polygon', 'properties': {'name': 'str'}}
 
-    with fiona.open(output_filename, 'w', 'GPKG', schema=schema, crs=FIONA_WGS84, layer=layer_name) as vector_file:
+    with fiona.open(output_filename, 'w', 'GPKG', schema=schema, crs=FIONA_CRS, layer=layer_name) as vector_file:
         vector_file.write({'properties': {'name': layer_name}, 'geometry': shapely.geometry.mapping(polygon)})
 
 

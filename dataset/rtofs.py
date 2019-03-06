@@ -18,25 +18,14 @@ import rasterio.control
 import rasterio.features
 import rasterio.mask
 import rasterio.warp
-import xarray
 from shapely import geometry
+import xarray
 
-from dataset import _utilities
+from dataset import CRS_EPSG, Logger, _utilities
 from main import DATA_DIR
 
-try:
-    from logbook import Logger
-except ImportError:
-    class Logger(object):
-        def __init__(self, name, level=0):
-            self.name = name
-            self.level = level
-
-        debug = info = warn = warning = notice = error = exception = \
-            critical = log = lambda *a, **kw: None
-
-RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
-FIONA_WGS84 = fiona.crs.from_epsg(4326)
+RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
+FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
 COORDINATE_VARIABLES = ['time', 'lev', 'lat', 'lon']
 
@@ -82,11 +71,11 @@ class RTOFSDataset:
         """
         Creates new dataset object from datetime and given model parameters.
 
-        :param model_date: Model run date.
-        :param source: Either '2ds' or '3dz'.
-        :param time_interval: Time interval of model output.
+        :param model_date: model run date
+        :param source: rither '2ds' or '3dz'
+        :param time_interval: time interval of model output
         :param logger: logbook logger
-        :param study_area_polygon_filename: Filename of vector file containing study area boundary.
+        :param study_area_polygon_filename: filename of vector file containing study area boundary
         """
 
         self.logger = logger
@@ -163,10 +152,10 @@ class RTOFSDataset:
         """
         Get data of specified variable at specified hour.
 
-        :param variable: Name of variable to retrieve.
-        :param time: Time from which to retrieve data.
-        :param crop: Whether to crop to study area extent.
-        :return: Array of data.
+        :param variable: name of variable to retrieve
+        :param time: time from which to retrieve data
+        :param crop: whether to crop to study area extent
+        :return: array of data
         """
 
         if time >= self.model_datetime:
@@ -220,14 +209,14 @@ class RTOFSDataset:
         """
         Write averaged raster data of given variables to given output directory.
 
-        :param output_dir: Path to directory.
-        :param variables: Variable names to use.
-        :param time: Time from which to retrieve data.
-        :param filename_prefix: Prefix for filenames.
-        :param filename_suffix: Suffix for filenames.
-        :param fill_value: Desired fill value of output.
-        :param driver: Strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
-        :param crop: Whether to crop to study area extent.
+        :param output_dir: path to directory
+        :param variables: variable names to use
+        :param time: time from which to retrieve data
+        :param filename_prefix: prefix for filenames
+        :param filename_suffix: suffix for filenames
+        :param fill_value: desired fill value of output
+        :param driver: strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
+        :param crop: whether to crop to study area extent
         """
 
         if variables is None:
@@ -276,7 +265,7 @@ class RTOFSDataset:
                 gdal_args = {
                     'transform': transform, 'height': variable_mean.shape[0],
                     'width': variable_mean.shape[1], 'count': 1, 'dtype': rasterio.float32,
-                    'crs': RASTERIO_WGS84,
+                    'crs': RASTERIO_CRS,
                     'nodata': numpy.array([fill_value]).astype(variable_mean.dtype).item()
                 }
 
@@ -291,6 +280,9 @@ class RTOFSDataset:
                     file_extension = 'gpkg'
                 else:
                     file_extension = 'tiff'
+                    gdal_args.update({
+                        'TILED': 'YES'
+                    })
 
                 output_filename = f'{os.path.splitext(output_filename)[0]}.{file_extension}'
 
@@ -304,12 +296,12 @@ class RTOFSDataset:
         """
         Writes interpolated raster of given variable to output path.
 
-        :param output_filename: Path of raster file to create.
-        :param variable: Name of variable.
-        :param time: Time from which to retrieve data.
-        :param fill_value: Desired fill value of output.
-        :param driver: Strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
-        :param crop: Whether to crop to study area extent.
+        :param output_filename: path of raster file to create
+        :param variable: name of variable
+        :param time: time from which to retrieve data
+        :param fill_value: desired fill value of output
+        :param driver: strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
+        :param crop: whether to crop to study area extent
         """
 
         output_data = self.data(variable, time, crop)
@@ -322,7 +314,7 @@ class RTOFSDataset:
 
             gdal_args = {
                 'transform': transform, 'height': output_data.shape[0], 'width': output_data.shape[1],
-                'count': 1, 'dtype': rasterio.float32, 'crs': RASTERIO_WGS84,
+                'count': 1, 'dtype': rasterio.float32, 'crs': RASTERIO_CRS,
                 'nodata': numpy.array([fill_value]).astype(output_data.dtype).item()
             }
 
@@ -333,6 +325,9 @@ class RTOFSDataset:
                 file_extension = 'gpkg'
             else:
                 file_extension = 'tiff'
+                gdal_args.update({
+                    'TILED': 'YES'
+                })
 
             output_filename = f'{os.path.splitext(output_filename)[0]}.{file_extension}'
 

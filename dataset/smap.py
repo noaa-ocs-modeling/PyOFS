@@ -7,9 +7,10 @@ Created on Feb 6, 2019
 @author: zachary.burnett
 """
 
+from collections import OrderedDict
 import datetime
 import os
-from collections import OrderedDict
+from typing import Collection
 
 import fiona
 import numpy
@@ -20,23 +21,12 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-from dataset import _utilities
+from dataset import CRS_EPSG, Logger, _utilities
 from main import DATA_DIR
-
-try:
-    from logbook import Logger
-except ImportError:
-    class Logger(object):
-        def __init__(self, name, level=0):
-            self.name = name
-            self.level = level
-
-        debug = info = warn = warning = notice = error = exception = \
-            critical = log = lambda *a, **kw: None
 
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 
-RASTERIO_WGS84 = rasterio.crs.CRS({"init": "epsg:4326"})
+RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 
 SOURCE_URLS = OrderedDict({
     'OpenDAP': OrderedDict({
@@ -57,7 +47,7 @@ class SMAPDataset:
 
         :param study_area_polygon_filename: filename of vector file containing study area boundary
         :param logger: logbook logger
-        :raises NoDataError: if dataset does not exist.
+        :raises NoDataError: if dataset does not exist
         """
 
         self.logger = logger
@@ -122,7 +112,7 @@ class SMAPDataset:
         """
         Get coordinate bounds of dataset.
 
-        :return: Tuple of bounds (west, south, east, north)
+        :return: tuple of bounds (west, south, east, north)
         """
 
         return self.data_extent.bounds
@@ -131,7 +121,7 @@ class SMAPDataset:
         """
         Get cell sizes of dataset.
 
-        :return: Tuple of cell sizes (x_size, y_size)
+        :return: tuple of cell sizes (x_size, y_size)
         """
 
         return self.netcdf_dataset.geospatial_lon_resolution, self.netcdf_dataset.geospatial_lat_resolution
@@ -168,14 +158,15 @@ class SMAPDataset:
         else:
             raise _utilities.NoDataError(f'No data exists for {data_datetime.strftime("%Y%m%dT%H%M%S")}.')
 
-    def write_rasters(self, output_dir: str, data_datetime: datetime.datetime, variables: list = tuple('sss'),
+    def write_rasters(self, output_dir: str, data_datetime: datetime.datetime,
+                      variables: Collection[str] = tuple(['sss']),
                       filename_prefix: str = 'smos', fill_value: float = -9999.0, driver: str = 'GTiff'):
         """
         Write SMOS rasters to file using data from given variables.
 
         :param output_dir: path to output directory
         :param data_datetime: datetime to retrieve (only uses month)
-        :param variables: list of variable names to write
+        :param variables: variable names to write
         :param filename_prefix: prefix for output filenames
         :param fill_value: desired fill value of output
         :param driver: strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
@@ -191,7 +182,7 @@ class SMAPDataset:
                 gdal_args = {
                     'height': input_data.shape[0], 'width': input_data.shape[1], 'count': 1,
                     'dtype': rasterio.float32,
-                    'crs': RASTERIO_WGS84, 'transform': SMAPDataset.study_area_transform, 'nodata': fill_value
+                    'crs': RASTERIO_CRS, 'transform': SMAPDataset.study_area_transform, 'nodata': fill_value
                 }
 
                 if driver == 'AAIGrid':
@@ -201,6 +192,9 @@ class SMAPDataset:
                     file_extension = 'gpkg'
                 else:
                     file_extension = 'tiff'
+                    gdal_args.update({
+                        'TILED': 'YES'
+                    })
 
                 output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
 
