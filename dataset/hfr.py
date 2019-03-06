@@ -135,7 +135,7 @@ class HFRRange:
         output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(time).values
 
         if dop_threshold is not None:
-            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=time) <= dop_threshold) | (
+            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=time) <= dop_threshold) & (
                     self.netcdf_dataset['DOPy'].sel(time=time) <= dop_threshold))
             output_data[~dop_mask] = numpy.nan
 
@@ -162,7 +162,7 @@ class HFRRange:
         output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(time=slice(start_datetime, end_datetime)).values
 
         if dop_threshold is not None:
-            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold) | (
+            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold) & (
                     self.netcdf_dataset['DOPy'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold)).values
             output_data[~dop_mask] = numpy.nan
 
@@ -246,7 +246,7 @@ class HFRRange:
         time_interval_selection = self.netcdf_dataset.sel(time=slice(start_datetime, end_datetime))
 
         if dop_threshold is not None:
-            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold) | (
+            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold) & (
                     self.netcdf_dataset['DOPy'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold)).values
             time_interval_selection[~dop_mask] = numpy.nan
 
