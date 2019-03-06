@@ -522,14 +522,38 @@ class HFRRange:
 
 
 if __name__ == '__main__':
+    from matplotlib import pyplot
+    from pandas.plotting import register_matplotlib_converters
+
+    register_matplotlib_converters()
+
     output_dir = os.path.join(DATA_DIR, r'output\test')
 
     start_datetime = datetime.datetime(2019, 2, 6)
     end_datetime = start_datetime + datetime.timedelta(days=1)
 
-    hfr_range = HFRRange(start_datetime, end_datetime)
-    hfr_range.write_vector(os.path.join(output_dir, 'hfr_no_DOP.gpkg'))
-    hfr_range.write_vector(os.path.join(output_dir, 'hfr_0.5_DOP.gpkg'), dop_threshold=0.5)
-    hfr_range.write_vector(os.path.join(output_dir, 'hfr_0.1_DOP.gpkg'), dop_threshold=0.1)
+    hfr_range = HFRRange(start_datetime, end_datetime, source='UCSD')
+
+    cell = hfr_range.netcdf_dataset.isel(lon=67, lat=270)
+
+    _, axes = pyplot.subplots(nrows=2)
+
+    axes[0].plot(cell['time'], cell['u'])
+    axes[0].plot(cell['time'], cell['v'])
+    axes[1].plot(cell['time'], cell['DOPx'])
+    axes[1].plot(cell['time'], cell['DOPy'])
+
+    for axis in axes:
+        axis.legend()
+
+    pyplot.show()
+
+    # hfr_range.write_rasters(output_dir, filename_suffix='hfr_no_DOP')
+    # hfr_range.write_rasters(output_dir, filename_suffix='hfr_0.5_DOP', dop_threshold=0.5)
+    # hfr_range.write_rasters(output_dir, filename_suffix='hfr_0.1_DOP', dop_threshold=0.1)
+
+    # hfr_range.write_vector(os.path.join(output_dir, 'hfr_no_DOP.gpkg'))
+    # hfr_range.write_vector(os.path.join(output_dir, 'hfr_0.5_DOP.gpkg'), dop_threshold=0.5)
+    # hfr_range.write_vector(os.path.join(output_dir, 'hfr_0.1_DOP.gpkg'), dop_threshold=0.1)
 
     print('done')
