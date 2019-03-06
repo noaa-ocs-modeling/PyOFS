@@ -316,15 +316,20 @@ if __name__ == '__main__':
     model_datetime = datetime.datetime(2019, 2, 25)
     # model_datetime.replace(hour=3, minute=0, second=0, microsecond=0)
 
+    print('Collecting data...')
     # data = wcofs.WCOFSDataset(model_datetime, source='avg').to_xarray(variables=('ssu', 'ssv'))
     data = hfr.HFRRange(model_datetime, model_datetime + datetime.timedelta(days=1), source='UCSD').to_xarray(
-        variables=('ssu', 'ssv'), mean=False)
+        variables=['ssu', 'ssv'], mean=False)
 
+    print('Creating velocity field...')
     velocity_field = VelocityField(data, u_name='ssu', v_name='ssv')
+    print(f'Velocity field created: {velocity_field}')
 
+    print('Creating starting contour...')
     contour = RectangleContour(velocity_field,
                                datetime.datetime.utcfromtimestamp(velocity_field.field['time'][0].item() * 1e-9),
                                west_lon=-122.99451, east_lon=-122.73859, south_lat=36.82880, north_lat=36.93911)
+    print(f'Contour created: {contour}')
 
     for t_delta in numpy.diff(velocity_field.field['time']):
         timedelta = datetime.timedelta(seconds=int(t_delta) * 1e-9)

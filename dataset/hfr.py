@@ -124,7 +124,7 @@ class HFRRange:
         output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(time).values
 
         if dop_threshold is not None:
-            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=time) <= dop_threshold) | (
+            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=time) <= dop_threshold) & (
                     self.netcdf_dataset['DOPy'].sel(time=time) <= dop_threshold))
             output_data[~dop_mask] = numpy.nan
 
@@ -151,7 +151,7 @@ class HFRRange:
         output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(time=slice(start_datetime, end_datetime)).values
 
         if dop_threshold is not None:
-            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold) | (
+            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold) & (
                     self.netcdf_dataset['DOPy'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold)).values
             output_data[~dop_mask] = numpy.nan
 
@@ -235,7 +235,7 @@ class HFRRange:
         time_interval_selection = self.netcdf_dataset.sel(time=slice(start_datetime, end_datetime))
 
         if dop_threshold is not None:
-            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold) | (
+            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold) & (
                     self.netcdf_dataset['DOPy'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold)).values
             time_interval_selection[~dop_mask] = numpy.nan
 
@@ -351,7 +351,7 @@ class HFRRange:
     def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = '',
                       variables: list = None, start_datetime: datetime.datetime = None,
                       end_datetime: datetime.datetime = None, fill_value: float = -9999, driver: str = 'GTiff',
-                      dop_threshold: float = 0.5):
+                      dop_threshold: float = None):
         """
         Write average of HFR data for all hours in the given time interval to rasters.
 
@@ -477,7 +477,7 @@ class HFRRange:
                     time=slice(start_datetime, end_datetime)).values
 
                 if dop_threshold is not None:
-                    dop_mask = ((self.netcdf_dataset['DOPx'] <= dop_threshold) | (
+                    dop_mask = ((self.netcdf_dataset['DOPx'] <= dop_threshold) & (
                             self.netcdf_dataset['DOPy'] <= dop_threshold)).values
                     output_data[~dop_mask] = numpy.nan
 
@@ -522,10 +522,12 @@ class HFRRange:
 if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIR, r'output\test')
 
-    start_datetime = datetime.datetime(2018, 11, 15)
+    start_datetime = datetime.datetime(2019, 2, 6)
     end_datetime = start_datetime + datetime.timedelta(days=1)
 
     hfr_range = HFRRange(start_datetime, end_datetime)
-    hfr_range.write_rasters(output_dir)
+    hfr_range.write_vector(os.path.join(output_dir, 'hfr_no_DOP.gpkg'))
+    hfr_range.write_vector(os.path.join(output_dir, 'hfr_0.5_DOP.gpkg'), dop_threshold=0.5)
+    hfr_range.write_vector(os.path.join(output_dir, 'hfr_0.1_DOP.gpkg'), dop_threshold=0.1)
 
     print('done')

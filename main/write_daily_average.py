@@ -82,7 +82,7 @@ def write_observation(output_dir: str, observation_date: datetime.datetime,
             hfr_range = hfr.HFRRange(start_of_day_hfr_time, end_of_day_hfr_time, logger=logger)
             hfr_range.write_rasters(observation_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}',
                                     variables=['dir', 'mag'], driver='AAIGrid',
-                                    fill_value=LEAFLET_NODATA_VALUE)
+                                    fill_value=LEAFLET_NODATA_VALUE, dop_threshold=0.5)
             del hfr_range
         elif observation == 'sst':
             start_of_day_in_utc = start_of_day + STUDY_AREA_TO_UTC
@@ -90,7 +90,6 @@ def write_observation(output_dir: str, observation_date: datetime.datetime,
             end_of_day_in_utc = start_of_day + datetime.timedelta(hours=24) + STUDY_AREA_TO_UTC
 
             viirs_range = viirs.VIIRSRange(start_of_day_in_utc, end_of_day_in_utc, logger=logger)
-
             viirs_range.write_raster(observation_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_morning',
                                      start_datetime=start_of_day_in_utc, end_datetime=noon_in_utc,
                                      fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', sses_correction=False,
@@ -102,7 +101,6 @@ def write_observation(output_dir: str, observation_date: datetime.datetime,
             del viirs_range
         elif observation == 'sss':
             smap_dataset = smap.SMAPDataset(logger=logger)
-
             smap_dataset.write_rasters(observation_dir, data_datetime=start_of_day, fill_value=LEAFLET_NODATA_VALUE,
                                        driver='GTiff', variables=['sss'])
             del smap_dataset
