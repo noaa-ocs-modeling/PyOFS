@@ -10,6 +10,7 @@ Created on Feb 6, 2019
 from collections import OrderedDict
 import datetime
 import os
+from typing import Collection
 
 import fiona
 import numpy
@@ -157,14 +158,15 @@ class SMAPDataset:
         else:
             raise _utilities.NoDataError(f'No data exists for {data_datetime.strftime("%Y%m%dT%H%M%S")}.')
 
-    def write_rasters(self, output_dir: str, data_datetime: datetime.datetime, variables: list = tuple(['sss']),
+    def write_rasters(self, output_dir: str, data_datetime: datetime.datetime,
+                      variables: Collection[str] = tuple(['sss']),
                       filename_prefix: str = 'smos', fill_value: float = -9999.0, driver: str = 'GTiff'):
         """
         Write SMOS rasters to file using data from given variables.
 
         :param output_dir: path to output directory
         :param data_datetime: datetime to retrieve (only uses month)
-        :param variables: list of variable names to write
+        :param variables: variable names to write
         :param filename_prefix: prefix for output filenames
         :param fill_value: desired fill value of output
         :param driver: strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')

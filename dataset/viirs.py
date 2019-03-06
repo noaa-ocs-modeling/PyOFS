@@ -13,6 +13,7 @@ import datetime
 import ftplib
 import math
 import os
+from typing import Collection
 
 import fiona
 import numpy
@@ -321,13 +322,14 @@ class VIIRSDataset:
 
         return sses_data
 
-    def write_rasters(self, output_dir: str, variables: list = ('sst', 'sses'), filename_prefix: str = 'viirs',
+    def write_rasters(self, output_dir: str, variables: Collection[str] = ('sst', 'sses'),
+                      filename_prefix: str = 'viirs',
                       fill_value: float = -9999.0, driver: str = 'GTiff', sses_correction: bool = False):
         """
         Write VIIRS rasters to file using data from given variables.
 
         :param output_dir: path to output directory
-        :param variables: list of variable names to write
+        :param variables: variable names to write
         :param filename_prefix: prefix for output filenames
         :param fill_value: desired fill value of output
         :param driver: strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
@@ -403,7 +405,7 @@ class VIIRSRange:
 
         :param start_datetime: beginning of time interval (in UTC)
         :param end_datetime: end of time interval (in UTC)
-        :param satellites: list of VIIRS platforms
+        :param satellites: VIIRS platforms
         :param study_area_polygon_filename: filename of vector file of study area boundary
         :param pass_times_filename: path to text file with pass times
         :param algorithm: either 'STAR' or 'OSPO'
@@ -488,7 +490,7 @@ class VIIRSRange:
                 sample_dataset.netcdf_dataset.geospatial_lat_resolution)
 
     def data(self, start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
-             average: bool = False, sses_correction: bool = False, variables: list = tuple(['sst']),
+             average: bool = False, sses_correction: bool = False, variables: Collection[str] = tuple(['sst']),
              satellite: str = None) -> dict:
         """
         Get VIIRS data (either overlapped or averaged) from the given time interval.
@@ -497,7 +499,7 @@ class VIIRSRange:
         :param end_datetime: end of time interval (in UTC)
         :param average: whether to average rasters, otherwise overlap them
         :param sses_correction: whether to subtract SSES bias from L3 sea surface temperature data
-        :param variables: list of variables to write (either 'sst' or 'sses')
+        :param variables: variables to write (either 'sst' or 'sses')
         :param satellite: VIIRS platform to retrieve. Default: per-granule averages of platform datasets
         :return dictionary of data per variable
         """
@@ -553,14 +555,15 @@ class VIIRSRange:
 
         return variables_data
 
-    def write_rasters(self, output_dir: str, variables: list = ('sst', 'sses'), filename_prefix: str = 'viirs',
+    def write_rasters(self, output_dir: str, variables: Collection[str] = ('sst', 'sses'),
+                      filename_prefix: str = 'viirs',
                       fill_value: float = None, driver: str = 'GTiff', sses_correction: bool = False,
                       satellite: str = None):
         """
         Write individual VIIRS rasters to directory.
 
         :param output_dir: path to output directory
-        :param variables: list of variable names to write
+        :param variables: variable names to write
         :param filename_prefix: prefix for output filenames
         :param fill_value: desired fill value of output
         :param driver: string of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
@@ -582,7 +585,7 @@ class VIIRSRange:
     def write_raster(self, output_dir: str, filename_prefix: str = None, filename_suffix: str = None,
                      start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
                      average: bool = False, fill_value: float = -9999, driver: str = 'GTiff',
-                     sses_correction: bool = False, variables: list = tuple(['sst']), satellite: str = None):
+                     sses_correction: bool = False, variables: Collection[str] = tuple(['sst']), satellite: str = None):
 
         """
         Write VIIRS raster of SST data (either overlapped or averaged) from the given time interval.
@@ -596,7 +599,7 @@ class VIIRSRange:
         :param fill_value: desired fill value of output
         :param driver: string of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
         :param sses_correction: whether to subtract SSES bias from L3 sea surface temperature data
-        :param variables: list of variables to write (either 'sst' or 'sses')
+        :param variables: variables to write (either 'sst' or 'sses')
         :param satellite: VIIRS platform to retrieve; if not specified, will average from both satellites
         """
 
@@ -664,12 +667,12 @@ class VIIRSRange:
                     self.logger.warning(
                         f'No {"VIIRS" if satellite is None else "VIIRS " + satellite} {variable} found between {start_datetime} and {end_datetime}.')
 
-    def to_xarray(self, variables: list = ('sst', 'sses'), mean: bool = True, sses_correction: bool = False,
+    def to_xarray(self, variables: Collection[str] = ('sst', 'sses'), mean: bool = True, sses_correction: bool = False,
                   satellites: list = None) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
 
-        :param variables: list of variables to use
+        :param variables: variables to use
         :param mean: whether to average all time indices
         :param sses_correction: whether to subtract SSES bias from L3 sea surface temperature data
         :param satellites: VIIRS platforms to retrieve; if not specified, will average from both satellites
@@ -704,13 +707,14 @@ class VIIRSRange:
 
         return output_dataset
 
-    def to_netcdf(self, output_file: str, variables: list = None, mean: bool = True, sses_correction: bool = False,
+    def to_netcdf(self, output_file: str, variables: Collection[str] = None, mean: bool = True,
+                  sses_correction: bool = False,
                   satellites: list = None):
         """
         Writes to NetCDF file.
 
         :param output_file: output file to write
-        :param variables: list of variables to use
+        :param variables: variables to use
         :param mean: whether to average all time indices
         :param sses_correction: whether to subtract SSES bias from L3 sea surface temperature data
         :param satellites: VIIRS platforms to retrieve; if not specified, will average from both satellites

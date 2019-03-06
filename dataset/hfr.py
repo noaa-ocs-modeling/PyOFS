@@ -9,6 +9,7 @@ Created on Jun 13, 2018
 
 import datetime
 import os
+from typing import Collection
 
 import fiona
 import fiona.crs
@@ -211,13 +212,14 @@ class HFRRange:
         with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_CRS) as layer:
             layer.writerecords(layer_records)
 
-    def write_vectors(self, output_filename: str, variables: list = None, start_datetime: datetime.datetime = None,
-                      end_datetime: datetime.datetime = None, dop_threshold: float = 0.5):
+    def write_vectors(self, output_filename: str, variables: Collection[str] = None,
+                      start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
+                      dop_threshold: float = 0.5):
         """
         Write HFR data to a layer of the provided output file for every hour in the given time interval.
 
         :param output_filename: path to output file
-        :param variables: list of variable names to use
+        :param variables: variable names to use
         :param start_datetime: beginning of time interval
         :param end_datetime: end of time interval
         :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
@@ -289,7 +291,7 @@ class HFRRange:
             with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_CRS) as layer:
                 layer.writerecords(layer_records)
 
-    def write_vector(self, output_filename: str, layer_name: str = 'ssuv', variables: list = None,
+    def write_vector(self, output_filename: str, layer_name: str = 'ssuv', variables: Collection[str] = None,
                      start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
                      dop_threshold: float = 0.5):
         """
@@ -297,7 +299,7 @@ class HFRRange:
 
         :param output_filename: path to output file
         :param layer_name: name of layer to write
-        :param variables: list of variable names to use
+        :param variables: variable names to use
         :param start_datetime: beginning of time interval
         :param end_datetime: end of time interval
         :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
@@ -349,7 +351,7 @@ class HFRRange:
             layer.writerecords(layer_records)
 
     def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = '',
-                      variables: list = None, start_datetime: datetime.datetime = None,
+                      variables: Collection[str] = None, start_datetime: datetime.datetime = None,
                       end_datetime: datetime.datetime = None, fill_value: float = -9999, driver: str = 'GTiff',
                       dop_threshold: float = None):
         """
@@ -358,7 +360,7 @@ class HFRRange:
         :param output_dir: path to output directory
         :param filename_prefix: prefix for output filenames
         :param filename_suffix: suffix for output filenames
-        :param variables: list of variable names to use
+        :param variables: variable names to use
         :param start_datetime: beginning of time interval
         :param end_datetime: end of time interval
         :param fill_value: desired fill value of output
@@ -437,13 +439,13 @@ class HFRRange:
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(numpy.flipud(raster_data), 1)
 
-    def to_xarray(self, variables: list = None, start_datetime: datetime.datetime = None,
+    def to_xarray(self, variables: Collection[str] = None, start_datetime: datetime.datetime = None,
                   end_datetime: datetime.datetime = None, mean: bool = True,
                   dop_threshold: float = 0.5) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
 
-        :param variables: list of variables to use
+        :param variables: variables to use
         :param start_datetime: beginning of time interval
         :param end_datetime: end of time interval
         :param mean: whether to average all time indices
@@ -489,13 +491,13 @@ class HFRRange:
 
         return output_dataset
 
-    def to_netcdf(self, output_file: str, variables: list = None, start_datetime: datetime.datetime = None,
+    def to_netcdf(self, output_file: str, variables: Collection[str] = None, start_datetime: datetime.datetime = None,
                   end_datetime: datetime.datetime = None, mean: bool = True):
         """
         Writes to NetCDF file.
 
         :param output_file: output file to write
-        :param variables: list of variables to use
+        :param variables: variables to use
         :param start_datetime: beginning of time interval
         :param end_datetime: end of time interval
         :param mean: whether to average all time indices

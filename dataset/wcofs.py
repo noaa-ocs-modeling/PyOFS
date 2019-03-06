@@ -11,6 +11,7 @@ from concurrent import futures
 import datetime
 import os
 import threading
+from typing import Collection
 
 import fiona
 import fiona.crs
@@ -76,7 +77,7 @@ class WCOFSDataset:
 
         :param model_date: model run date
         :param source: one of 'stations', 'fields', 'avg', or '2ds'
-        :param time_deltas: list of integers of times from model start for which to retrieve data (days for avg, hours for others)
+        :param time_deltas: integers of times from model start for which to retrieve data (days for avg, hours for others)
         :param x_size: size of cell in X direction
         :param y_size: size of cell in Y direction
         :param grid_filename: filename of NetCDF containing WCOFS grid coordinates
@@ -312,7 +313,7 @@ class WCOFSDataset:
         Gets average of data from given time deltas.
 
         :param variable: variable to use
-        :param time_deltas: list of integers of time indices to use in average (days for avg, hours for others)
+        :param time_deltas: integers of time indices to use in average (days for avg, hours for others)
         :return: array of data
         """
 
@@ -340,7 +341,7 @@ class WCOFSDataset:
 
         return variable_data
 
-    def write_rasters(self, output_dir: str, variables: list = None, filename_suffix: str = None,
+    def write_rasters(self, output_dir: str, variables: Collection[str] = None, filename_suffix: str = None,
                       time_deltas: list = None, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
                       x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999,
                       driver: str = 'GTiff'):
@@ -349,7 +350,7 @@ class WCOFSDataset:
 
         :param output_dir: path to directory
         :param variables: variable names to use
-        :param time_deltas: list of time indices to write
+        :param time_deltas: time indices to write
         :param filename_suffix: suffix for filenames
         :param study_area_polygon_filename: path to vector file containing study area boundary
         :param x_size: cell size of output grid in X direction
@@ -566,7 +567,7 @@ class WCOFSDataset:
 
         :param output_filename: path to output file
         :param layer_name: name of layer to write
-        :param time_deltas: list of integers of hours to use in average
+        :param time_deltas: integers of hours to use in average
         """
 
         variables = list(DATA_VARIABLES.keys())
@@ -664,11 +665,11 @@ class WCOFSDataset:
 
         return record
 
-    def to_xarray(self, variables: list = None) -> xarray.Dataset:
+    def to_xarray(self, variables: Collection[str] = None) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
 
-        :param variables: list of variables to use
+        :param variables: variables to use
         :return: xarray dataset of given variables
         """
 
@@ -700,12 +701,12 @@ class WCOFSDataset:
 
         return output_dataset
 
-    def to_netcdf(self, output_file: str, variables: list = None):
+    def to_netcdf(self, output_file: str, variables: Collection[str] = None):
         """
         Writes to NetCDF file.
 
         :param output_file: output file to write
-        :param variables: list of variables to use
+        :param variables: variables to use
         """
 
         self.to_xarray(variables).to_netcdf(output_file)
@@ -741,7 +742,7 @@ class WCOFSRange:
         :param start_datetime: beginning of time interval
         :param end_datetime: end of time interval
         :param source: one of 'stations', 'fields', 'avg', or '2ds'
-        :param time_deltas: list of time indices (nowcast or forecast) to retrieve
+        :param time_deltas: time indices (nowcast or forecast) to retrieve
         :param x_size: size of cell in X direction
         :param y_size: size of cell in Y direction
         :param grid_filename: filename of NetCDF containing WCOFS grid coordinates
@@ -1011,7 +1012,7 @@ class WCOFSRange:
             del running_futures
         return output_data
 
-    def write_rasters(self, output_dir: str, variables: list = None, filename_suffix: str = None,
+    def write_rasters(self, output_dir: str, variables: Collection[str] = None, filename_suffix: str = None,
                       study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
                       start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
                       x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999, driver: str = 'GTiff'):
@@ -1019,7 +1020,7 @@ class WCOFSRange:
         Write raster data of given variables to given output directory, averaged over given time interval.
 
         :param output_dir: path to output directory
-        :param variables: list of variable names to use
+        :param variables: variable names to use
         :param filename_suffix: suffix for filenames
         :param study_area_polygon_filename: path to vector file containing study area boundary
         :param start_datetime: beginning of time interval
@@ -1228,13 +1229,14 @@ class WCOFSRange:
                     with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
                         output_raster.write(masked_data, 1)
 
-    def write_vector(self, output_filename: str, variables: list = None, start_datetime: datetime.datetime = None,
+    def write_vector(self, output_filename: str, variables: Collection[str] = None,
+                     start_datetime: datetime.datetime = None,
                      end_datetime: datetime.datetime = None):
         """
         Write average of surface velocity vector data for all hours in the given time interval to a single layer of the provided output file.
 
         :param output_filename: path to output file
-        :param variables: list of variable names to write to vector file
+        :param variables: variable names to write to vector file
         :param start_datetime: beginning of time interval
         :param end_datetime: end of time interval
         """
@@ -1314,11 +1316,11 @@ class WCOFSRange:
                             layer=layer_name) as layer:
                 layer.writerecords(layer_records)
 
-    def to_xarray(self, variables: list = None, mean: bool = True) -> xarray.Dataset:
+    def to_xarray(self, variables: Collection[str] = None, mean: bool = True) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
 
-        :param variables: list of variables to use
+        :param variables: variables to use
         :param mean: whether to average all time indices
         :return: xarray dataset of given variables
         """
@@ -1397,12 +1399,12 @@ class WCOFSRange:
 
         return output_dataset
 
-    def to_netcdf(self, output_file: str, variables: list = None, mean: bool = True):
+    def to_netcdf(self, output_file: str, variables: Collection[str] = None, mean: bool = True):
         """
         Writes to NetCDF file.
 
         :param output_file: output file to write
-        :param variables: list of variables to use
+        :param variables: variables to use
         :param mean: whether to average all time indices
         """
 
