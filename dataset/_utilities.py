@@ -18,9 +18,9 @@ def copy_xarray(input_path: str, output_path: str) -> xarray.Dataset:
     """
     Copy given xarray dataset to a local file at the given path.
 
-    :param input_path: Path to dataset to copy.
-    :param output_path: Path to output file.
-    :return: Copied dataset, now at local filename.
+    :param input_path: path to dataset to copy
+    :param output_path: path to output file
+    :return: copied dataset at given path
     """
 
     print(f'Copying dataset to {output_path}')
@@ -40,9 +40,9 @@ def round_to_day(datetime_object: datetime.datetime, direction: str = None) -> d
     """
     Return given datetime rounded to the nearest day.
 
-    :param datetime_object: Datetime to round.
-    :param direction: Either 'ceiling' or 'floor', optional.
-    :return: Rounded datetime.
+    :param datetime_object: datetime to round
+    :param direction: either 'ceiling' or 'floor', optional
+    :return: rounded datetime
     """
 
     start_of_day = datetime_object.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -60,9 +60,9 @@ def round_to_hour(datetime_object: datetime.datetime, direction: str = None) -> 
     """
     Return given datetime rounded to the nearest hour.
 
-    :param datetime_object: Datetime to round.
-    :param direction: Either 'ceiling' or 'floor', optional.
-    :return: Rounded datetime.
+    :param datetime_object: datetime to round
+    :param direction: either 'ceiling' or 'floor', optional
+    :return: rounded datetime
     """
 
     start_of_hour = datetime_object.replace(minute=0, second=0, microsecond=0)
@@ -80,8 +80,8 @@ def round_to_ten_minutes(datetime_object: datetime.datetime) -> datetime.datetim
     """
     Return given datetime rounded to the nearest ten minutes.
 
-    :param datetime_object: Datetime to round.
-    :return: Rounded datetime.
+    :param datetime_object: datetime to round
+    :return: rounded datetime
     """
 
     return datetime_object.replace(minute=int(round(datetime_object.minute, -1)), second=0, microsecond=0)
@@ -91,9 +91,9 @@ def range_daily(start_datetime: datetime.datetime, end_datetime: datetime.dateti
     """
     Generate range of times between given times at day intervals.
 
-    :param start_datetime: Beginning of time interval.
-    :param end_datetime: End of time interval.
-    :return: Range of datetimes.
+    :param start_datetime: beginning of time interval
+    :param end_datetime: end of time interval
+    :return: range of datetimes
     """
 
     duration = end_datetime - start_datetime
@@ -110,9 +110,9 @@ def range_hourly(start_datetime: datetime.datetime, end_datetime: datetime.datet
     """
     Generate range of times between given times at hour intervals.
 
-    :param start_datetime: Beginning of time interval.
-    :param end_datetime: End of time interval.
-    :return: Range of datetimes.
+    :param start_datetime: beginning of time interval
+    :param end_datetime: end of time interval
+    :return: range of datetimes
     """
 
     duration = end_datetime - start_datetime
@@ -129,9 +129,9 @@ def ten_minute_range(start_datetime: datetime.datetime, end_datetime: datetime.d
     """
     Generate range of times between given times at ten minute intervals.
 
-    :param start_datetime: Beginning of time interval.
-    :param end_datetime: End of time interval.
-    :return: Range of datetimes.
+    :param start_datetime: beginning of time interval
+    :param end_datetime: end of time interval
+    :return: range of datetimes
     """
 
     duration = end_datetime - start_datetime
@@ -145,8 +145,8 @@ def get_masked_data(masked_constant: numpy.ma.core.MaskedConstant) -> object:
     """
     Wrapper to make sure we don't call .data on a regular constant, which will cause memory problems.
 
-    :param masked_constant: Input constant.
-    :return: Data held within masked constant.
+    :param masked_constant: input constant
+    :return: data held within masked constant
     """
 
     if 'MaskedConstant' in str(type(masked_constant)) or 'MaskedArray' in str(type(masked_constant)):
@@ -162,17 +162,17 @@ def write_gpkg_subdataset(input_data: numpy.ndarray, output_filename: str, layer
     Write input array to a raster layer in a geopackage.
     If the layer exists in the given geopackage, the entire file must be overwritten to replace it.
 
-    :param input_data: Array of data to write to raster.
-    :param output_filename: Geopackage filename.
-    :param layer_name: Name of output layer.
-    :param height: The numbers of rows of the raster dataset.
-    :param width: The number of columns of the raster dataset.
-    :param dtype: The data type for bands.
-    :param crs: The coordinate reference system.
-    :param transform: Affine transformation mapping the pixel space to geographic space.
-    :param nodata: Defines the pixel value to be interpreted as not valid data.
-    :param overwrite: Whether to erase entire geopackage, if replacing existing layer.
-    :raises Exception: raised GDAL error.
+    :param input_data: array of data to write to raster
+    :param output_filename: geopackage filename
+    :param layer_name: name of output layer
+    :param height: numbers of rows of the raster dataset
+    :param width: number of columns of the raster dataset
+    :param dtype: data type for bands
+    :param crs: coordinate reference system
+    :param transform: affine transformation mapping the pixel space to geographic space
+    :param nodata: pixel value to be interpreted as invalid data
+    :param overwrite: whether to erase entire geopackage, if replacing existing layer
+    :raises Exception: raised GDAL error
     """
 
     with rasterio.Env(OGR_GPKG_FOREIGN_KEY_CHECK='NO'):
@@ -196,6 +196,17 @@ def write_gpkg_subdataset(input_data: numpy.ndarray, output_filename: str, layer
                        transform=transform, nodata=nodata, raster_table=layer_name, raster_identifier=layer_name,
                        raster_description=layer_name) as output_raster:
         output_raster.write(input_data.astype(dtype), 1)
+
+
+def datetime64_to_datetime(datetime64: numpy.datetime64) -> datetime.datetime:
+    """
+    Convert numpy.datetime64 object to native Python datetime.datetime object
+
+    :param datetime64: numpy datetime
+    :return: python datetime
+    """
+
+    return datetime.datetime.fromtimestamp(datetime64.values.astype(datetime.datetime) * 1e-9)
 
 
 class NoDataError(Exception):

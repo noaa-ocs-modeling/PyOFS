@@ -17,8 +17,7 @@ import rasterio
 import scipy.interpolate
 import xarray
 
-from dataset import CRS_EPSG, Logger
-from dataset import _utilities
+from dataset import CRS_EPSG, Logger, _utilities
 from main import DATA_DIR
 
 DATA_VARIABLES = {'ssu': 'u', 'ssv': 'v', 'dopx': 'DOPx', 'dopy': 'DOPy'}
@@ -46,10 +45,10 @@ class HFRRange:
         """
         Creates new dataset object from source.
 
-        :param start_datetime: Beginning of time interval.
-        :param end_datetime: End of time interval.
-        :param resolution: Desired dataset resolution in kilometers.
-        :param source: Either UCSD (University of California San Diego) or NDBC (National Data Buoy Center). NDBC has a larger extent but only for the past 4 days.
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
+        :param resolution: desired dataset resolution in kilometers
+        :param source: either UCSD (University of California San Diego) or NDBC (National Data Buoy Center); NDBC has larger extent but only for the past 4 days
         :param logger: logbook logger
         :raises NoDataError: if dataset does not exist.
         """
@@ -116,10 +115,10 @@ class HFRRange:
         """
         Get data for the specified variable at a single time.
 
-        :param variable: Variable name.
-        :param time: Time to retrieve.
-        :param dop_threshold: Threshold for Dilution of Precision (DOP) above which data should be discarded.
-        :return: Array of data.
+        :param variable: variable name
+        :param time: time to retrieve
+        :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
+        :return: array of data.
         """
 
         output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(time).values
@@ -136,11 +135,11 @@ class HFRRange:
         """
         Get data for the specified variable at a single time.
 
-        :param variable: Variable name.
-        :param start_datetime: Start of time interval.
-        :param end_datetime: End of time interval.
-        :param dop_threshold: Threshold for Dilution of Precision (DOP) above which data should be discarded.
-        :return: Array of data.
+        :param variable: variable name
+        :param start_datetime: start of time interval
+        :param end_datetime: end of time interval
+        :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
+        :return: array of data
         """
 
         if start_datetime is None:
@@ -164,7 +163,7 @@ class HFRRange:
         """
         Get coordinate bounds of dataset.
 
-        :return: Tuple of bounds (west, north, east, south)
+        :return: tuple of bounds (west, north, east, south)
         """
 
         return (self.netcdf_dataset.geospatial_lon_min, self.netcdf_dataset.geospatial_lat_max,
@@ -174,7 +173,7 @@ class HFRRange:
         """
         Get cell sizes of dataset.
 
-        :return: Tuple of cell sizes (x, y)
+        :return: tuple of cell sizes (x, y)
         """
 
         return abs(self.mean_x_size), abs(self.mean_y_size)
@@ -183,8 +182,8 @@ class HFRRange:
         """
         Writes HFR radar facility locations to specified file and layer.
 
-        :param output_filename: Path to output file.
-        :param layer_name: Name of layer to write.
+        :param output_filename: path to output file
+        :param layer_name: name of layer to write
         """
 
         layer_records = []
@@ -217,11 +216,11 @@ class HFRRange:
         """
         Write HFR data to a layer of the provided output file for every hour in the given time interval.
 
-        :param output_filename: Path to output file.
-        :param variables: List of variable names to use.
-        :param start_datetime: Beginning of time interval.
-        :param end_datetime: End of time interval.
-        :param dop_threshold: Threshold for Dilution of Precision (DOP) above which data should be discarded.
+        :param output_filename: path to output file
+        :param variables: list of variable names to use
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
+        :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
         """
 
         if variables is None:
@@ -296,12 +295,12 @@ class HFRRange:
         """
         Write average of HFR data for all hours in the given time interval to a single layer of the provided output file.
 
-        :param output_filename: Path to output file.
-        :param layer_name: Name of layer to write.
-        :param variables: List of variable names to use.
-        :param start_datetime: Beginning of time interval.
-        :param end_datetime: End of time interval.
-        :param dop_threshold: Threshold for Dilution of Precision (DOP) above which data should be discarded.
+        :param output_filename: path to output file
+        :param layer_name: name of layer to write
+        :param variables: list of variable names to use
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
+        :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
         """
 
         if variables is None:
@@ -356,15 +355,15 @@ class HFRRange:
         """
         Write average of HFR data for all hours in the given time interval to rasters.
 
-        :param output_dir: Path to output directory.
-        :param filename_prefix: Prefix for output filenames.
-        :param filename_suffix: Suffix for output filenames.
-        :param variables: List of variable names to use.
-        :param start_datetime: Beginning of time interval.
-        :param end_datetime: End of time interval.
-        :param fill_value: Desired fill value of output.
-        :param driver: String of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid').
-        :param dop_threshold: Threshold for dilution of precision above which data is not useable.
+        :param output_dir: path to output directory
+        :param filename_prefix: prefix for output filenames
+        :param filename_suffix: suffix for output filenames
+        :param variables: list of variable names to use
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
+        :param fill_value: desired fill value of output
+        :param driver: string of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
+        :param dop_threshold: threshold for dilution of precision above which data is not useable
         """
 
         if variables is None:
@@ -438,45 +437,71 @@ class HFRRange:
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(numpy.flipud(raster_data), 1)
 
-    def to_xarray(self, variables: list = None, mean: bool = True) -> xarray.Dataset:
+    def to_xarray(self, variables: list = None, start_datetime: datetime.datetime = None,
+                  end_datetime: datetime.datetime = None, mean: bool = True,
+                  dop_threshold: float = 0.5) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
 
-        :param variables: List of variables to use.
-        :param mean: Whether to average all time indices.
-        :return: xarray Dataset of given variables.
+        :param variables: list of variables to use
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
+        :param mean: whether to average all time indices
+        :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
+        :return: xarray dataset of given variables
         """
 
-        data_arrays = {}
+        output_dataset = xarray.Dataset()
 
         if variables is None:
             variables = DATA_VARIABLES
 
+        if start_datetime is None:
+            start_datetime = self.start_datetime
+
+        if end_datetime is None:
+            end_datetime = self.end_datetime
+
         if mean:
             for variable in variables:
-                data_arrays[variable] = xarray.DataArray(numpy.mean(self.data_average(variable), axis=0),
-                                                         coords={'lat': self.netcdf_dataset['lat'],
-                                                                 'lon': self.netcdf_dataset['lon']},
-                                                         dims=('lat', 'lon'))
+                output_data = self.data_average(variable, start_datetime=start_datetime,
+                                                end_datetime=end_datetime, dop_threshold=dop_threshold)
+
+                output_dataset.update({variable: xarray.DataArray(output_data,
+                                                                  coords={'lat': self.netcdf_dataset['lat'],
+                                                                          'lon': self.netcdf_dataset['lon']},
+                                                                  dims=('lat', 'lon'))})
         else:
             for variable in variables:
-                data_arrays[variable] = xarray.DataArray(self.data_average(variable),
-                                                         coords={'lat': self.netcdf_dataset['lat'],
-                                                                 'lon': self.netcdf_dataset['lon']},
-                                                         dims=('time', 'lat', 'lon'))
+                output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(
+                    time=slice(start_datetime, end_datetime)).values
 
-        return xarray.Dataset(data_vars=data_arrays)
+                if dop_threshold is not None:
+                    dop_mask = ((self.netcdf_dataset['DOPx'] <= dop_threshold) | (
+                            self.netcdf_dataset['DOPy'] <= dop_threshold)).values
+                    output_data[~dop_mask] = numpy.nan
 
-    def to_netcdf(self, output_file: str, variables: list = None, mean: bool = True):
+                output_dataset.update({variable: xarray.DataArray(output_data,
+                                                                  coords={'time': self.netcdf_dataset['time'],
+                                                                          'lat': self.netcdf_dataset['lat'],
+                                                                          'lon': self.netcdf_dataset['lon']},
+                                                                  dims=('time', 'lat', 'lon'))})
+
+        return output_dataset
+
+    def to_netcdf(self, output_file: str, variables: list = None, start_datetime: datetime.datetime = None,
+                  end_datetime: datetime.datetime = None, mean: bool = True):
         """
         Writes to NetCDF file.
 
-        :param output_file: Output file to write.
-        :param variables: List of variables to use.
-        :param mean: Whether to average all time indices.
+        :param output_file: output file to write
+        :param variables: list of variables to use
+        :param start_datetime: beginning of time interval
+        :param end_datetime: end of time interval
+        :param mean: whether to average all time indices
         """
 
-        self.to_xarray(variables, mean).to_netcdf(output_file)
+        self.to_xarray(variables, start_datetime, end_datetime, mean).to_netcdf(output_file)
 
     def __repr__(self):
         used_params = [self.start_datetime.__repr__(), self.end_datetime.__repr__()]

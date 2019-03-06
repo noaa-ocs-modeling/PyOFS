@@ -1,6 +1,6 @@
 # coding=utf-8
 
-CRS_EPSG = 3857
+CRS_EPSG = 4326
 
 try:
     from logbook import Logger
