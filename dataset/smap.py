@@ -7,9 +7,10 @@ Created on Feb 6, 2019
 @author: zachary.burnett
 """
 
-from collections import OrderedDict
 import datetime
+import logging
 import os
+from collections import OrderedDict
 from typing import Collection
 
 import fiona
@@ -21,7 +22,7 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-from dataset import CRS_EPSG, Logger, _utilities
+from dataset import CRS_EPSG, _utilities
 from main import DATA_DIR
 
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
@@ -41,16 +42,13 @@ class SMAPDataset:
     study_area_bounds = None
     study_area_coordinates = None
 
-    def __init__(self, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, logger: Logger = None):
+    def __init__(self, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME):
         """
         Retrieve VIIRS NetCDF dataset from NOAA with given datetime.
 
         :param study_area_polygon_filename: filename of vector file containing study area boundary
-        :param logger: logbook logger
         :raises NoDataError: if dataset does not exist
         """
-
-        self.logger = logger
 
         self.study_area_polygon_filename, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
 
@@ -62,8 +60,7 @@ class SMAPDataset:
                 self.netcdf_dataset = xarray.open_dataset(source_url)
                 break
             except Exception as error:
-                if self.logger is not None:
-                    self.logger.error(f'Error collecting dataset from {source}: {error}')
+                logging.error(f'Error collecting dataset from {source}: {error}')
 
         # construct rectangular polygon of granule extent
         lon_min = float(self.netcdf_dataset.geospatial_lon_min)
@@ -199,8 +196,7 @@ class SMAPDataset:
                 output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
 
                 # use rasterio to write to raster with GDAL args
-                if self.logger is not None:
-                    self.logger.info(f'Writing to {output_filename}')
+                logging.info(f'Writing to {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(input_data, 1)
 

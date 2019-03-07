@@ -8,6 +8,7 @@ Created on Jun 13, 2018
 """
 
 import datetime
+import logging
 import os
 from typing import Collection
 
@@ -18,7 +19,7 @@ import rasterio
 import scipy.interpolate
 import xarray
 
-from dataset import CRS_EPSG, Logger, _utilities
+from dataset import CRS_EPSG, _utilities
 from main import DATA_DIR
 
 DATA_VARIABLES = {'ssu': 'u', 'ssv': 'v', 'dopx': 'DOPx', 'dopy': 'DOPy'}
@@ -42,7 +43,7 @@ class HFRRange:
     grid_transform = None
 
     def __init__(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime, resolution: int = 6,
-                 source: str = None, logger: Logger = None):
+                 source: str = None):
         """
         Creates new dataset object from source.
 
@@ -50,11 +51,8 @@ class HFRRange:
         :param end_datetime: end of time interval
         :param resolution: desired dataset resolution in kilometers
         :param source: either UCSD (University of California San Diego) or NDBC (National Data Buoy Center); NDBC has larger extent but only for the past 4 days
-        :param logger: logbook logger
         :raises NoDataError: if dataset does not exist.
         """
-
-        self.logger = logger
 
         self.start_datetime = start_datetime
         if end_datetime > datetime.datetime.utcnow():
@@ -93,10 +91,9 @@ class HFRRange:
 
         self.netcdf_dataset = self.netcdf_dataset.sel(time=slice(self.start_datetime, self.end_datetime))
 
-        if self.logger is not None:
-            self.logger.info(f'Collecting HFR velocity from {self.source} between ' +
-                             f'{str(self.netcdf_dataset["time"].min().values)[:19]}' +
-                             f' and {str(self.netcdf_dataset["time"].max().values)[:19]}...')
+        logging.info(f'Collecting HFR velocity from {self.source} between ' +
+                     f'{str(self.netcdf_dataset["time"].min().values)[:19]}' +
+                     f' and {str(self.netcdf_dataset["time"].max().values)[:19]}...')
 
         if HFRRange.grid_transform is None:
             lon = self.netcdf_dataset['lon'].values
@@ -345,8 +342,7 @@ class HFRRange:
                     feature_index += 1
 
         # write queued features to layer
-        if self.logger is not None:
-            self.logger.info(f'Writing {output_filename}')
+        logging.info(f'Writing {output_filename}')
         with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_CRS) as layer:
             layer.writerecords(layer_records)
 
@@ -434,8 +430,7 @@ class HFRRange:
             output_filename = os.path.join(output_dir,
                                            f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
 
-            if self.logger is not None:
-                self.logger.info(f'Writing {output_filename}')
+            logging.info(f'Writing {output_filename}')
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(numpy.flipud(raster_data), 1)
 

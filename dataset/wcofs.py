@@ -7,24 +7,25 @@ Created on Jun 25, 2018
 @author: zachary.burnett
 """
 
-from concurrent import futures
 import datetime
+import logging
 import os
 import threading
+from concurrent import futures
 from typing import Collection
 
 import fiona
 import fiona.crs
 import numpy
 import rasterio.control
-from rasterio.io import MemoryFile
 import rasterio.mask
 import rasterio.warp
-from scipy import interpolate
 import shapely.geometry
 import xarray
+from rasterio.io import MemoryFile
+from scipy import interpolate
 
-from dataset import CRS_EPSG, Logger, _utilities
+from dataset import CRS_EPSG, _utilities
 from main import DATA_DIR
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
@@ -71,7 +72,7 @@ class WCOFSDataset:
 
     def __init__(self, model_date: datetime.datetime, source: str = None, time_deltas: list = None,
                  x_size: float = None, y_size: float = None, grid_filename: str = None, source_url: str = None,
-                 wcofs_string: str = 'wcofs', logger: Logger = None):
+                 wcofs_string: str = 'wcofs'):
         """
         Creates new dataset object from datetime and given model parameters.
 
@@ -83,12 +84,9 @@ class WCOFSDataset:
         :param grid_filename: filename of NetCDF containing WCOFS grid coordinates
         :param source_url: directory containing NetCDF files
         :param wcofs_string: WCOFS string in filename
-        :param logger: logbook logger
         :raises ValueError: if source is not valid
         :raises NoDataError: if no datasets exist for the given model run
         """
-
-        self.logger = logger
 
         valid_source_strings = ['stations', 'fields', 'avg', '2ds']
 
@@ -140,8 +138,7 @@ class WCOFSDataset:
                         self.netcdf_datasets[-1 if day < 0 else 1] = xarray.open_dataset(url, decode_times=False)
                         self.source_url = source
                     except OSError:
-                        if self.logger is not None:
-                            self.logger.warn(f'No WCOFS dataset found at {url}')
+                        logging.warning(f'No WCOFS dataset found at {url}')
             else:
                 for hour in self.time_deltas:
                     model_type = 'n' if hour <= 0 else 'f'
@@ -152,8 +149,7 @@ class WCOFSDataset:
                         self.netcdf_datasets[hour] = xarray.open_dataset(url, decode_times=False)
                         self.source_url = source
                     except OSError:
-                        if self.logger is not None:
-                            self.logger.warn(f'No WCOFS dataset found at {url}')
+                        logging.warning(f'No WCOFS dataset found at {url}')
 
         if len(self.netcdf_datasets) > 0:
             self.dataset_locks = {time_delta: threading.Lock() for time_delta in self.netcdf_datasets.keys()}
@@ -442,9 +438,8 @@ class WCOFSDataset:
                 if v_data is not None:
                     variable_means[v_name] = v_data
 
-        if self.logger is not None:
-            self.logger.debug('parallel data aggregation took ' +
-                              f'{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+        logging.debug('parallel data aggregation took ' +
+                      f'{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
         start_time = datetime.datetime.now()
 
@@ -457,8 +452,7 @@ class WCOFSDataset:
 
                 for variable, variable_data in variable_means.items():
                     if variable_data is not None:
-                        if self.logger is not None:
-                            self.logger.debug(f'Starting {variable} interpolation...')
+                        logging.debug(f'Starting {variable} interpolation...')
 
                         grid_lon = output_grid_coordinates[variable]['lon']
                         grid_lat = output_grid_coordinates[variable]['lat']
@@ -503,9 +497,8 @@ class WCOFSDataset:
                     if v_name not in variables:
                         del interpolated_data[v_name]
 
-            if self.logger is not None:
-                self.logger.debug(f'parallel grid interpolation took ' +
-                                  f'{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+            logging.debug(f'parallel grid interpolation took ' +
+                          f'{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
         # write interpolated grids to raster files
         for variable, variable_data in interpolated_data.items():
@@ -556,8 +549,7 @@ class WCOFSDataset:
             if os.path.isfile(output_filename):
                 os.remove(output_filename)
 
-            if self.logger is not None:
-                self.logger.info(f'Writing to {output_filename}')
+            logging.info(f'Writing to {output_filename}')
             with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
                 output_raster.write(masked_data, 1)
 
@@ -587,9 +579,8 @@ class WCOFSDataset:
 
             del running_futures
 
-        if self.logger is not None:
-            self.logger.debug('parallel data aggregation took ' +
-                              f'{(datetime.datetime.now() - start_time).total_seconds(): .2f} seconds')
+        logging.debug('parallel data aggregation took ' +
+                      f'{(datetime.datetime.now() - start_time).total_seconds(): .2f} seconds')
 
         schema = {
             'geometry': 'Point', 'properties': {
@@ -602,8 +593,7 @@ class WCOFSDataset:
 
         start_time = datetime.datetime.now()
 
-        if self.logger is not None:
-            self.logger.debug('Creating records...')
+        logging.debug('Creating records...')
 
         # create features
         layer_records = []
@@ -629,23 +619,20 @@ class WCOFSDataset:
                 if result is not None:
                     layer_records.append(result)
 
-        if self.logger is not None:
-            self.logger.debug(
-                f'creating records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+        logging.debug(
+            f'creating records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
         start_time = datetime.datetime.now()
 
-        if self.logger is not None:
-            self.logger.info(f'Writing {output_filename}:{layer_name}')
+        logging.info(f'Writing {output_filename}:{layer_name}')
 
         # create layer
         with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_CRS,
                         layer=layer_name) as output_vector_file:
             output_vector_file.writerecords(layer_records)
 
-        if self.logger is not None:
-            self.logger.debug(
-                f'writing records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+        logging.debug(
+            f'writing records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
     def _create_fiona_record(self, variable_means, row, col, feature_index):
         # get coordinates of cell center
@@ -735,7 +722,7 @@ class WCOFSRange:
 
     def __init__(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime, source: str = '2ds',
                  time_deltas: list = None, x_size: float = None, y_size: float = None, grid_filename: str = None,
-                 source_url: str = None, wcofs_string: str = 'wcofs', logger: Logger = None):
+                 source_url: str = None, wcofs_string: str = 'wcofs'):
         """
         Create range of WCOFS datasets from the given time interval.
 
@@ -748,11 +735,8 @@ class WCOFSRange:
         :param grid_filename: filename of NetCDF containing WCOFS grid coordinates
         :param source_url: directory containing NetCDF files
         :param wcofs_string: WCOFS string in filename
-        :param logger: logbook logger
         :raises NoDataError: if data does not exist
         """
-
-        self.logger = logger
 
         self.source = source
         self.time_deltas = time_deltas
@@ -769,8 +753,7 @@ class WCOFSRange:
             self.start_datetime = _utilities.round_to_hour(start_datetime)
             self.end_datetime = _utilities.round_to_hour(end_datetime)
 
-        if self.logger is not None:
-            self.logger.info(f'Collecting WCOFS stack between {self.start_datetime} and {self.end_datetime}...')
+        logging.info(f'Collecting WCOFS stack between {self.start_datetime} and {self.end_datetime}...')
 
         # get all possible model dates that could overlap with the given time interval
         overlapping_start_datetime = self.start_datetime - datetime.timedelta(hours=WCOFS_MODEL_HOURS['f'] - 24)
@@ -937,8 +920,7 @@ class WCOFSRange:
         :return: dictionary of data for every model for every time in the given time interval
         """
 
-        if self.logger is not None:
-            self.logger.debug(f'Aggregating {variable} data...')
+        logging.debug(f'Aggregating {variable} data...')
 
         start_datetime = start_datetime if start_datetime is not None else self.start_datetime
         end_datetime = end_datetime if end_datetime is not None else self.end_datetime
@@ -1108,9 +1090,8 @@ class WCOFSRange:
             if v_name not in variable_data_stack_averages:
                 variable_data_stack_averages[v_name] = self.data_averages(v_name, start_datetime, end_datetime)
 
-        if self.logger is not None:
-            self.logger.debug('parallel data aggregation took ' +
-                              f'{(datetime.datetime.now() - start_time).total_seconds(): .2=f} seconds')
+        logging.debug('parallel data aggregation took ' +
+                      f'{(datetime.datetime.now() - start_time).total_seconds(): .2=f} seconds')
 
         start_time = datetime.datetime.now()
 
@@ -1121,8 +1102,7 @@ class WCOFSRange:
             running_futures = {}
 
             for variable, variable_data_stack in variable_data_stack_averages.items():
-                if self.logger is not None:
-                    self.logger.debug(f'Starting {variable} interpolation...')
+                logging.debug(f'Starting {variable} interpolation...')
 
                 grid_lon = output_grid_coordinates[variable]['lon']
                 grid_lat = output_grid_coordinates[variable]['lat']
@@ -1173,9 +1153,8 @@ class WCOFSRange:
             if v_name not in variables:
                 del interpolated_data[v_name]
 
-        if self.logger is not None:
-            self.logger.debug('parallel grid interpolation took ' +
-                              f'{(datetime.datetime.now() - start_time).total_seconds(): .2f} seconds')
+        logging.debug('parallel grid interpolation took ' +
+                      f'{(datetime.datetime.now() - start_time).total_seconds(): .2f} seconds')
 
         # write interpolated grids to raster files
         for variable, variable_data_stack in interpolated_data.items():
@@ -1224,8 +1203,7 @@ class WCOFSRange:
                     if os.path.isfile(output_filename):
                         os.remove(output_filename)
 
-                    if self.logger is not None:
-                        self.logger.info(f'Writing to {output_filename}')
+                    logging.info(f'Writing to {output_filename}')
                     with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
                         output_raster.write(masked_data, 1)
 
@@ -1260,9 +1238,8 @@ class WCOFSRange:
 
             del running_futures
 
-        if self.logger is not None:
-            self.logger.debug('parallel data aggregation took ' +
-                              f'{(datetime.datetime.now() - start_time).total_seconds(): .2f} seconds')
+        logging.debug('parallel data aggregation took ' +
+                      f'{(datetime.datetime.now() - start_time).total_seconds(): .2f} seconds')
 
         model_datetime_strings = [model_datetime for model_datetime in
                                   next(iter(variable_data_stack_averages.values())).keys()]
@@ -1275,8 +1252,7 @@ class WCOFSRange:
         for variable in variables:
             schema['properties'][variable] = 'float'
 
-        if self.logger is not None:
-            self.logger.debug('Creating records...')
+        logging.debug('Creating records...')
 
         # create features
         layers = {model_datetime: [] for model_datetime in model_datetime_strings}
@@ -1310,8 +1286,7 @@ class WCOFSRange:
 
         # write queued features to layer
         for layer_name, layer_records in layers.items():
-            if self.logger is not None:
-                self.logger.info(f'Writing {output_filename}:{layer_name}')
+            logging.info(f'Writing {output_filename}:{layer_name}')
             with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_CRS,
                             layer=layer_name) as layer:
                 layer.writerecords(layer_records)
