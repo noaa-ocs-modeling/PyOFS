@@ -7,10 +7,11 @@ Created on Aug 1, 2018
 @author: zachary.burnett
 """
 
-from concurrent import futures
 import datetime
+import logging
 import os
 import re
+from concurrent import futures
 
 import fiona
 import fiona.crs
@@ -21,7 +22,7 @@ import shapely
 import shapely.geometry
 import xarray
 
-from dataset import CRS_EPSG, Logger, _utilities
+from dataset import CRS_EPSG, _utilities
 from main import DATA_DIR
 
 MEASUREMENT_VARIABLES = ['water_temperature', 'conductivity', 'salinity', 'o2_saturation', 'dissolved_oxygen',
@@ -41,16 +42,13 @@ class NDBCStation:
     Buoy data of ocean variables within a time interval.
     """
 
-    def __init__(self, station, logger: Logger = None):
+    def __init__(self, station):
         """
         Creates new dataset object.
 
         :param str station: station name
-        :param logger: logbook logger
         :raises NoDataError: if dataset does not exist
         """
-
-        self.logger = logger
 
         self.valid = False
         self.station_name = station
@@ -64,7 +62,13 @@ class NDBCStation:
         except:
             raise _utilities.NoDataError(f'No NDBC dataset found at {self.url}')
 
-    def geometry(self):
+    def geometry(self) -> shapely.geometry.Point:
+        """
+        Get geometry as a point.
+
+        :return: point
+        """
+
         return shapely.geometry.point.Point(self.longitude, self.latitude)
 
     def data(self, start_datetime, end_datetime) -> dict:
@@ -76,9 +80,8 @@ class NDBCStation:
         :return: dictionary of data from the given station over the given time interval
         """
 
-        if self.logger is not None:
-            self.logger.info(
-                f'Collecting NDBC data of station {self.station_name} from {start_datetime} to {end_datetime}...')
+        logging.info(
+            f'Collecting NDBC data of station {self.station_name} from {start_datetime} to {end_datetime}...')
 
         output_data = {variable: None for variable in MEASUREMENT_VARIABLES}
 
@@ -115,11 +118,12 @@ class NDBCRange:
 
         self.start_datetime = start_datetime
         self.end_datetime = end_datetime
-        self.station_names = stations
 
-        if self.station_names is None:
+        if stations is None:
             with requests.get(SOURCE_URL) as catalog:
                 self.station_names = re.findall("href='(.*?)/catalog.html'", catalog.text)
+        else:
+            self.station_names = stations
 
         self.stations = {}
 
@@ -133,8 +137,7 @@ class NDBCRange:
 
                 if type(completed_future.exception()) is not _utilities.NoDataError:
                     result = completed_future.result()
-                    if self.logger is not None:
-                        self.logger.info(f'Collecting NDBC data from station {station_name}...')
+                    logging.info(f'Collecting NDBC data from station {station_name}...')
                     self.stations[station_name] = result
 
             del running_futures
@@ -181,8 +184,7 @@ class NDBCRange:
         }
 
         with fiona.open(output_filename, 'w', 'GPKG', schema, FIONA_CRS, layer=layer_name) as layer:
-            if self.logger is not None:
-                self.logger.debug('Creating features...')
+            logging.debug('Creating features...')
 
             layer_records = []
 
@@ -211,8 +213,7 @@ class NDBCRange:
 
                 layer_records.append(record)
 
-            if self.logger is not None:
-                self.logger.info(f'Writing {output_filename}:{layer_name}')
+            logging.info(f'Writing {output_filename}:{layer_name}')
             layer.writerecords(layer_records)
 
     def __repr__(self):

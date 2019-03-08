@@ -1,3 +1,12 @@
+# coding=utf-8
+"""
+Data utility functions.
+
+Created on Feb 27, 2019
+
+@author: zachary.burnett
+"""
+
 import datetime
 import math
 
@@ -5,6 +14,7 @@ import numpy
 import pyproj
 import shapely.geometry
 import xarray
+from matplotlib import pyplot
 
 from dataset import _utilities
 
@@ -111,8 +121,15 @@ class VelocityField:
 
         return (math.atan2(self.u(time, lon, lat), self.v(time, lon, lat)) + math.pi) * (180 / math.pi)
 
+    def plot(self, time: datetime.datetime):
+        quiver_plot = pyplot.quiver(self.field['x'], self.field['y'],
+                                    self.field[self.u_name].sel(time=time, method='nearest'),
+                                    self.field[self.v_name].sel(time=time, method='nearest'), units='width')
+        pyplot.quiverkey(quiver_plot, 0.9, 0.9, 2, r'$2 \frac{m}{s}$', labelpos='E',
+                         coordinates='figure')
+
     def __getitem__(self, time: datetime.datetime, lon: float, lat: float):
-        return (self.u(time, lon, lat), self.v(time, lon, lat))
+        return self.u(time, lon, lat), self.v(time, lon, lat)
 
     def __repr__(self):
         return str(self.field)
@@ -197,7 +214,7 @@ class Particle:
         :return: tuple of velocity vector (u, v)
         """
 
-        return (self.u, self.v)
+        return self.u, self.v
 
     def __str__(self):
         return f'{self.time} {self.coordinates()} -> {self.velocity()}'
@@ -325,17 +342,24 @@ if __name__ == '__main__':
     velocity_field = VelocityField(data, u_name='ssu', v_name='ssv')
     print(f'Velocity field created: {velocity_field}')
 
-    print('Creating starting contour...')
-    contour = RectangleContour(velocity_field,
-                               datetime.datetime.utcfromtimestamp(velocity_field.field['time'][0].item() * 1e-9),
-                               west_lon=-122.99451, east_lon=-122.73859, south_lat=36.82880, north_lat=36.93911)
-    print(f'Contour created: {contour}')
+    for time in velocity_field.field['time']:
+        print(f'Plotting {time}')
+        velocity_field.plot(time)
+        break
 
-    for t_delta in numpy.diff(velocity_field.field['time']):
-        timedelta = datetime.timedelta(seconds=int(t_delta) * 1e-9)
+    pyplot.show()
 
-        print(f'Time step: {timedelta}')
-        contour.step(timedelta)
-        print(f'New state: {contour}')
+    # print('Creating starting contour...')
+    # contour = RectangleContour(velocity_field,
+    #                            datetime.datetime.utcfromtimestamp(velocity_field.field['time'][0].item() * 1e-9),
+    #                            west_lon=-122.99451, east_lon=-122.73859, south_lat=36.82880, north_lat=36.93911)
+    # print(f'Contour created: {contour}')
+    #
+    # for t_delta in numpy.diff(velocity_field.field['time']):
+    #     timedelta = datetime.timedelta(seconds=int(t_delta) * 1e-9)
+    #
+    #     print(f'Time step: {timedelta}')
+    #     contour.step(timedelta)
+    #     print(f'New state: {contour}')
 
     print('done')
