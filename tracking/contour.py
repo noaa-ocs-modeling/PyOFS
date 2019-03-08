@@ -10,11 +10,11 @@ Created on Feb 27, 2019
 import datetime
 import math
 
-from matplotlib import pyplot
 import numpy
 import pyproj
 import shapely.geometry
 import xarray
+from matplotlib import pyplot
 
 from dataset import _utilities
 

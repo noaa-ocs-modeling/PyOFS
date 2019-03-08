@@ -7,13 +7,13 @@ Created on Jun 13, 2018
 @author: zachary.burnett
 """
 
-from collections import OrderedDict
-from concurrent import futures
 import datetime
 import ftplib
 import logging
 import math
 import os
+from collections import OrderedDict
+from concurrent import futures
 from typing import Collection
 
 import fiona

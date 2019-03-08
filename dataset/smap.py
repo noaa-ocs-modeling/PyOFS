@@ -7,10 +7,10 @@ Created on Feb 6, 2019
 @author: zachary.burnett
 """
 
-from collections import OrderedDict
 import datetime
 import logging
 import os
+from collections import OrderedDict
 from typing import Collection
 
 import fiona

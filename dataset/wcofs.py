@@ -7,23 +7,23 @@ Created on Jun 25, 2018
 @author: zachary.burnett
 """
 
-from concurrent import futures
 import datetime
 import logging
 import os
 import threading
+from concurrent import futures
 from typing import Collection, Union
 
 import fiona
 import fiona.crs
 import numpy
 import rasterio.control
-from rasterio.io import MemoryFile
 import rasterio.mask
 import rasterio.warp
-from scipy import interpolate
 import shapely.geometry
 import xarray
+from rasterio.io import MemoryFile
+from scipy import interpolate
 
 from dataset import CRS_EPSG, _utilities
 from main import DATA_DIR

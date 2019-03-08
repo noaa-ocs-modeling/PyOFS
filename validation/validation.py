@@ -1,7 +1,7 @@
-from concurrent import futures
 import datetime
 import os
 import sys
+from concurrent import futures
 
 import numpy
 import xarray

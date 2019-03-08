@@ -7,11 +7,11 @@ Created on Aug 1, 2018
 @author: zachary.burnett
 """
 
-from concurrent import futures
 import datetime
 import logging
 import os
 import re
+from concurrent import futures
 
 import fiona
 import fiona.crs
