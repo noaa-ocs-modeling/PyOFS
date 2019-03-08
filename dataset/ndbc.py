@@ -42,15 +42,13 @@ class NDBCStation:
     Buoy data of ocean variables within a time interval.
     """
 
-    def __init__(self, station, logger: logging.Logger = None):
+    def __init__(self, station):
         """
         Creates new dataset object.
 
         :param str station: station name
         :raises NoDataError: if dataset does not exist
         """
-
-        self.logger = logger if logger is not None else logging.getLogger(self.__class__.__name__)
 
         self.valid = False
         self.station_name = station
@@ -82,7 +80,7 @@ class NDBCStation:
         :return: dictionary of data from the given station over the given time interval
         """
 
-        self.logger.info(
+        logging.info(
             f'Collecting NDBC data of station {self.station_name} from {start_datetime} to {end_datetime}...')
 
         output_data = {variable: None for variable in MEASUREMENT_VARIABLES}
@@ -108,8 +106,7 @@ class NDBCRange:
     Buoy data of ocean variables within a time interval.
     """
 
-    def __init__(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime, stations: list = None,
-                 logger: logging.Logger = None):
+    def __init__(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime, stations: list = None):
         """
         Creates new dataset object.
 
@@ -128,8 +125,6 @@ class NDBCRange:
         else:
             self.station_names = stations
 
-        self.logger = logger if logger is not None else logging.getLogger(self.__class__.__name__)
-
         self.stations = {}
 
         # concurrently populate dictionary with datasets for each station within given time interval
@@ -142,7 +137,7 @@ class NDBCRange:
 
                 if type(completed_future.exception()) is not _utilities.NoDataError:
                     result = completed_future.result()
-                    self.logger.info(f'Collecting NDBC data from station {station_name}...')
+                    logging.info(f'Collecting NDBC data from station {station_name}...')
                     self.stations[station_name] = result
 
             del running_futures
@@ -189,7 +184,7 @@ class NDBCRange:
         }
 
         with fiona.open(output_filename, 'w', 'GPKG', schema, FIONA_CRS, layer=layer_name) as layer:
-            self.logger.debug('Creating features...')
+            logging.debug('Creating features...')
 
             layer_records = []
 
@@ -218,7 +213,7 @@ class NDBCRange:
 
                 layer_records.append(record)
 
-            self.logger.info(f'Writing {output_filename}:{layer_name}')
+            logging.info(f'Writing {output_filename}:{layer_name}')
             layer.writerecords(layer_records)
 
     def __repr__(self):

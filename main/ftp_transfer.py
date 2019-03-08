@@ -9,10 +9,8 @@ Created on Aug 9, 2018
 
 import datetime
 import ftplib
+import logging
 import os
-import sys
-
-import logbook
 
 DATA_DIR = os.environ['OFS_DATA']
 
@@ -48,12 +46,14 @@ if __name__ == '__main__':
     # check whether logfile exists
     log_exists = os.path.exists(log_path)
 
-    logbook.FileHandler(log_path, level='NOTICE', bubble=True).push_application()
-    logbook.StreamHandler(sys.stdout, level='DEBUG', bubble=True).push_application()
-    logger = logbook.Logger('FTP')
+    logging.basicConfig(filename=log_path, level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S',
+                        format='[%(asctime)s] %(levelname)s: %(message)s')
+    console = logging.StreamHandler()
+    console.setLevel(logging.DEBUG)
+    logging.getLogger('').addHandler(console)
 
     # write initial message
-    logger.notice('Starting FTP transfer...')
+    logging.info('Starting FTP transfer...')
 
     # instantiate FTP connection
     with ftplib.FTP(TIDEPOOL_URL) as ftp_connection:
@@ -89,18 +89,18 @@ if __name__ == '__main__':
                 if not (os.path.exists(output_path) and os.stat(output_path).st_size > 232000):
                     with open(output_path, 'wb') as output_file:
                         ftp_connection.retrbinary(f'RETR {input_path}', output_file.write)
-                        logger.notice(f'Copied "{input_path}" ' +
-                                      f'({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s) ' +
-                                      f' to "{output_path}", {os.stat(output_path).st_size / 1000} KB')
+                        logging.info(f'Copied "{input_path}" ' +
+                                     f'({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s) ' +
+                                     f' to "{output_path}", {os.stat(output_path).st_size / 1000} KB')
                         num_downloads += 1
                 else:
                     # only write 'file exists' message on the first run of the day
                     if not log_exists:
-                        logger.info('Destination file already exists: ' +
-                                    f'"{output_path}", {os.stat(output_path).st_size / 1000} KB')
+                        logging.info('Destination file already exists: ' +
+                                     f'"{output_path}", {os.stat(output_path).st_size / 1000} KB')
 
-    logger.notice(f'Downloaded {num_downloads} files. ' +
-                  f'Total time: {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+    logging.info(f'Downloaded {num_downloads} files. ' +
+                 f'Total time: {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
     if num_downloads == 0:
         exit(1)

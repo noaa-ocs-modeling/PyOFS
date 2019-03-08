@@ -1,3 +1,12 @@
+# coding=utf-8
+"""
+Data utility functions.
+
+Created on Feb 27, 2019
+
+@author: zachary.burnett
+"""
+
 import datetime
 import math
 
