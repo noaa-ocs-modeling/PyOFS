@@ -11,7 +11,7 @@ import datetime
 import logging
 import os
 import sys
-from typing import List, Union
+from typing import Collection, Union
 
 import pytz
 
@@ -110,8 +110,9 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
 
 
 def write_rtofs(output_dir: str, model_run_date: Union[datetime.datetime, datetime.date],
-                day_deltas: range = MODEL_DAY_DELTAS['RTOFS'], scalar_variables: List[str] = ('sst', 'sss', 'ssh'),
-                vector_variables: List[str] = ('dir', 'mag')):
+                day_deltas: range = MODEL_DAY_DELTAS['RTOFS'],
+                scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
+                vector_variables: Collection[str] = ('dir', 'mag')):
     """
     Writes daily average of RTOFS output on given date.
 
@@ -180,8 +181,10 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
 
 
 def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, datetime.date, int, float],
-                day_deltas: range = MODEL_DAY_DELTAS['WCOFS'], scalar_variables: List[str] = ('sst', 'sss', 'ssh'),
-                vector_variables: List[str] = ('dir', 'mag'), data_assimilation: bool = True, grid_size_km: int = 4):
+                day_deltas: range = MODEL_DAY_DELTAS['WCOFS'],
+                scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
+                vector_variables: Collection[str] = ('dir', 'mag'), data_assimilation: bool = True,
+                grid_size_km: int = 4):
     """
     Writes daily average of model output on given date.
 
