@@ -248,7 +248,7 @@ class VIIRSDataset:
 
         return self.netcdf_dataset.geospatial_lon_resolution, self.netcdf_dataset.geospatial_lat_resolution
 
-    def data(self, variable: str = 'sst') -> numpy.ndarray:
+    def data(self, variable: str = 'sst', sses_correction=True) -> numpy.ndarray:
         """
         Retrieve data of given variable. Use 'sst_sses' to retrieve SST corrected with sensor-specific error statistic (SSES)
 
@@ -257,9 +257,7 @@ class VIIRSDataset:
         """
 
         if variable == 'sst':
-            return self._sst()
-        if variable == 'sst':
-            return self._sst(sses_correction=True)
+            return self._sst(sses_correction)
         elif variable == 'sses':
             return self._sses()
 
@@ -478,7 +476,7 @@ class VIIRSRange:
                 sample_dataset.netcdf_dataset.geospatial_lat_resolution)
 
     def data(self, start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
-             average: bool = False, sses_correction: bool = False, variables: Collection[str] = tuple(['sst']),
+             average: bool = False, sses_correction: bool = False, variables: Collection[str] = tuple('sst'),
              satellite: str = None) -> dict:
         """
         Get VIIRS data (either overlapped or averaged) from the given time interval.
@@ -725,21 +723,20 @@ class VIIRSRange:
         return f'{self.__class__.__name__}({", ".join(used_params)})'
 
 
-def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
+def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
                            start_datetime: datetime.datetime = VIIRS_START_DATETIME,
                            output_filename: str = PASS_TIMES_FILENAME, num_periods: int = 1,
-                           data_source: str = 'STAR', subskin: bool = False,
-                           acspo_version: str = '2.40'):
+                           algorithm: str = 'STAR', version: str = '2.40'):
     """
     Compute VIIRS pass times from the given start date along the number of periods specified.
 
+    :param satellite: satellite for which to store pass times, either NPP or N20
     :param study_area_polygon_filename: path to vector file containing polygon of study area
     :param start_datetime: beginning of given VIIRS period (in UTC)
     :param output_filename: path to output file
     :param num_periods: number of periods to store
-    :param data_source: either 'STAR' or 'OSPO'
-    :param subskin: whether dataset should use subskin or not
-    :param acspo_version: ACSPO Version number (2.40 - 2.41)
+    :param algorithm: either 'STAR' or 'OSPO'
+    :param version: ACSPO Version number (2.40 - 2.41)
     """
 
     start_datetime = _utilities.round_to_ten_minutes(start_datetime)
@@ -776,8 +773,7 @@ def store_viirs_pass_times(study_area_polygon_filename: str = STUDY_AREA_POLYGON
 
             try:
                 # get dataset of new datetime
-                dataset = VIIRSDataset(cycle_datetime, study_area_polygon_filename, data_source, subskin,
-                                       acspo_version)
+                dataset = VIIRSDataset(cycle_datetime, satellite, study_area_polygon_filename, algorithm, version)
 
                 # check if dataset falls within polygon extent
                 if dataset.data_extent.is_valid:
