@@ -7,10 +7,10 @@ Created on Feb 6, 2019
 @author: zachary.burnett
 """
 
+from collections import OrderedDict
 import datetime
 import logging
 import os
-from collections import OrderedDict
 from typing import Collection
 
 import fiona
@@ -37,12 +37,16 @@ SOURCE_URLS = OrderedDict({
 
 
 class SMAPDataset:
+    """
+    Soil Moisture Active Passive (SMAP) satellite sea-surface salinity.
+    """
+
     study_area_transform = None
     study_area_extent = None
     study_area_bounds = None
     study_area_coordinates = None
 
-    def __init__(self, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME):
+    def __init__(self, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, logger: logging.Logger = None):
         """
         Retrieve VIIRS NetCDF dataset from NOAA with given datetime.
 
@@ -52,6 +56,8 @@ class SMAPDataset:
 
         self.study_area_polygon_filename, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
 
+        self.logger = logger if logger is not None else logging.getLogger(self.__class__.__name__)
+
         if study_area_polygon_layer_name == '':
             study_area_polygon_layer_name = None
 
@@ -60,7 +66,7 @@ class SMAPDataset:
                 self.netcdf_dataset = xarray.open_dataset(source_url)
                 break
             except Exception as error:
-                logging.error(f'Error collecting dataset from {source}: {error}')
+                self.logger.error(f'Error collecting dataset from {source}: {error}')
 
         # construct rectangular polygon of granule extent
         lon_min = float(self.netcdf_dataset.geospatial_lon_min)
@@ -196,7 +202,7 @@ class SMAPDataset:
                 output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
 
                 # use rasterio to write to raster with GDAL args
-                logging.info(f'Writing to {output_filename}')
+                self.logger.info(f'Writing to {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(input_data, 1)
 

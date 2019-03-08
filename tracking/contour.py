@@ -120,7 +120,7 @@ class VelocityField:
                          coordinates='figure')
 
     def __getitem__(self, time: datetime.datetime, lon: float, lat: float):
-        return (self.u(time, lon, lat), self.v(time, lon, lat))
+        return self.u(time, lon, lat), self.v(time, lon, lat)
 
     def __repr__(self):
         return str(self.field)
@@ -205,7 +205,7 @@ class Particle:
         :return: tuple of velocity vector (u, v)
         """
 
-        return (self.u, self.v)
+        return self.u, self.v
 
     def __str__(self):
         return f'{self.time} {self.coordinates()} -> {self.velocity()}'

@@ -33,7 +33,7 @@ def get_directory_structure(rootdir):
     return output_dict
 
 
-def populate_json(input_dir, json_path):
+def write_dir_structure_to_json(input_dir, json_path):
     """
     Write directory structure to JSON file.
 
@@ -51,4 +51,4 @@ if __name__ == '__main__':
     json_path = os.path.join(DATA_DIR, r'reference\model_dates.json')
     input_dir = os.path.join(DATA_DIR, 'output')
 
-    populate_json(input_dir, json_path)
+    write_dir_structure_to_json(input_dir, json_path)

@@ -7,11 +7,11 @@ Created on Aug 1, 2018
 @author: zachary.burnett
 """
 
+from concurrent import futures
 import datetime
 import logging
 import os
 import re
-from concurrent import futures
 
 import fiona
 import fiona.crs
@@ -42,13 +42,15 @@ class NDBCStation:
     Buoy data of ocean variables within a time interval.
     """
 
-    def __init__(self, station):
+    def __init__(self, station, logger: logging.Logger = None):
         """
         Creates new dataset object.
 
         :param str station: station name
         :raises NoDataError: if dataset does not exist
         """
+
+        self.logger = logger if logger is not None else logging.getLogger(self.__class__.__name__)
 
         self.valid = False
         self.station_name = station
@@ -62,7 +64,13 @@ class NDBCStation:
         except:
             raise _utilities.NoDataError(f'No NDBC dataset found at {self.url}')
 
-    def geometry(self):
+    def geometry(self) -> shapely.geometry.Point:
+        """
+        Get geometry as a point.
+
+        :return: point
+        """
+
         return shapely.geometry.point.Point(self.longitude, self.latitude)
 
     def data(self, start_datetime, end_datetime) -> dict:
@@ -74,7 +82,7 @@ class NDBCStation:
         :return: dictionary of data from the given station over the given time interval
         """
 
-        logging.info(
+        self.logger.info(
             f'Collecting NDBC data of station {self.station_name} from {start_datetime} to {end_datetime}...')
 
         output_data = {variable: None for variable in MEASUREMENT_VARIABLES}
@@ -100,7 +108,8 @@ class NDBCRange:
     Buoy data of ocean variables within a time interval.
     """
 
-    def __init__(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime, stations: list = None):
+    def __init__(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime, stations: list = None,
+                 logger: logging.Logger = None):
         """
         Creates new dataset object.
 
@@ -112,11 +121,14 @@ class NDBCRange:
 
         self.start_datetime = start_datetime
         self.end_datetime = end_datetime
-        self.station_names = stations
 
-        if self.station_names is None:
+        if stations is None:
             with requests.get(SOURCE_URL) as catalog:
                 self.station_names = re.findall("href='(.*?)/catalog.html'", catalog.text)
+        else:
+            self.station_names = stations
+
+        self.logger = logger if logger is not None else logging.getLogger(self.__class__.__name__)
 
         self.stations = {}
 
@@ -130,7 +142,7 @@ class NDBCRange:
 
                 if type(completed_future.exception()) is not _utilities.NoDataError:
                     result = completed_future.result()
-                    logging.info(f'Collecting NDBC data from station {station_name}...')
+                    self.logger.info(f'Collecting NDBC data from station {station_name}...')
                     self.stations[station_name] = result
 
             del running_futures
@@ -177,7 +189,7 @@ class NDBCRange:
         }
 
         with fiona.open(output_filename, 'w', 'GPKG', schema, FIONA_CRS, layer=layer_name) as layer:
-            logging.debug('Creating features...')
+            self.logger.debug('Creating features...')
 
             layer_records = []
 
@@ -206,7 +218,7 @@ class NDBCRange:
 
                 layer_records.append(record)
 
-            logging.info(f'Writing {output_filename}:{layer_name}')
+            self.logger.info(f'Writing {output_filename}:{layer_name}')
             layer.writerecords(layer_records)
 
     def __repr__(self):
