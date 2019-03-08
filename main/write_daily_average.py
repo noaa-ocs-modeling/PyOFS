@@ -6,6 +6,7 @@ Created on Aug 21, 2018
 
 @author: zachary.burnett
 """
+
 import datetime
 import logging
 import os
