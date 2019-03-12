@@ -16,7 +16,7 @@ import shapely.geometry
 import xarray
 from matplotlib import pyplot
 
-from dataset import _utilities
+from PyOFS.dataset import _utilities, hfr
 
 GCS = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
 PCS = pyproj.Proj(
@@ -328,7 +328,6 @@ class RectangleContour(Contour):
 
 
 if __name__ == '__main__':
-    from dataset import hfr
 
     model_datetime = datetime.datetime(2019, 2, 25)
     # model_datetime.replace(hour=3, minute=0, second=0, microsecond=0)

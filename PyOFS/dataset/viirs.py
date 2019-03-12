@@ -25,8 +25,8 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-from dataset import CRS_EPSG, _utilities
-from main import DATA_DIR
+from PyOFS import DATA_DIR, CRS_EPSG
+from PyOFS.dataset import _utilities
 
 VIIRS_START_DATETIME = datetime.datetime.strptime('2012-03-01 00:10:00', '%Y-%m-%d %H:%M:%S')
 VIIRS_PERIOD = datetime.timedelta(days=16)

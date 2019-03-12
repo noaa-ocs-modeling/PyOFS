@@ -19,8 +19,8 @@ import rasterio
 import scipy.interpolate
 import xarray
 
-from dataset import CRS_EPSG, _utilities
-from main import DATA_DIR
+from PyOFS import DATA_DIR, CRS_EPSG
+from PyOFS.dataset import _utilities
 
 DATA_VARIABLES = {'ssu': 'u', 'ssv': 'v', 'dopx': 'DOPx', 'dopy': 'DOPy'}
 

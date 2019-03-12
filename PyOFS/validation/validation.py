@@ -9,7 +9,7 @@ import xarray
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
 from main import DATA_DIR
-from dataset.wcofs import interpolate_grid
+from PyOFS.dataset import interpolate_grid, hfr, viirs
 
 WORKSPACE_DIR = os.path.join(DATA_DIR, 'validation')
 
@@ -40,15 +40,11 @@ def to_netcdf(start_datetime: datetime.datetime, end_datetime: datetime.datetime
 
     # write HFR NetCDF file if it does not exist
     if not os.path.exists(nc_filenames['hfr']):
-        from dataset import hfr
-
         hfr_range = hfr.HFRRange(start_datetime, end_datetime)
         hfr_range.to_netcdf(nc_filenames['hfr'])
 
     # write VIIRS NetCDF file if it does not exist
     if not os.path.exists(nc_filenames['viirs']):
-        from dataset import viirs
-
         utc_start_datetime = start_datetime + datetime.timedelta(hours=UTC_OFFSET)
         utc_end_datetime = end_datetime + datetime.timedelta(hours=UTC_OFFSET)
 
@@ -58,8 +54,6 @@ def to_netcdf(start_datetime: datetime.datetime, end_datetime: datetime.datetime
     # write WCOFS NetCDF files if they do not exist
     if not os.path.exists(nc_filenames['wcofs_u_noDA']) or not os.path.exists(
             nc_filenames['wcofs_v_noDA']) or not os.path.exists(nc_filenames['wcofs_sst_noDA']):
-        from dataset import wcofs
-
         wcofs_range_noDA = wcofs.WCOFSRange(start_datetime, end_datetime, source='avg',
                                             grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME,
                                             source_url=os.path.join(DATA_DIR, 'input', 'wcofs', 'avg'),
@@ -72,7 +66,7 @@ def to_netcdf(start_datetime: datetime.datetime, end_datetime: datetime.datetime
 
     if not os.path.exists(nc_filenames['wcofs_sst_DA']) or not os.path.exists(
             nc_filenames['wcofs_u_DA']) or not os.path.exists(nc_filenames['wcofs_v_DA']):
-        from dataset import wcofs
+        from PyOFS.dataset import wcofs
 
         wcofs_range = wcofs.WCOFSRange(start_datetime, end_datetime, source='avg')
 

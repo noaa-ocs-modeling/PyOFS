@@ -25,8 +25,8 @@ import xarray
 from rasterio.io import MemoryFile
 from scipy import interpolate
 
-from dataset import CRS_EPSG, _utilities
-from main import DATA_DIR
+from PyOFS import DATA_DIR, CRS_EPSG
+from PyOFS.dataset import _utilities
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
