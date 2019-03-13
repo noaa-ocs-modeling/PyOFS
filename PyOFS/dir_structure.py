@@ -11,21 +11,19 @@ import functools
 import json
 import os
 
-DATA_DIR = os.environ['OFS_DATA']
 
-
-def get_directory_structure(rootdir):
+def get_directory_structure(root_dir):
     """
     Creates a nested dictionary that represents the folder structure of rootdir
 
-    :param rootdir: directory that will be the root of the output
+    :param root_dir: directory that will be the root of the output
     :return: dictionary of folder structure
     """
 
     output_dict = {}
-    rootdir = rootdir.rstrip(os.sep)
-    start = rootdir.rfind(os.sep) + 1
-    for path, dirs, files in os.walk(rootdir):
+    root_dir = root_dir.rstrip(os.sep)
+    start = root_dir.rfind(os.sep) + 1
+    for path, dirs, files in os.walk(root_dir):
         folders = path[start:].split(os.sep)
         subdir = dict.fromkeys(files)
         parent = functools.reduce(dict.get, folders[:-1], output_dict)
@@ -48,6 +46,12 @@ def dir_structure_to_json(input_dir, json_path):
 
 
 if __name__ == '__main__':
+    import sys
+
+    sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
+
+    from config import DATA_DIR
+
     json_path = os.path.join(DATA_DIR, r'reference\model_dates.json')
     input_dir = os.path.join(DATA_DIR, 'output')
 
