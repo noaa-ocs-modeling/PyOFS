@@ -9,7 +9,6 @@ Created on Feb 27, 2019
 
 import datetime
 import math
-
 import numpy
 import pyproj
 import shapely.geometry
@@ -71,51 +70,51 @@ class VelocityField:
         self.x_delta = float(numpy.nanmean(numpy.diff(self.field['x'])))
         self.y_delta = float(numpy.nanmean(numpy.diff(self.field['y'])))
 
-    def u(self, time: datetime.datetime, lon: float, lat: float) -> float:
+    def u(self, lon: float, lat: float, time: datetime.datetime) -> float:
         """
         u velocity in m/s at coordinates
 
-        :param time: time
         :param lon: longitude
         :param lat: latitude
+        :param time: time
         :return: u value at coordinate in m/s
         """
 
         x, y = PCS(lon, lat)
         return self.field[self.u_name].sel(time=time, x=x, y=y, method='nearest').values.item()
 
-    def v(self, time: datetime.datetime, lon: float, lat: float) -> float:
+    def v(self, lon: float, lat: float, time: datetime.datetime) -> float:
         """
         v velocity in m/s at coordinates
 
-        :param time: time
         :param lon: longitude
         :param lat: latitude
+        :param time: time
         :return: v value at coordinate in m/s
         """
 
         x, y = PCS(lon, lat)
         return self.field[self.v_name].sel(time=time, x=x, y=y, method='nearest').values.item()
 
-    def velocity(self, time: datetime.datetime, lon: float, lat: float) -> float:
+    def velocity(self, lon: float, lat: float, time: datetime.datetime) -> float:
         """
         absolute velocity in m/s at coordinate
 
-        :param time: time
         :param lon: longitude
         :param lat: latitude
+        :param time: time
         :return: magnitude of uv vector in m/s
         """
 
         return math.sqrt(self.u(time, lon, lat) ** 2 + self.v(time, lon, lat) ** 2)
 
-    def direction(self, time: datetime.datetime, lon: float, lat: float) -> float:
+    def direction(self, lon: float, lat: float, time: datetime.datetime) -> float:
         """
         angle of uv vector
 
-        :param time: time
         :param lon: longitude
         :param lat: latitude
+        :param time: time
         :return: degree from north of uv vector
         """
 
@@ -125,10 +124,9 @@ class VelocityField:
         quiver_plot = pyplot.quiver(self.field['x'], self.field['y'],
                                     self.field[self.u_name].sel(time=time, method='nearest'),
                                     self.field[self.v_name].sel(time=time, method='nearest'), units='width')
-        pyplot.quiverkey(quiver_plot, 0.9, 0.9, 2, r'$2 \frac{m}{s}$', labelpos='E',
-                         coordinates='figure')
+        pyplot.quiverkey(quiver_plot, 0.9, 0.9, 2, r'$2 \frac{m}{s}$', labelpos='E', coordinates='figure')
 
-    def __getitem__(self, time: datetime.datetime, lon: float, lat: float):
+    def __getitem__(self, lon: float, lat: float, time: datetime.datetime):
         return self.u(time, lon, lat), self.v(time, lon, lat)
 
     def __repr__(self):
@@ -163,10 +161,8 @@ class Particle:
         if t_delta is None:
             t_delta = self.field.t_delta
 
-        if not numpy.isnan(self.u):
+        if not numpy.isnan(self.u) and not numpy.isnan(self.v):
             self.x += self.u * t_delta.total_seconds()
-
-        if not numpy.isnan(self.v):
             self.y += self.v * t_delta.total_seconds()
 
         self.time += t_delta
