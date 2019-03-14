@@ -1,7 +1,16 @@
-import sys
 import os
 
-from config import CONDA_ENV, DATA_DIR
+import sys
+
+if 'CONDA_GIS' in os.environ:
+    CONDA_ENV = os.environ['CONDA_GIS']
+else:
+    CONDA_ENV = r"D:\Python\conda\GIS"
+
+if 'OFS_DATA' in os.environ:
+    DATA_DIR = os.environ['OFS_DATA']
+else:
+    DATA_DIR = r"D:\Data"
 
 sys.path.append(os.path.join(CONDA_ENV, 'bin'))
 sys.path.append(os.path.join(CONDA_ENV, 'Scripts'))

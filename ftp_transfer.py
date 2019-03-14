@@ -12,11 +12,7 @@ import ftplib
 import logging
 import os
 
-import sys
-
-sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
-
-from config import DATA_DIR
+from PyOFS import DATA_DIR
 
 TIDEPOOL_URL = 'tidepool.nos.noaa.gov'
 INPUT_DIR = '/pub/outgoing/CSDL'

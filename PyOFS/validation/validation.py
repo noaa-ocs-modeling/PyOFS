@@ -1,14 +1,14 @@
-import sys
-
 import datetime
-import numpy
 import os
-import xarray
 from concurrent import futures
+
+import numpy
+import sys
+import xarray
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
-from examples import DATA_DIR
+from main import DATA_DIR
 from PyOFS.dataset import interpolate_grid, hfr, viirs
 
 WORKSPACE_DIR = os.path.join(DATA_DIR, 'validation')

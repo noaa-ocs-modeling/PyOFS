@@ -13,13 +13,10 @@ import os
 from typing import Collection, Union
 
 import pytz
-import sys
 
-sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
-
+import dir_structure
 from PyOFS import DATA_DIR
-from examples import dir_structure
-from PyOFS.dataset import hfr, viirs, rtofs, wcofs, smap
+from PyOFS.dataset import hfr, rtofs, smap, viirs, wcofs
 
 JSON_PATH = os.path.join(DATA_DIR, r'reference\model_dates.json')
 LOG_DIR = os.path.join(DATA_DIR, 'log')
