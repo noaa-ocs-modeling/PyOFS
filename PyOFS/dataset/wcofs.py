@@ -25,7 +25,7 @@ import xarray
 from rasterio.io import MemoryFile
 from scipy import interpolate
 
-from PyOFS import DATA_DIR, CRS_EPSG
+from PyOFS import CRS_EPSG, DATA_DIR
 from PyOFS.dataset import _utilities
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
@@ -729,14 +729,14 @@ class WCOFSRange:
     Range of WCOFS datasets.
     """
 
-    def __init__(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime, source: str = '2ds',
+    def __init__(self, start_time: datetime.datetime, end_time: datetime.datetime, source: str = '2ds',
                  time_deltas: list = None, x_size: float = None, y_size: float = None, grid_filename: str = None,
                  source_url: str = None, wcofs_string: str = 'wcofs'):
         """
         Create range of WCOFS datasets from the given time interval.
 
-        :param start_datetime: beginning of time interval
-        :param end_datetime: end of time interval
+        :param start_time: beginning of time interval
+        :param end_time: end of time interval
         :param source: one of 'stations', 'fields', 'avg', or '2ds'
         :param time_deltas: time indices (nowcast or forecast) to retrieve
         :param x_size: size of cell in X direction
@@ -756,19 +756,19 @@ class WCOFSRange:
         self.wcofs_string = wcofs_string
 
         if self.source == 'avg':
-            self.start_datetime = _utilities.round_to_day(start_datetime)
-            self.end_datetime = _utilities.round_to_day(end_datetime)
+            self.start_time = _utilities.round_to_day(start_time)
+            self.end_time = _utilities.round_to_day(end_time)
         else:
-            self.start_datetime = _utilities.round_to_hour(start_datetime)
-            self.end_datetime = _utilities.round_to_hour(end_datetime)
+            self.start_time = _utilities.round_to_hour(start_time)
+            self.end_time = _utilities.round_to_hour(end_time)
 
-        logging.info(f'Collecting WCOFS stack between {self.start_datetime} and {self.end_datetime}...')
+        logging.info(f'Collecting WCOFS stack between {self.start_time} and {self.end_time}...')
 
         # get all possible model dates that could overlap with the given time interval
-        overlapping_start_datetime = self.start_datetime - datetime.timedelta(hours=WCOFS_MODEL_HOURS['f'] - 24)
-        overlapping_end_datetime = self.end_datetime + datetime.timedelta(hours=-WCOFS_MODEL_HOURS['n'] - 24)
-        model_dates = _utilities.range_daily(_utilities.round_to_day(overlapping_start_datetime, 'floor'),
-                                             _utilities.round_to_day(overlapping_end_datetime, 'ceiling'))
+        overlapping_start_time = self.start_time - datetime.timedelta(hours=WCOFS_MODEL_HOURS['f'] - 24)
+        overlapping_end_time = self.end_time + datetime.timedelta(hours=-WCOFS_MODEL_HOURS['n'] - 24)
+        model_dates = _utilities.range_daily(_utilities.round_to_day(overlapping_start_time, 'floor'),
+                                             _utilities.round_to_day(overlapping_end_time, 'ceiling'))
 
         self.datasets = {}
 
@@ -779,8 +779,8 @@ class WCOFSRange:
             for model_date in model_dates:
                 if self.source == 'avg':
                     # construct start and end days from given time interval
-                    start_duration = self.start_datetime - model_date
-                    end_duration = self.end_datetime - model_date
+                    start_duration = self.start_time - model_date
+                    end_duration = self.end_time - model_date
 
                     start_day = round(start_duration.total_seconds() / (60 * 60 * 24))
                     end_day = round(end_duration.total_seconds() / (60 * 60 * 24))
@@ -808,8 +808,8 @@ class WCOFSRange:
                     model_datetime = model_date + datetime.timedelta(hours=3)
 
                     # construct start and end hours from given time interval
-                    start_duration = self.start_datetime - model_datetime
-                    end_duration = self.end_datetime - model_datetime
+                    start_duration = self.start_time - model_datetime
+                    end_duration = self.end_time - model_datetime
 
                     start_hour = round(start_duration.total_seconds() / (60 * 60))
                     if start_hour <= WCOFS_MODEL_HOURS['n']:
@@ -860,7 +860,7 @@ class WCOFSRange:
             self.variable_grids = WCOFSDataset.variable_grids
         else:
             raise _utilities.NoDataError(
-                f'No WCOFS datasets found between {self.start_datetime} and {self.end_datetime}.')
+                f'No WCOFS datasets found between {self.start_time} and {self.end_time}.')
 
     def data(self, variable: str, model_datetime: datetime.datetime, time_delta: int) -> numpy.ndarray:
         """
@@ -918,28 +918,28 @@ class WCOFSRange:
             del running_futures
         return output_data
 
-    def data_stacks(self, variable: str, start_datetime: datetime.datetime = None,
-                    end_datetime: datetime.datetime = None) -> dict:
+    def data_stacks(self, variable: str, start_time: datetime.datetime = None,
+                    end_time: datetime.datetime = None) -> dict:
         """
         Return dictionary of data for each model run within the given variable and datetime.
 
         :param variable: name of variable to use
-        :param start_datetime: beginning of time interval
-        :param end_datetime: end of time interval
+        :param start_time: beginning of time interval
+        :param end_time: end of time interval
         :return: dictionary of data for every model for every time in the given time interval
         """
 
         logging.debug(f'Aggregating {variable} data...')
 
-        start_datetime = start_datetime if start_datetime is not None else self.start_datetime
-        end_datetime = end_datetime if end_datetime is not None else self.end_datetime
+        start_time = start_time if start_time is not None else self.start_time
+        end_time = end_time if end_time is not None else self.end_time
 
         if self.source == 'avg':
-            time_range = _utilities.range_daily(_utilities.round_to_day(start_datetime),
-                                                _utilities.round_to_day(end_datetime))
+            time_range = _utilities.range_daily(_utilities.round_to_day(start_time),
+                                                _utilities.round_to_day(end_time))
         else:
-            time_range = _utilities.range_hourly(_utilities.round_to_hour(start_datetime),
-                                                 _utilities.round_to_hour(end_datetime))
+            time_range = _utilities.range_hourly(_utilities.round_to_hour(start_time),
+                                                 _utilities.round_to_hour(end_time))
 
         output_data = {}
 
@@ -959,21 +959,21 @@ class WCOFSRange:
 
         return output_data
 
-    def data_averages(self, variable: str, start_datetime: datetime.datetime = None,
-                      end_datetime: datetime.datetime = None) -> dict:
+    def data_averages(self, variable: str, start_time: datetime.datetime = None,
+                      end_time: datetime.datetime = None) -> dict:
         """
         Collect averaged data for every time index in given time interval.
 
         :param variable: name of variable to average
-        :param start_datetime: beginning of time interval
-        :param end_datetime: end of time interval
+        :param start_time: beginning of time interval
+        :param end_time: end of time interval
         :return: dictionary of data for every model in the given datetime
         """
 
-        start_datetime = start_datetime if start_datetime is not None else self.start_datetime
-        end_datetime = end_datetime if end_datetime is not None else self.end_datetime
+        start_time = start_time if start_time is not None else self.start_time
+        end_time = end_time if end_time is not None else self.end_time
 
-        input_data = self.data_stacks(variable, start_datetime, end_datetime)
+        input_data = self.data_stacks(variable, start_time, end_time)
         stacked_arrays = {}
 
         for _, data_stack in input_data.items():
@@ -1005,7 +1005,7 @@ class WCOFSRange:
 
     def write_rasters(self, output_dir: str, variables: Collection[str] = None, filename_suffix: str = None,
                       study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
-                      start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
+                      start_time: datetime.datetime = None, end_time: datetime.datetime = None,
                       x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999, driver: str = 'GTiff'):
         """
         Write raster data of given variables to given output directory, averaged over given time interval.
@@ -1014,8 +1014,8 @@ class WCOFSRange:
         :param variables: variable names to use
         :param filename_suffix: suffix for filenames
         :param study_area_polygon_filename: path to vector file containing study area boundary
-        :param start_datetime: beginning of time interval
-        :param end_datetime: end of time interval
+        :param start_time: beginning of time interval
+        :param end_time: end of time interval
         :param x_size: cell size of output grid in X direction
         :param y_size: cell size of output grid in Y direction
         :param fill_value: desired fill value of output
@@ -1080,7 +1080,7 @@ class WCOFSRange:
         # concurrently populate dictionary with averaged data within given time interval for each variable
         with futures.ThreadPoolExecutor() as concurrency_pool:
             running_futures = {
-                concurrency_pool.submit(self.data_averages, variable, start_datetime, end_datetime): variable for
+                concurrency_pool.submit(self.data_averages, variable, start_time, end_time): variable for
                 variable in variables if variable not in ['dir', 'mag']}
 
             for completed_future in futures.as_completed(running_futures):
@@ -1094,10 +1094,10 @@ class WCOFSRange:
             v_name = 'ssv'
 
             if u_name not in variable_data_stack_averages:
-                variable_data_stack_averages[u_name] = self.data_averages(u_name, start_datetime, end_datetime)
+                variable_data_stack_averages[u_name] = self.data_averages(u_name, start_time, end_time)
 
             if v_name not in variable_data_stack_averages:
-                variable_data_stack_averages[v_name] = self.data_averages(v_name, start_datetime, end_datetime)
+                variable_data_stack_averages[v_name] = self.data_averages(v_name, start_time, end_time)
 
         logging.debug('parallel data aggregation took ' +
                       f'{(datetime.datetime.now() - start_time).total_seconds(): .2=f} seconds')
@@ -1217,15 +1217,15 @@ class WCOFSRange:
                         output_raster.write(masked_data, 1)
 
     def write_vector(self, output_filename: str, variables: Collection[str] = None,
-                     start_datetime: datetime.datetime = None,
-                     end_datetime: datetime.datetime = None):
+                     start_time: datetime.datetime = None,
+                     end_time: datetime.datetime = None):
         """
         Write average of surface velocity vector data for all hours in the given time interval to a single layer of the provided output file.
 
         :param output_filename: path to output file
         :param variables: variable names to write to vector file
-        :param start_datetime: beginning of time interval
-        :param end_datetime: end of time interval
+        :param start_time: beginning of time interval
+        :param end_time: end of time interval
         """
 
         if variables is None:
@@ -1238,7 +1238,7 @@ class WCOFSRange:
         # concurrently populate dictionary with averaged data within given time interval for each variable
         with futures.ThreadPoolExecutor() as concurrency_pool:
             running_futures = {
-                concurrency_pool.submit(self.data_averages, variable, start_datetime, end_datetime): variable for
+                concurrency_pool.submit(self.data_averages, variable, start_time, end_time): variable for
                 variable in variables}
 
             for completed_future in futures.as_completed(running_futures):
@@ -1341,11 +1341,11 @@ class WCOFSRange:
                 grid = self.variable_grids[variable]
 
                 if self.source == 'avg':
-                    model_times = _utilities.range_daily(_utilities.round_to_day(self.start_datetime),
-                                                         _utilities.round_to_day(self.end_datetime))
+                    model_times = _utilities.range_daily(_utilities.round_to_day(self.start_time),
+                                                         _utilities.round_to_day(self.end_time))
                 else:
-                    model_times = _utilities.range_hourly(_utilities.round_to_hour(self.start_datetime),
-                                                          _utilities.round_to_hour(self.end_datetime))
+                    model_times = _utilities.range_hourly(_utilities.round_to_hour(self.start_time),
+                                                          _utilities.round_to_hour(self.end_time))
 
                 data = {}
                 time_deltas = None
@@ -1396,7 +1396,7 @@ class WCOFSRange:
         self.to_xarray(variables, mean).to_netcdf(output_file)
 
     def __repr__(self):
-        used_params = [self.start_datetime.__repr__(), self.end_datetime.__repr__()]
+        used_params = [self.start_time.__repr__(), self.end_time.__repr__()]
         optional_params = [self.source, self.time_deltas, self.x_size, self.y_size, self.grid_filename, self.source_url,
                            self.wcofs_string]
 
@@ -1505,10 +1505,10 @@ def write_convex_hull(netcdf_dataset: xarray.Dataset, output_filename: str, grid
 if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIR, r'output\test')
 
-    start_datetime = datetime.datetime(2018, 11, 8)
-    end_datetime = start_datetime + datetime.timedelta(days=1)
+    start_time = datetime.datetime(2018, 11, 8)
+    end_time = start_time + datetime.timedelta(days=1)
 
-    wcofs_range = WCOFSRange(start_datetime, end_datetime, source='avg')
+    wcofs_range = WCOFSRange(start_time, end_time, source='avg')
     wcofs_range.write_rasters(output_dir, variables=['sss', 'sst', 'ssu', 'ssv', 'zeta'])
 
     print('done')

@@ -19,7 +19,7 @@ import rasterio
 import scipy.interpolate
 import xarray
 
-from PyOFS import DATA_DIR, CRS_EPSG
+from PyOFS import CRS_EPSG, DATA_DIR
 from PyOFS.dataset import _utilities
 
 DATA_VARIABLES = {'ssu': 'u', 'ssv': 'v', 'dopx': 'DOPx', 'dopy': 'DOPy'}
@@ -42,39 +42,39 @@ class HFRRange:
 
     grid_transform = None
 
-    def __init__(self, start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
+    def __init__(self, start_time: datetime.datetime = None, end_time: datetime.datetime = None,
                  resolution: int = 6,
                  source: str = None):
         """
         Creates new dataset object from source.
 
-        :param start_datetime: beginning of time interval
-        :param end_datetime: end of time interval
+        :param start_time: beginning of time interval
+        :param end_time: end of time interval
         :param resolution: desired dataset resolution in kilometers
         :param source: either UCSD (University of California San Diego) or NDBC (National Data Buoy Center); NDBC has larger extent but only for the past 4 days
         :raises NoDataError: if dataset does not exist.
         """
 
-        if start_datetime is None:
-            start_datetime = datetime.datetime.now()
+        if start_time is None:
+            start_time = datetime.datetime.now()
 
-        self.start_datetime = start_datetime
+        self.start_time = start_time
 
-        if end_datetime is None:
-            end_datetime = self.start_datetime + datetime.timedelta(days=1)
+        if end_time is None:
+            end_time = self.start_time + datetime.timedelta(days=1)
 
-        if end_datetime > datetime.datetime.utcnow():
+        if end_time > datetime.datetime.utcnow():
             # HFR near real time delay is 1 hour behind UTC
-            self.end_datetime = datetime.datetime.utcnow() - NRT_DELAY
+            self.end_time = datetime.datetime.utcnow() - NRT_DELAY
         else:
-            self.end_datetime = end_datetime
+            self.end_time = end_time
 
         self.resolution = resolution
 
         # get NDBC dataset if input time is within 4 days, otherwise get UCSD dataset
         if source is not None:
             self.source = source
-        elif (datetime.datetime.now() - self.start_datetime) < datetime.timedelta(days=4):
+        elif (datetime.datetime.now() - self.start_time) < datetime.timedelta(days=4):
             self.source = 'NDBC'
         else:
             self.source = 'UCSD'
@@ -99,7 +99,7 @@ class HFRRange:
                                                        coords=raw_times.coords, dims=raw_times.dims,
                                                        attrs=raw_times.attrs)
 
-        self.netcdf_dataset = self.netcdf_dataset.sel(time=slice(self.start_datetime, self.end_datetime))
+        self.netcdf_dataset = self.netcdf_dataset.sel(time=slice(self.start_time, self.end_time))
 
         logging.info(f'Collecting HFR velocity from {self.source} between ' +
                      f'{str(self.netcdf_dataset["time"].min().values)[:19]}' +
@@ -138,29 +138,29 @@ class HFRRange:
 
         return output_data
 
-    def data_average(self, variable: str, start_datetime: datetime.datetime = None,
-                     end_datetime: datetime.datetime = None, dop_threshold: float = None) -> numpy.ndarray:
+    def data_average(self, variable: str, start_time: datetime.datetime = None,
+                     end_time: datetime.datetime = None, dop_threshold: float = None) -> numpy.ndarray:
         """
         Get data for the specified variable at a single time.
 
         :param variable: variable name
-        :param start_datetime: start of time interval
-        :param end_datetime: end of time interval
+        :param start_time: start of time interval
+        :param end_time: end of time interval
         :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
         :return: array of data
         """
 
-        if start_datetime is None:
-            start_datetime = self.start_datetime
+        if start_time is None:
+            start_time = self.start_time
 
-        if end_datetime is None:
-            end_datetime = self.end_datetime
+        if end_time is None:
+            end_time = self.end_time
 
-        output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(time=slice(start_datetime, end_datetime)).values
+        output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(time=slice(start_time, end_time)).values
 
         if dop_threshold is not None:
-            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold) & (
-                    self.netcdf_dataset['DOPy'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold)).values
+            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=slice(start_time, end_time)) <= dop_threshold) & (
+                    self.netcdf_dataset['DOPy'].sel(time=slice(start_time, end_time)) <= dop_threshold)).values
             output_data[~dop_mask] = numpy.nan
 
         output_data = numpy.nanmean(output_data, axis=0)
@@ -220,32 +220,32 @@ class HFRRange:
             layer.writerecords(layer_records)
 
     def write_vectors(self, output_filename: str, variables: Collection[str] = None,
-                      start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
+                      start_time: datetime.datetime = None, end_time: datetime.datetime = None,
                       dop_threshold: float = 0.5):
         """
         Write HFR data to a layer of the provided output file for every hour in the given time interval.
 
         :param output_filename: path to output file
         :param variables: variable names to use
-        :param start_datetime: beginning of time interval
-        :param end_datetime: end of time interval
+        :param start_time: beginning of time interval
+        :param end_time: end of time interval
         :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
         """
 
         if variables is None:
             variables = DATA_VARIABLES
 
-        if start_datetime is None:
-            start_datetime = self.start_datetime
+        if start_time is None:
+            start_time = self.start_time
 
-        if end_datetime is None:
-            end_datetime = self.end_datetime
+        if end_time is None:
+            end_time = self.end_time
 
-        time_interval_selection = self.netcdf_dataset.sel(time=slice(start_datetime, end_datetime))
+        time_interval_selection = self.netcdf_dataset.sel(time=slice(start_time, end_time))
 
         if dop_threshold is not None:
-            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold) & (
-                    self.netcdf_dataset['DOPy'].sel(time=slice(start_datetime, end_datetime)) <= dop_threshold)).values
+            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=slice(start_time, end_time)) <= dop_threshold) & (
+                    self.netcdf_dataset['DOPy'].sel(time=slice(start_time, end_time)) <= dop_threshold)).values
             time_interval_selection[~dop_mask] = numpy.nan
 
         # create dict to store features
@@ -299,7 +299,7 @@ class HFRRange:
                 layer.writerecords(layer_records)
 
     def write_vector(self, output_filename: str, layer_name: str = 'ssuv', variables: Collection[str] = None,
-                     start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
+                     start_time: datetime.datetime = None, end_time: datetime.datetime = None,
                      dop_threshold: float = 0.5):
         """
         Write average of HFR data for all hours in the given time interval to a single layer of the provided output file.
@@ -307,15 +307,15 @@ class HFRRange:
         :param output_filename: path to output file
         :param layer_name: name of layer to write
         :param variables: variable names to use
-        :param start_datetime: beginning of time interval
-        :param end_datetime: end of time interval
+        :param start_time: beginning of time interval
+        :param end_time: end of time interval
         :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
         """
 
         if variables is None:
             variables = DATA_VARIABLES
 
-        variable_means = {variable: self.data_average(variable, start_datetime, end_datetime, dop_threshold) for
+        variable_means = {variable: self.data_average(variable, start_time, end_time, dop_threshold) for
                           variable in variables}
 
         # define layer schema
@@ -357,8 +357,8 @@ class HFRRange:
             layer.writerecords(layer_records)
 
     def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = '',
-                      variables: Collection[str] = None, start_datetime: datetime.datetime = None,
-                      end_datetime: datetime.datetime = None, fill_value: float = -9999, driver: str = 'GTiff',
+                      variables: Collection[str] = None, start_time: datetime.datetime = None,
+                      end_time: datetime.datetime = None, fill_value: float = -9999, driver: str = 'GTiff',
                       dop_threshold: float = None):
         """
         Write average of HFR data for all hours in the given time interval to rasters.
@@ -367,8 +367,8 @@ class HFRRange:
         :param filename_prefix: prefix for output filenames
         :param filename_suffix: suffix for output filenames
         :param variables: variable names to use
-        :param start_datetime: beginning of time interval
-        :param end_datetime: end of time interval
+        :param start_time: beginning of time interval
+        :param end_time: end of time interval
         :param fill_value: desired fill value of output
         :param driver: string of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
         :param dop_threshold: threshold for dilution of precision above which data is not useable
@@ -380,19 +380,19 @@ class HFRRange:
         if filename_suffix is not '':
             filename_suffix = f'_{filename_suffix}'
 
-        variable_means = {variable: self.data_average(variable, start_datetime, end_datetime, dop_threshold) for
+        variable_means = {variable: self.data_average(variable, start_time, end_time, dop_threshold) for
                           variable in variables if variable not in ['dir', 'mag']}
 
         if 'dir' in variables or 'mag' in variables:
             if 'ssu' in variables:
                 u_data = variable_means['ssu']
             else:
-                u_data = self.data_average('ssu', start_datetime, end_datetime, dop_threshold)
+                u_data = self.data_average('ssu', start_time, end_time, dop_threshold)
 
             if 'ssv' in variables:
                 v_data = variable_means['ssv']
             else:
-                v_data = self.data_average('ssv', start_datetime, end_datetime, dop_threshold)
+                v_data = self.data_average('ssv', start_time, end_time, dop_threshold)
 
             # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
             variable_means['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (180 / numpy.pi)
@@ -444,15 +444,15 @@ class HFRRange:
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(numpy.flipud(raster_data), 1)
 
-    def to_xarray(self, variables: Collection[str] = None, start_datetime: datetime.datetime = None,
-                  end_datetime: datetime.datetime = None, mean: bool = True,
+    def to_xarray(self, variables: Collection[str] = None, start_time: datetime.datetime = None,
+                  end_time: datetime.datetime = None, mean: bool = True,
                   dop_threshold: float = 0.5) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
 
         :param variables: variables to use
-        :param start_datetime: beginning of time interval
-        :param end_datetime: end of time interval
+        :param start_time: beginning of time interval
+        :param end_time: end of time interval
         :param mean: whether to average all time indices
         :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
         :return: xarray dataset of given variables
@@ -463,16 +463,16 @@ class HFRRange:
         if variables is None:
             variables = DATA_VARIABLES
 
-        if start_datetime is None:
-            start_datetime = self.start_datetime
+        if start_time is None:
+            start_time = self.start_time
 
-        if end_datetime is None:
-            end_datetime = self.end_datetime
+        if end_time is None:
+            end_time = self.end_time
 
         if mean:
             for variable in variables:
-                output_data = self.data_average(variable, start_datetime=start_datetime,
-                                                end_datetime=end_datetime, dop_threshold=dop_threshold)
+                output_data = self.data_average(variable, start_time=start_time,
+                                                end_time=end_time, dop_threshold=dop_threshold)
 
                 output_dataset.update({variable: xarray.DataArray(output_data,
                                                                   coords={'lat': self.netcdf_dataset['lat'],
@@ -481,7 +481,7 @@ class HFRRange:
         else:
             for variable in variables:
                 output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(
-                    time=slice(start_datetime, end_datetime)).values
+                    time=slice(start_time, end_time)).values
 
                 if dop_threshold is not None:
                     dop_mask = ((self.netcdf_dataset['DOPx'] <= dop_threshold) & (
@@ -496,22 +496,22 @@ class HFRRange:
 
         return output_dataset
 
-    def to_netcdf(self, output_file: str, variables: Collection[str] = None, start_datetime: datetime.datetime = None,
-                  end_datetime: datetime.datetime = None, mean: bool = True):
+    def to_netcdf(self, output_file: str, variables: Collection[str] = None, start_time: datetime.datetime = None,
+                  end_time: datetime.datetime = None, mean: bool = True):
         """
         Writes to NetCDF file.
 
         :param output_file: output file to write
         :param variables: variables to use
-        :param start_datetime: beginning of time interval
-        :param end_datetime: end of time interval
+        :param start_time: beginning of time interval
+        :param end_time: end of time interval
         :param mean: whether to average all time indices
         """
 
-        self.to_xarray(variables, start_datetime, end_datetime, mean).to_netcdf(output_file)
+        self.to_xarray(variables, start_time, end_time, mean).to_netcdf(output_file)
 
     def __repr__(self):
-        used_params = [self.start_datetime.__repr__(), self.end_datetime.__repr__()]
+        used_params = [self.start_time.__repr__(), self.end_time.__repr__()]
         optional_params = [self.resolution]
 
         for param in optional_params:
@@ -534,10 +534,10 @@ if __name__ == '__main__':
 
     output_dir = os.path.join(DATA_DIR, r'output\test')
 
-    start_datetime = datetime.datetime(2019, 2, 6)
-    end_datetime = start_datetime + datetime.timedelta(days=1)
+    start_time = datetime.datetime(2019, 2, 6)
+    end_time = start_time + datetime.timedelta(days=1)
 
-    hfr_range = HFRRange(start_datetime, end_datetime, source='UCSD')
+    hfr_range = HFRRange(start_time, end_time, source='UCSD')
 
     cell = hfr_range.netcdf_dataset.isel(lon=67, lat=270)
 

@@ -92,58 +92,58 @@ def round_to_ten_minutes(datetime_object: datetime.datetime) -> datetime.datetim
     return datetime_object.replace(minute=int(round(datetime_object.minute, -1)), second=0, microsecond=0)
 
 
-def range_daily(start_datetime: datetime.datetime, end_datetime: datetime.datetime) -> list:
+def range_daily(start_time: datetime.datetime, end_time: datetime.datetime) -> list:
     """
     Generate range of times between given times at day intervals.
 
-    :param start_datetime: beginning of time interval
-    :param end_datetime: end of time interval
+    :param start_time: beginning of time interval
+    :param end_time: end of time interval
     :return: range of datetimes
     """
 
-    duration = end_datetime - start_datetime
+    duration = end_time - start_time
     days = duration.days
     stride = 1 if days > 0 else -1
 
-    return [start_datetime + datetime.timedelta(days=day) for day in range(0, days, stride)]
+    return [start_time + datetime.timedelta(days=day) for day in range(0, days, stride)]
 
 
-# return numpy.arange(start_datetime, end_datetime, dtype='datetime64[D]')
+# return numpy.arange(start_time, end_time, dtype='datetime64[D]')
 
 
-def range_hourly(start_datetime: datetime.datetime, end_datetime: datetime.datetime) -> list:
+def range_hourly(start_time: datetime.datetime, end_time: datetime.datetime) -> list:
     """
     Generate range of times between given times at hour intervals.
 
-    :param start_datetime: beginning of time interval
-    :param end_datetime: end of time interval
+    :param start_time: beginning of time interval
+    :param end_time: end of time interval
     :return: range of datetimes
     """
 
-    duration = end_datetime - start_datetime
+    duration = end_time - start_time
     hours = int(duration.total_seconds() / 3600)
     stride = 1 if duration.days > 0 else -1
 
-    return [start_datetime + datetime.timedelta(hours=hour) for hour in range(0, hours, stride)]
+    return [start_time + datetime.timedelta(hours=hour) for hour in range(0, hours, stride)]
 
 
-# return numpy.arange(start_datetime, end_datetime, dtype='datetime64[h]')
+# return numpy.arange(start_time, end_time, dtype='datetime64[h]')
 
 
-def ten_minute_range(start_datetime: datetime.datetime, end_datetime: datetime.datetime) -> list:
+def ten_minute_range(start_time: datetime.datetime, end_time: datetime.datetime) -> list:
     """
     Generate range of times between given times at ten minute intervals.
 
-    :param start_datetime: beginning of time interval
-    :param end_datetime: end of time interval
+    :param start_time: beginning of time interval
+    :param end_time: end of time interval
     :return: range of datetimes
     """
 
-    duration = end_datetime - start_datetime
+    duration = end_time - start_time
     minutes = int(duration.total_seconds() / 60)
     stride = 10
 
-    return [start_datetime + datetime.timedelta(minutes=minute) for minute in range(0, minutes + 1, stride)]
+    return [start_time + datetime.timedelta(minutes=minute) for minute in range(0, minutes + 1, stride)]
 
 
 def get_masked_data(masked_constant: numpy.ma.core.MaskedConstant) -> object:

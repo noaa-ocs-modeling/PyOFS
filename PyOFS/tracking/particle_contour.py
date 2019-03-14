@@ -9,8 +9,10 @@ Created on Feb 27, 2019
 
 import datetime
 import math
+import os
 from typing import Tuple
 
+import cartopy.feature
 import numpy
 import pyproj
 import shapely.geometry
@@ -78,7 +80,8 @@ class VelocityField:
         :return: u value at coordinate in m/s
         """
 
-        return self.field['u'].sel(time=time, x=lon, y=lat, method='nearest').values.item()
+        x, y = pyproj.transform(WGS84, WebMercator, lon, lat)
+        return self.field['u'].sel(time=time, x=x, y=y, method='nearest').values.item()
 
     def v(self, lon: float, lat: float, time: datetime.datetime) -> float:
         """
@@ -90,7 +93,8 @@ class VelocityField:
         :return: v value at coordinate in m/s
         """
 
-        return self.field['v'].sel(time=time, x=lon, y=lat, method='nearest').values.item()
+        x, y = pyproj.transform(WGS84, WebMercator, lon, lat)
+        return self.field['v'].sel(time=time, x=x, y=y, method='nearest').values.item()
 
     def velocity(self, lon: float, lat: float, time: datetime.datetime) -> float:
         """
@@ -116,10 +120,10 @@ class VelocityField:
 
         return (math.atan2(self.u(lon, lat, time), self.v(lon, lat, time)) + math.pi) * (180 / math.pi)
 
-    def plot(self, time: datetime.datetime):
-        quiver_plot = pyplot.quiver(self.field['x'], self.field['y'],
-                                    self.field['u'].sel(time=time, method='nearest'),
-                                    self.field['v'].sel(time=time, method='nearest'), units='width')
+    def plot(self, time: datetime.datetime, color: str = None):
+        quiver_plot = pyplot.quiver(X=self.field['x'], Y=self.field['y'],
+                                    U=self.field['u'].sel(time=time, method='nearest'),
+                                    V=self.field['v'].sel(time=time, method='nearest'), C=color, units='width')
         pyplot.quiverkey(quiver_plot, 0.9, 0.9, 2, r'$2 \frac{m}{s}$', labelpos='E', coordinates='figure')
 
     def __getitem__(self, lon: float, lat: float, time: datetime.datetime) -> Tuple[float, float]:
@@ -191,11 +195,19 @@ class Particle:
 
         return self.u, self.v
 
+    def plot(self, color: str = None):
+        lon, lat = pyproj.transform(WebMercator, WGS84, self.x, self.y)
+
+        if color is None:
+            pyplot.plot(lon, lat)
+        else:
+            pyplot.plot(lon, lat, color=color)
+
     def __str__(self):
         return f'{self.time} {self.coordinates()} -> {self.velocity()}'
 
 
-class Contour:
+class ParticleContour:
     """
     Contour of points within a velocity field.
     """
@@ -206,7 +218,7 @@ class Contour:
 
         :param field: velocity field
         :param time: starting time
-        :param points: list of coordinate tuples (x, y)
+        :param points: list of coordinate tuples (lon, lat)
         """
 
         self.field = field
@@ -235,6 +247,14 @@ class Contour:
 
         self.polygon = shapely.geometry.Polygon([(particle.x, particle.y) for particle in self.particles])
 
+    def plot(self, color: str = None):
+        lon, lat = zip(*[pyproj.transform(WebMercator, WGS84, particle.x, particle.y) for particle in self.particles])
+
+        if color is None:
+            pyplot.plot(lon, lat)
+        else:
+            pyplot.plot(lon, lat, color=color)
+
     def area(self):
         return self.polygon.area
 
@@ -245,7 +265,7 @@ class Contour:
         return f'contour at time {self.time} with bounds {self.bounds()} and area {self.area()} m^2'
 
 
-class CircleContour(Contour):
+class CircleContour(ParticleContour):
     def __init__(self, field: VelocityField, time: datetime.datetime, center: tuple, radius: float,
                  interval: float = 500):
         """
@@ -253,16 +273,23 @@ class CircleContour(Contour):
 
         :param field: velocity field
         :param time: starting time
-        :param center: central point (x, y)
+        :param center: central point (lon, lat)
         :param radius: radius in m
         :param interval: interval between points in m
         """
 
-        points = []
+        center_x, center_y = pyproj.transform(WGS84, WebMercator, center[0], center[1])
+        circumference = 2 * math.pi * radius
+        num_points = round(circumference / interval)
+
+        points = [pyproj.transform(WebMercator, WGS84, math.cos(2 * math.pi / num_points * x) * radius + center_x,
+                                   math.sin(2 * math.pi / num_points * x) * radius + center_y) for x in
+                  range(0, num_points + 1)]
+
         super().__init__(field, time, points)
 
 
-class RectangleContour(Contour):
+class RectangleContour(ParticleContour):
     def __init__(self, field: VelocityField, time: datetime.datetime, west_lon: float, east_lon: float,
                  south_lat: float, north_lat: float, interval: float = 500):
         """
@@ -315,41 +342,49 @@ class RectangleContour(Contour):
 
 
 if __name__ == '__main__':
-    # sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
+    from pandas.plotting import register_matplotlib_converters
 
-    from PyOFS.dataset import hfr
+    register_matplotlib_converters()
 
-    model_datetime = datetime.datetime(2019, 3, 13)
-    # model_datetime.replace(hour=3, minute=0, second=0, microsecond=0)
+    data_path = r"C:\Data\develop\output\test\rtofs_20190313.nc"
+    data_datetime = datetime.datetime(2019, 3, 13)
+    contour_center = (-123.79820, 37.31710)
+    contour_radius = 100000
+
+    if not os.path.exists(data_path):
+        from PyOFS.dataset import wcofs
+
+        print('Writing data...')
+        wcofs.WCOFSDataset(data_datetime).to_xarray(variables=['ssu', 'ssv']).to_netcdf(data_path)
 
     print('Collecting data...')
-    # data = wcofs.WCOFSDataset(model_datetime, source='avg').to_xarray(variables=('ssu', 'ssv'))
-    data = hfr.HFRRange(model_datetime, model_datetime + datetime.timedelta(days=1)).to_xarray(
-        variables=['ssu', 'ssv'], mean=False)
+    data = xarray.open_dataset(data_path)
 
     print('Creating velocity field...')
     velocity_field = VelocityField(data, u_name='ssu', v_name='ssv')
-    print(f'Velocity field created')
-
-    # for time in velocity_field.field['time']:
-    #     print(f'Plotting {time}')
-    #     velocity_field.plot(time)
-    #     break
-    #
-    # pyplot.show()
 
     print('Creating starting contour...')
-    contour = RectangleContour(velocity_field,
-                               datetime.datetime.utcfromtimestamp(velocity_field.field['time'][0].item() * 1e-9),
-                               west_lon=-122.99451, east_lon=-122.73859, south_lat=36.82880, north_lat=36.93911)
+    contour = CircleContour(velocity_field,
+                            datetime.datetime.utcfromtimestamp(velocity_field.field['time'][0].item() * 1e-9),
+                            center=contour_center, radius=contour_radius)
     print(f'Contour created: {contour}')
 
-    for t_delta in numpy.diff(velocity_field.field['time']):
-        timedelta = datetime.timedelta(seconds=int(t_delta) * 1e-9)
+    time_deltas = numpy.diff(velocity_field.field['time'])
+
+    ax = pyplot.axes(projection=cartopy.crs.PlateCarree())
+    ax.set_prop_cycle(color=[pyplot.cm.cool(color_index) for color_index in numpy.linspace(0, 1, len(time_deltas))])
+    ax.add_feature(cartopy.feature.LAND)
+
+    for time_delta in time_deltas:
+        timedelta = datetime.timedelta(seconds=int(time_delta) * 1e-9)
 
         previous_area = contour.area()
         contour.step(timedelta)
         area_change = contour.area() - previous_area
         print(f'step {timedelta} to {contour.time}: change in area was {area_change} m^2')
+
+        contour.plot()
+
+    pyplot.show()
 
     print('done')
