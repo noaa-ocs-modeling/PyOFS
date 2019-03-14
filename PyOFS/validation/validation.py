@@ -8,8 +8,8 @@ import xarray
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
-from main import DATA_DIR
-from PyOFS.dataset import interpolate_grid, hfr, viirs
+from PyOFS import DATA_DIR
+from PyOFS.dataset import hfr, viirs, wcofs
 
 WORKSPACE_DIR = os.path.join(DATA_DIR, 'validation')
 
@@ -130,7 +130,7 @@ def interpolate_grids(datasets: dict) -> dict:
                     sorted(datasets['wcofs_sst_noDA'][wcofs_dimensions['sst'][0]].values, reverse=True))).items():
             try:
 
-                sst_noDA_future = concurrency_pool.submit(interpolate_grid,
+                sst_noDA_future = concurrency_pool.submit(wcofs.interpolate_grid,
                                                           datasets['wcofs_sst_noDA']['lon'].values,
                                                           datasets['wcofs_sst_noDA']['lat'].values,
                                                           datasets['wcofs_sst_noDA']['temp'][time_delta_index, :,
@@ -139,7 +139,7 @@ def interpolate_grids(datasets: dict) -> dict:
                                                           datasets['viirs']['lat'].values,
                                                           'linear')
 
-                sst_DA_future = concurrency_pool.submit(interpolate_grid,
+                sst_DA_future = concurrency_pool.submit(wcofs.interpolate_grid,
                                                         datasets['wcofs_sst_DA']['lon'].values,
                                                         datasets['wcofs_sst_DA']['lat'].values,
                                                         datasets['wcofs_sst_DA']['temp'][time_delta_index, :,
@@ -148,7 +148,7 @@ def interpolate_grids(datasets: dict) -> dict:
                                                         datasets['viirs']['lat'].values,
                                                         'linear')
 
-                u_noDA_future = concurrency_pool.submit(interpolate_grid,
+                u_noDA_future = concurrency_pool.submit(wcofs.interpolate_grid,
                                                         datasets['wcofs_u_noDA']['lon'].values,
                                                         datasets['wcofs_u_noDA']['lat'].values,
                                                         datasets['wcofs_u_noDA']['u'][time_delta_index, :,
@@ -157,7 +157,7 @@ def interpolate_grids(datasets: dict) -> dict:
                                                         datasets['hfr']['lat'].values,
                                                         'linear')
 
-                u_DA_future = concurrency_pool.submit(interpolate_grid,
+                u_DA_future = concurrency_pool.submit(wcofs.interpolate_grid,
                                                       datasets['wcofs_u_DA']['lon'].values,
                                                       datasets['wcofs_u_DA']['lat'].values,
                                                       datasets['wcofs_u_DA']['u'][time_delta_index, :, :].values,
@@ -165,7 +165,7 @@ def interpolate_grids(datasets: dict) -> dict:
                                                       datasets['hfr']['lat'].values,
                                                       'linear')
 
-                v_noDA_future = concurrency_pool.submit(interpolate_grid,
+                v_noDA_future = concurrency_pool.submit(wcofs.interpolate_grid,
                                                         datasets['wcofs_v_noDA']['lon'].values,
                                                         datasets['wcofs_v_noDA']['lat'].values,
                                                         datasets['wcofs_v_noDA']['v'][time_delta_index, :,
@@ -174,7 +174,7 @@ def interpolate_grids(datasets: dict) -> dict:
                                                         datasets['hfr']['lat'].values,
                                                         'linear')
 
-                v_DA_future = concurrency_pool.submit(interpolate_grid,
+                v_DA_future = concurrency_pool.submit(wcofs.interpolate_grid,
                                                       datasets['wcofs_v_DA']['lon'].values,
                                                       datasets['wcofs_v_DA']['lat'].values,
                                                       datasets['wcofs_v_DA']['v'][time_delta_index, :, :].values,
