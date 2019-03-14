@@ -7,12 +7,11 @@ Created on Aug 9, 2018
 @author: zachary.burnett
 """
 
-import sys
-
 import datetime
 import ftplib
 import logging
 import os
+
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
@@ -94,9 +93,10 @@ if __name__ == '__main__':
                 if not (os.path.exists(output_path) and os.stat(output_path).st_size > 232000):
                     with open(output_path, 'wb') as output_file:
                         ftp_connection.retrbinary(f'RETR {input_path}', output_file.write)
-                        logging.info(f'Copied "{input_path}" ' +
-                                     f'({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s) ' +
-                                     f' to "{output_path}", {os.stat(output_path).st_size / 1000} KB')
+                        logging.info(
+                            f'Copied "{input_path}" to "{output_path}" ' +
+                            f'({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s, ' +
+                            f'{os.stat(output_path).st_size / 1000} KB)')
                         num_downloads += 1
                 else:
                     # only write 'file exists' message on the first run of the day
