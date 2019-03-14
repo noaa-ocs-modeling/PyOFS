@@ -42,7 +42,8 @@ class HFRRange:
 
     grid_transform = None
 
-    def __init__(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime, resolution: int = 6,
+    def __init__(self, start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
+                 resolution: int = 6,
                  source: str = None):
         """
         Creates new dataset object from source.
@@ -54,7 +55,14 @@ class HFRRange:
         :raises NoDataError: if dataset does not exist.
         """
 
+        if start_datetime is None:
+            start_datetime = datetime.datetime.now()
+
         self.start_datetime = start_datetime
+
+        if end_datetime is None:
+            end_datetime = self.start_datetime + datetime.timedelta(days=1)
+
         if end_datetime > datetime.datetime.utcnow():
             # HFR near real time delay is 1 hour behind UTC
             self.end_datetime = datetime.datetime.utcnow() - NRT_DELAY
@@ -77,6 +85,8 @@ class HFRRange:
         elif self.source == 'UCSD':
             self.url = f'{SOURCE_URLS["UCSD"]}/{self.resolution}km/hourly/RTV/' + \
                        f'HFRADAR_US_West_Coast_{self.resolution}km_Resolution_Hourly_RTV_best.ncd'
+        else:
+            self.url = self.source
 
         try:
             self.netcdf_dataset = xarray.open_dataset(self.url)

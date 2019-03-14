@@ -1,5 +1,4 @@
 import sys
-
 import os
 
 from config import CONDA_ENV, DATA_DIR

@@ -1,2 +1,2 @@
-CONDA_ENV = r'D:\Environments\conda\GIS'
-DATA_DIR = r'D:\data'
+CONDA_ENV = r'C:\Environments\conda\GIS'
+DATA_DIR = r'C:\Data\OFS'

@@ -59,7 +59,7 @@ class VIIRSDataset:
     study_area_bounds = None
     study_area_coordinates = None
 
-    def __init__(self, granule_datetime: datetime.datetime, satellite: str = 'NPP',
+    def __init__(self, granule_datetime: datetime.datetime = None, satellite: str = 'NPP',
                  study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, algorithm: str = 'OSPO',
                  version: str = None):
         """
@@ -72,6 +72,9 @@ class VIIRSDataset:
         :param version: ACSPO algorithm version
         :raises NoDataError: if dataset does not exist
         """
+
+        if granule_datetime is None:
+            granule_datetime = datetime.datetime.now()
 
         # round minute to nearest 10 minutes (VIIRS data interval)
         self.granule_datetime = _utilities.round_to_ten_minutes(granule_datetime)
