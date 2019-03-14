@@ -67,7 +67,7 @@ class RTOFSDataset:
     Real-Time Ocean Forecasting System (RTOFS) NetCDF dataset.
     """
 
-    def __init__(self, model_date: datetime.datetime, source: str = '2ds', time_interval: str = 'daily',
+    def __init__(self, model_date: datetime.datetime = None, source: str = '2ds', time_interval: str = 'daily',
                  study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME):
         """
         Creates new dataset object from datetime and given model parameters.
@@ -78,7 +78,14 @@ class RTOFSDataset:
         :param study_area_polygon_filename: filename of vector file containing study area boundary
         """
 
-        self.model_datetime = model_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        if model_date is None:
+            model_date = datetime.datetime.now()
+
+        if type(model_date) is datetime.date:
+            self.model_datetime = datetime.datetime.combine(model_date, datetime.datetime.min.time())
+        else:
+            self.model_datetime = model_date.replace(hour=0, minute=0, second=0, microsecond=0)
+
         self.source = source
         self.time_interval = time_interval
 

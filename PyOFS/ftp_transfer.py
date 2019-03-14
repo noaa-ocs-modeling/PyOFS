@@ -7,6 +7,8 @@ Created on Aug 9, 2018
 @author: zachary.burnett
 """
 
+import sys
+
 import datetime
 import ftplib
 import logging

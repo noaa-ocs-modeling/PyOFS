@@ -7,13 +7,13 @@ Created on Aug 21, 2018
 @author: zachary.burnett
 """
 
+import sys
+
 import datetime
 import logging
 import os
-import sys
-from typing import Collection, Union
-
 import pytz
+from typing import Collection, Union
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 

@@ -1,7 +1,7 @@
-import os
 import sys
+import os
 
-from config import DATA_DIR, CONDA_ENV
+from config import CONDA_ENV, DATA_DIR
 
 sys.path.append(os.path.join(CONDA_ENV, 'bin'))
 sys.path.append(os.path.join(CONDA_ENV, 'Scripts'))

@@ -12,7 +12,7 @@ import logging
 import os
 import threading
 from concurrent import futures
-from typing import Collection, Union
+from typing import Collection
 
 import fiona
 import fiona.crs
@@ -70,10 +70,9 @@ class WCOFSDataset:
     masks = None
     angle = None
 
-    def __init__(self, model_date: Union[datetime.date, datetime.datetime], source: str = None,
-                 time_deltas: list = None,
-                 x_size: float = None, y_size: float = None, grid_filename: str = None, source_url: str = None,
-                 wcofs_string: str = 'wcofs'):
+    def __init__(self, model_date: datetime.datetime = None, source: str = None,
+                 time_deltas: list = None, x_size: float = None, y_size: float = None, grid_filename: str = None,
+                 source_url: str = None, wcofs_string: str = 'wcofs'):
         """
         Creates new dataset object from datetime and given model parameters.
 
@@ -88,6 +87,17 @@ class WCOFSDataset:
         :raises ValueError: if source is not valid
         :raises NoDataError: if no datasets exist for the given model run
         """
+
+        if model_date is None:
+            model_date = datetime.datetime.now()
+
+        # set start time to WCOFS model run time (0300 UTC)
+        if type(model_date) is datetime.date:
+            self.model_datetime = datetime.datetime.combine(model_date,
+                                                            datetime.datetime.min.time()) + datetime.timedelta(
+                hours=3)
+        else:
+            self.model_datetime = model_date.replace(hour=3, minute=0, second=0, microsecond=0)
 
         valid_source_strings = ['stations', 'fields', 'avg', '2ds']
 
@@ -112,13 +122,6 @@ class WCOFSDataset:
 
         if grid_filename is None:
             grid_filename = WCOFS_4KM_GRID_FILENAME
-
-        # set start time to WCOFS model run time (0300 UTC)
-        if type(model_date) is datetime.date:
-            self.model_datetime = datetime.datetime.combine(model_date,
-                                                            datetime.datetime.min.time()) + datetime.timedelta(hours=3)
-        else:
-            self.model_datetime = model_date.replace(hour=3, minute=0, second=0, microsecond=0)
 
         self.x_size = x_size
         self.y_size = y_size
