@@ -10,11 +10,14 @@ Created on Aug 21, 2018
 import datetime
 import logging
 import os
+import sys
 from typing import Collection, Union
+
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
 import pytz
 
-import dir_structure
+from main import dir_structure
 from PyOFS import DATA_DIR
 from PyOFS.dataset import hfr, rtofs, smap, viirs, wcofs
 

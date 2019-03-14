@@ -11,6 +11,9 @@ import datetime
 import ftplib
 import logging
 import os
+import sys
+
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
 from PyOFS import DATA_DIR
 
