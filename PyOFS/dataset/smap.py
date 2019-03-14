@@ -22,8 +22,8 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-from dataset import CRS_EPSG, _utilities
-from main import DATA_DIR
+from PyOFS import DATA_DIR, CRS_EPSG
+from PyOFS.dataset import _utilities
 
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 

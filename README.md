@@ -1,2 +1,4 @@
 # PyOFS
-Python library for converting OFS NetCDF to geospatial format for use with OFS_Viewer.
+Python library for converting ocean data from NetCDF to geospatial format.
+
+`conda create -n GIS python=3.7 fiona rasterio scipy pytz matplotlib pyproj xarray netCDF4`

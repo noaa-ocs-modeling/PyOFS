@@ -8,6 +8,7 @@ Created on Jun 13, 2018
 """
 
 import datetime
+import os
 
 import numpy
 import rasterio
@@ -23,12 +24,16 @@ def copy_xarray(input_path: str, output_path: str) -> xarray.Dataset:
     :return: copied dataset at given path
     """
 
-    print(f'Copying dataset to {output_path}')
+    print(f'Reading dataset from {input_path}')
 
     input_dataset = xarray.open_dataset(input_path, decode_times=False)
 
+    print(f'Copying dataset to local memory...')
+
     # deep copy of xarray dataset
     output_dataset = input_dataset.copy(deep=True)
+
+    print(f'Writing to {output_path}')
 
     # save dataset to file
     output_dataset.to_netcdf(output_path)
@@ -217,4 +222,9 @@ class NoDataError(Exception):
 
 
 if __name__ == '__main__':
+    import PyOFS
+
+    copy_xarray('https://dods.ndbc.noaa.gov/thredds/dodsC/hfradar_uswc_6km',
+                os.path.join(PyOFS.DATA_DIR, 'output', 'test', 'hfradar_uswc_6km.nc'))
+
     print('done')

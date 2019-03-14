@@ -7,19 +7,18 @@ Created on Aug 21, 2018
 @author: zachary.burnett
 """
 
+import sys
+
 import datetime
 import logging
 import os
-import sys
-from typing import Collection, Union
-
 import pytz
+from typing import Collection, Union
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
-from dataset import hfr, viirs, rtofs, wcofs, smap
-
-from main import json_dir_structure, DATA_DIR
+from PyOFS import dir_structure, DATA_DIR
+from PyOFS.dataset import hfr, viirs, rtofs, wcofs, smap
 
 JSON_PATH = os.path.join(DATA_DIR, r'reference\model_dates.json')
 LOG_DIR = os.path.join(DATA_DIR, 'log')
@@ -366,6 +365,6 @@ if __name__ == '__main__':
     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas, log_path=log_path)
 
     # write new directory structure to JSON file
-    json_dir_structure.write_dir_structure_to_json(OUTPUT_DIR, JSON_PATH)
+    dir_structure.dir_structure_to_json(OUTPUT_DIR, JSON_PATH)
 
     print('done')

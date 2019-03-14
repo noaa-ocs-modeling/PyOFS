@@ -7,12 +7,17 @@ Created on Aug 9, 2018
 @author: zachary.burnett
 """
 
+import sys
+
 import datetime
 import ftplib
 import logging
 import os
+import sys
 
-DATA_DIR = os.environ['OFS_DATA']
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
+
+from config import DATA_DIR
 
 TIDEPOOL_URL = 'tidepool.nos.noaa.gov'
 INPUT_DIR = '/pub/outgoing/CSDL'

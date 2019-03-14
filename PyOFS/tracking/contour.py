@@ -9,6 +9,7 @@ Created on Feb 27, 2019
 
 import datetime
 import math
+from typing import Tuple
 
 import numpy
 import pyproj
@@ -16,10 +17,8 @@ import shapely.geometry
 import xarray
 from matplotlib import pyplot
 
-from dataset import _utilities
-
-GCS = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
-PCS = pyproj.Proj(
+WGS84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
+WebMercator = pyproj.Proj(
     '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs')
 
 
@@ -29,7 +28,7 @@ class VelocityField:
     """
 
     def __init__(self, field: xarray.Dataset, u_name: str = 'u', v_name: str = 'v', x_name: str = 'lon',
-                 y_name: str = 'lat'):
+                 y_name: str = 'lat', t_name: str = 'time'):
         """
         Create new velocity field from given dataset.
 
@@ -38,9 +37,10 @@ class VelocityField:
         :param v_name: name of v variable
         :param x_name: name of x coordinate
         :param y_name: name of y coordinate
+        :param t_name: name of time coordinate
         """
 
-        self.field = field.rename({x_name: 'x', y_name: 'y'})
+        self.field = field.rename({u_name: 'u', v_name: 'v', x_name: 'x', y_name: 'y', t_name: 'time'})
 
         x_dims = self.field['x'].dims
         y_dims = self.field['y'].dims
@@ -51,7 +51,7 @@ class VelocityField:
         if len(x_dims) == 1 or len(y_dims) == 1:
             lon, lat = numpy.meshgrid(lon, lat)
 
-        x, y = PCS(lon, lat)
+        x, y = pyproj.transform(WGS84, WebMercator, lon, lat)
 
         if len(x_dims) == 1 or len(y_dims) == 1:
             x = x[0, :]
@@ -64,72 +64,75 @@ class VelocityField:
 
         self.field['x'], self.field['y'] = x, y
 
-        self.u_name = u_name
-        self.v_name = v_name
-
         self.t_delta = datetime.timedelta(seconds=float(numpy.nanmean(numpy.diff(self.field['time']))) * 1e-9)
         self.x_delta = float(numpy.nanmean(numpy.diff(self.field['x'])))
         self.y_delta = float(numpy.nanmean(numpy.diff(self.field['y'])))
 
-    def u(self, time: datetime.datetime, lon: float, lat: float) -> float:
+    def u(self, lon: float, lat: float, time: datetime.datetime) -> float:
         """
         u velocity in m/s at coordinates
 
-        :param time: time
         :param lon: longitude
         :param lat: latitude
+        :param time: time
         :return: u value at coordinate in m/s
         """
 
-        x, y = PCS(lon, lat)
-        return self.field[self.u_name].sel(time=time, x=x, y=y, method='nearest').values.item()
+        return self.field['u'].sel(time=time, x=lon, y=lat, method='nearest').values.item()
 
-    def v(self, time: datetime.datetime, lon: float, lat: float) -> float:
+    def v(self, lon: float, lat: float, time: datetime.datetime) -> float:
         """
         v velocity in m/s at coordinates
 
-        :param time: time
         :param lon: longitude
         :param lat: latitude
+        :param time: time
         :return: v value at coordinate in m/s
         """
 
-        x, y = PCS(lon, lat)
-        return self.field[self.v_name].sel(time=time, x=x, y=y, method='nearest').values.item()
+        return self.field['v'].sel(time=time, x=lon, y=lat, method='nearest').values.item()
 
-    def velocity(self, time: datetime.datetime, lon: float, lat: float) -> float:
+    def velocity(self, lon: float, lat: float, time: datetime.datetime) -> float:
         """
         absolute velocity in m/s at coordinate
 
-        :param time: time
         :param lon: longitude
         :param lat: latitude
+        :param time: time
         :return: magnitude of uv vector in m/s
         """
 
-        return math.sqrt(self.u(time, lon, lat) ** 2 + self.v(time, lon, lat) ** 2)
+        return math.sqrt(self.u(lon, lat, time) ** 2 + self.v(lon, lat, time) ** 2)
 
-    def direction(self, time: datetime.datetime, lon: float, lat: float) -> float:
+    def direction(self, lon: float, lat: float, time: datetime.datetime) -> float:
         """
         angle of uv vector
 
-        :param time: time
         :param lon: longitude
         :param lat: latitude
+        :param time: time
         :return: degree from north of uv vector
         """
 
-        return (math.atan2(self.u(time, lon, lat), self.v(time, lon, lat)) + math.pi) * (180 / math.pi)
+        return (math.atan2(self.u(lon, lat, time), self.v(lon, lat, time)) + math.pi) * (180 / math.pi)
 
     def plot(self, time: datetime.datetime):
         quiver_plot = pyplot.quiver(self.field['x'], self.field['y'],
-                                    self.field[self.u_name].sel(time=time, method='nearest'),
-                                    self.field[self.v_name].sel(time=time, method='nearest'), units='width')
-        pyplot.quiverkey(quiver_plot, 0.9, 0.9, 2, r'$2 \frac{m}{s}$', labelpos='E',
-                         coordinates='figure')
+                                    self.field['u'].sel(time=time, method='nearest'),
+                                    self.field['v'].sel(time=time, method='nearest'), units='width')
+        pyplot.quiverkey(quiver_plot, 0.9, 0.9, 2, r'$2 \frac{m}{s}$', labelpos='E', coordinates='figure')
 
-    def __getitem__(self, time: datetime.datetime, lon: float, lat: float):
-        return self.u(time, lon, lat), self.v(time, lon, lat)
+    def __getitem__(self, lon: float, lat: float, time: datetime.datetime) -> Tuple[float, float]:
+        """
+        velocity vector (u, v) in m/s at coordinates
+
+        :param lon: longitude
+        :param lat: latitude
+        :param time: time
+        :return: tuple of (u, v)
+        """
+
+        return self.u(lon, lat, time), self.v(lon, lat, time)
 
     def __repr__(self):
         return str(self.field)
@@ -140,18 +143,21 @@ class Particle:
     Particle simulation.
     """
 
-    def __init__(self, field: VelocityField, time: datetime.datetime, lon: float, lat: float):
+    def __init__(self, field: VelocityField, lon: float, lat: float, time: datetime.datetime):
         """
         Create new particle within in the given velocity field.
 
         :param field: velocity field
-        :param time: starting time
         :param lon: starting longitude
         :param lat: starting latitude
+        :param time: starting time
         """
 
         self.field = field
-        self.set(time, lon, lat)
+        self.time = time
+        self.x, self.y = pyproj.transform(WGS84, WebMercator, lon, lat)
+        self.u = self.field.u(lon, lat, time)
+        self.v = self.field.v(lon, lat, time)
 
     def step(self, t_delta: datetime.timedelta = None):
         """
@@ -163,42 +169,11 @@ class Particle:
         if t_delta is None:
             t_delta = self.field.t_delta
 
-        if not numpy.isnan(self.u):
-            self.x += self.u * t_delta.total_seconds()
-
-        if not numpy.isnan(self.v):
-            self.y += self.v * t_delta.total_seconds()
+        if not numpy.isnan(self.u) and not numpy.isnan(self.v):
+            self.x += t_delta.total_seconds() * self.u
+            self.y += t_delta.total_seconds() * self.v
 
         self.time += t_delta
-
-        self.set(self.time, *GCS(self.x, self.y))
-
-    def set(self, time: datetime.datetime, lon: float, lat: float):
-        """
-        Set particle to given time and coordinates within velocity field.
-
-        :param time: time
-        :param lon: longitude
-        :param lat: latitude
-        """
-
-        x, y = PCS(lon, lat)
-
-        if self.field.has_multidim_coords:
-            x_delta = self.field.x_delta
-            y_delta = self.field.y_delta
-
-            nearest_time = self.field.field.sel(time=numpy.datetime64(time), method='nearest')
-            cell = nearest_time.interp(x=x, y=y)
-        else:
-            cell = self.field.field.sel(time=numpy.datetime64(time), x=x, y=y, method='nearest')
-
-        self.time = _utilities.datetime64_to_datetime(cell['time'])
-
-        self.x = cell['x'].item()
-        self.y = cell['y'].item()
-        self.u = cell['ssu'].item()
-        self.v = cell['ssv'].item()
 
     def coordinates(self) -> tuple:
         """
@@ -206,7 +181,7 @@ class Particle:
         :return tuple of GCS coordinates
         """
 
-        return GCS(self.x, self.y)
+        return pyproj.transform(WebMercator, WGS84, self.x, self.y)
 
     def velocity(self):
         """
@@ -234,32 +209,40 @@ class Contour:
         :param points: list of coordinate tuples (x, y)
         """
 
+        self.field = field
+        self.time = time
         self.particles = []
 
         for point in points:
-            self.particles.append(Particle(field, time, *point))
+            self.particles.append(Particle(field, point[0], point[1], time))
 
-    def step(self, t_delta: datetime.datetime = None):
+        self.polygon = shapely.geometry.Polygon([(particle.x, particle.y) for particle in self.particles])
+
+    def step(self, t_delta: datetime.timedelta = None):
         """
         Step particle by given time delta.
 
         :param t_delta: time delta
         """
 
+        if t_delta is None:
+            t_delta = self.field.t_delta
+
+        self.time += t_delta
+
         for particle in self.particles:
             particle.step(t_delta)
 
-    def polygon(self):
-        return shapely.geometry.Polygon([(particle.x, particle.y) for particle in self.particles])
+        self.polygon = shapely.geometry.Polygon([(particle.x, particle.y) for particle in self.particles])
 
     def area(self):
-        return self.polygon().area
+        return self.polygon.area
 
     def bounds(self):
-        return self.polygon().bounds
+        return self.polygon.bounds
 
     def __str__(self):
-        return f'contour with bounds {self.bounds()} and area of {self.area()} m^2'
+        return f'contour at time {self.time} with bounds {self.bounds()} and area {self.area()} m^2'
 
 
 class CircleContour(Contour):
@@ -294,24 +277,28 @@ class RectangleContour(Contour):
         :param interval: interval between points in meters
         """
 
-        corners = {'sw': (west_lon, south_lat), 'nw': (west_lon, north_lat), 'ne': (east_lon, north_lat),
-                   'se': (east_lon, south_lat)}
+        corners = {'sw': pyproj.transform(WGS84, WebMercator, west_lon, south_lat),
+                   'nw': pyproj.transform(WGS84, WebMercator, west_lon, north_lat),
+                   'ne': pyproj.transform(WGS84, WebMercator, east_lon, north_lat),
+                   'se': pyproj.transform(WGS84, WebMercator, east_lon, south_lat)}
         points = []
 
         for corner_name, corner in corners.items():
-            points.append(corner)
+            points.append(pyproj.transform(WebMercator, WGS84, *corner))
 
             if corner_name is 'sw':
-                edge_length = PCS(*corners['nw'])[1] - PCS(*corners['sw'])[1]
+                edge_length = corners['nw'][1] - corners['sw'][1]
             elif corner_name is 'nw':
-                edge_length = PCS(*corners['ne'])[0] - PCS(*corners['nw'])[0]
+                edge_length = corners['ne'][0] - corners['nw'][0]
             elif corner_name is 'ne':
-                edge_length = PCS(*corners['ne'])[1] - PCS(*corners['se'])[1]
+                edge_length = corners['ne'][1] - corners['se'][1]
             elif corner_name is 'se':
-                edge_length = PCS(*corners['se'])[0] - PCS(*corners['sw'])[0]
+                edge_length = corners['se'][0] - corners['sw'][0]
+            else:
+                edge_length = 0
 
             for stride in range(int(edge_length / interval)):
-                x, y = PCS(*corner)
+                x, y = corner
 
                 if corner_name is 'sw':
                     y += stride
@@ -322,44 +309,48 @@ class RectangleContour(Contour):
                 elif corner_name is 'se':
                     x -= stride
 
-                points.append(GCS(x, y))
+                points.append(pyproj.transform(WebMercator, WGS84, x, y))
 
         super().__init__(field, time, points)
 
 
 if __name__ == '__main__':
-    from dataset import hfr
+    # sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
-    model_datetime = datetime.datetime(2019, 2, 25)
+    from PyOFS.dataset import hfr
+
+    model_datetime = datetime.datetime(2019, 3, 13)
     # model_datetime.replace(hour=3, minute=0, second=0, microsecond=0)
 
     print('Collecting data...')
     # data = wcofs.WCOFSDataset(model_datetime, source='avg').to_xarray(variables=('ssu', 'ssv'))
-    data = hfr.HFRRange(model_datetime, model_datetime + datetime.timedelta(days=1), source='UCSD').to_xarray(
+    data = hfr.HFRRange(model_datetime, model_datetime + datetime.timedelta(days=1),
+                        source=r'C:\Data\OFS\develop\output\test\hfradar_uswc_6km.nc').to_xarray(
         variables=['ssu', 'ssv'], mean=False)
 
     print('Creating velocity field...')
     velocity_field = VelocityField(data, u_name='ssu', v_name='ssv')
-    print(f'Velocity field created: {velocity_field}')
+    print(f'Velocity field created')
 
-    for time in velocity_field.field['time']:
-        print(f'Plotting {time}')
-        velocity_field.plot(time)
-        break
-
-    pyplot.show()
-
-    # print('Creating starting contour...')
-    # contour = RectangleContour(velocity_field,
-    #                            datetime.datetime.utcfromtimestamp(velocity_field.field['time'][0].item() * 1e-9),
-    #                            west_lon=-122.99451, east_lon=-122.73859, south_lat=36.82880, north_lat=36.93911)
-    # print(f'Contour created: {contour}')
+    # for time in velocity_field.field['time']:
+    #     print(f'Plotting {time}')
+    #     velocity_field.plot(time)
+    #     break
     #
-    # for t_delta in numpy.diff(velocity_field.field['time']):
-    #     timedelta = datetime.timedelta(seconds=int(t_delta) * 1e-9)
-    #
-    #     print(f'Time step: {timedelta}')
-    #     contour.step(timedelta)
-    #     print(f'New state: {contour}')
+    # pyplot.show()
+
+    print('Creating starting contour...')
+    contour = RectangleContour(velocity_field,
+                               datetime.datetime.utcfromtimestamp(velocity_field.field['time'][0].item() * 1e-9),
+                               west_lon=-122.99451, east_lon=-122.73859, south_lat=36.82880, north_lat=36.93911)
+    print(f'Contour created: {contour}')
+
+    for t_delta in numpy.diff(velocity_field.field['time']):
+        timedelta = datetime.timedelta(seconds=int(t_delta) * 1e-9)
+
+        previous_area = contour.area()
+        contour.step(timedelta)
+        area_change = contour.area() - previous_area
+        print(f'step {timedelta} to {contour.time}: change in area was {area_change} m^2')
 
     print('done')
