@@ -57,6 +57,8 @@ DATA_VARIABLES = {
     'ssh': {'2ds': {'diag': 'ssh'}}
 }
 
+TIME_DELTAS = {'daily': range(-3, 8 + 1)}
+
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 
 SOURCE_URL = 'https://nomads.ncep.noaa.gov:9090/dods/rtofs'
@@ -350,17 +352,32 @@ class RTOFSDataset:
 
         output_dataset = xarray.Dataset()
 
-        coordinates = OrderedDict({
-            'lat': self.lat,
-            'lon': self.lon
-        })
+        if self.time_interval == 'daily':
+            times = [self.model_time + datetime.timedelta(days=day_delta) for day_delta in TIME_DELTAS['daily']]
+
+        if mean:
+            coordinates = OrderedDict({
+                'lat': self.lat,
+                'lon': self.lon
+            })
+        else:
+            coordinates = OrderedDict({
+                'time': times,
+                'lat': self.lat,
+                'lon': self.lon
+            })
 
         variables_data = {}
 
         for variable in variables:
-            variable_data = [self.data(variable=variable, time=self.model_time + datetime.timedelta(days=day_delta))
-                             for day_delta in range(-3, 8 + 1)]
-            variables_data[variable] = numpy.stack(variable_data)
+            variable_data = [self.data(variable=variable, time=time) for time in times]
+
+            variable_data = numpy.stack(variable_data, axis=0)
+
+            if mean:
+                variable_data = numpy.nanmean(variable_data, axis=0)
+
+            variables_data[variable] = variable_data
 
         for variable, variable_data in variables_data.items():
             output_dataset.update(
