@@ -59,13 +59,13 @@ class VIIRSDataset:
     study_area_bounds = None
     study_area_coordinates = None
 
-    def __init__(self, granule_datetime: datetime.datetime = None, satellite: str = 'NPP',
+    def __init__(self, data_time: datetime.datetime = None, satellite: str = 'NPP',
                  study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, algorithm: str = 'OSPO',
                  version: str = None):
         """
         Retrieve VIIRS NetCDF dataset from NOAA with given datetime.
 
-        :param granule_datetime: dataset datetime
+        :param data_time: dataset datetime
         :param satellite: VIIRS platform
         :param study_area_polygon_filename: filename of vector file containing study area boundary
         :param algorithm: either 'STAR' or 'OSPO'
@@ -73,11 +73,11 @@ class VIIRSDataset:
         :raises NoDataError: if dataset does not exist
         """
 
-        if granule_datetime is None:
-            granule_datetime = datetime.datetime.now()
+        if data_time is None:
+            data_time = datetime.datetime.now()
 
         # round minute to nearest 10 minutes (VIIRS data interval)
-        self.granule_datetime = _utilities.round_to_ten_minutes(granule_datetime)
+        self.data_time = _utilities.round_to_ten_minutes(data_time)
 
         self.satellite = satellite
 
@@ -87,13 +87,13 @@ class VIIRSDataset:
             study_area_polygon_layer_name = None
 
         # use NRT flag if granule is less than 13 days old
-        self.near_real_time = datetime.datetime.now() - granule_datetime <= datetime.timedelta(days=13)
+        self.near_real_time = datetime.datetime.now() - data_time <= datetime.timedelta(days=13)
         self.algorithm = algorithm
 
         if version is None:
-            if granule_datetime >= datetime.datetime(2018, 11, 7, 15, 10):
+            if data_time >= datetime.datetime(2018, 11, 7, 15, 10):
                 self.version = '2.60'
-            elif granule_datetime >= datetime.datetime(2017, 9, 14, 12, 50):
+            elif data_time >= datetime.datetime(2017, 9, 14, 12, 50):
                 self.version = '2.41'
             else:
                 self.version = '2.40'
@@ -102,8 +102,8 @@ class VIIRSDataset:
 
         self.url = None
 
-        month_dir = f'{self.granule_datetime.year}/{self.granule_datetime.timetuple().tm_yday:03}'
-        filename = f'{self.granule_datetime.strftime("%Y%m%d%H%M%S")}-' + \
+        month_dir = f'{self.data_time.year}/{self.data_time.timetuple().tm_yday:03}'
+        filename = f'{self.data_time.strftime("%Y%m%d%H%M%S")}-' + \
                    f'{self.algorithm}-L3U_GHRSST-SSTsubskin-VIIRS_{self.satellite.upper()}-ACSPO_V{self.version}-v02.0-fv01.0.nc'
 
         # TODO N20 does not yet have a reanalysis archive on NESDIS (as of March 8th, 2019)
@@ -158,7 +158,7 @@ class VIIRSDataset:
                             os.mkdir(output_dir)
 
                         output_filename = os.path.join(output_dir,
-                                                       f'viirs_{self.granule_datetime.strftime("%Y%m%dT%H%M")}.nc')
+                                                       f'viirs_{self.data_time.strftime("%Y%m%dT%H%M")}.nc')
 
                         if os.path.exists(output_filename):
                             os.remove(output_filename)
@@ -181,7 +181,7 @@ class VIIRSDataset:
                     break
 
         if self.url is None:
-            raise _utilities.NoDataError(f'No VIIRS dataset found at {self.granule_datetime} UTC.')
+            raise _utilities.NoDataError(f'No VIIRS dataset found at {self.data_time} UTC.')
 
         # construct rectangular polygon of granule extent
         if 'geospatial_bounds' in self.netcdf_dataset.attrs:
@@ -203,13 +203,13 @@ class VIIRSDataset:
                     shapely.geometry.Polygon(
                         [(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
         else:
-            logging.warning(f'{self.granule_datetime} UTC: Dataset has no stored bounds...')
+            logging.warning(f'{self.data_time} UTC: Dataset has no stored bounds...')
 
         lon_pixel_size = self.netcdf_dataset.geospatial_lon_resolution
         lat_pixel_size = self.netcdf_dataset.geospatial_lat_resolution
 
         if VIIRSDataset.study_area_extent is None:
-            logging.debug(f'Calculating indices and transform from granule at {self.granule_datetime} UTC...')
+            logging.debug(f'Calculating indices and transform from granule at {self.data_time} UTC...')
 
             # get first record in layer
             with fiona.open(self.study_area_polygon_filename, layer=study_area_polygon_layer_name) as vector_layer:
@@ -289,7 +289,7 @@ class VIIRSDataset:
 
                     if mismatch_percentage > 0:
                         logging.warning(
-                            f'{self.granule_datetime} UTC: SSES extent mismatch at {mismatch_percentage:.1f}%')
+                            f'{self.data_time} UTC: SSES extent mismatch at {mismatch_percentage:.1f}%')
 
                     output_sst_data -= sses
 
@@ -367,7 +367,7 @@ class VIIRSDataset:
                     output_raster.write(input_data, 1)
 
     def __repr__(self):
-        used_params = [self.granule_datetime.__repr__()]
+        used_params = [self.data_time.__repr__()]
         optional_params = [self.satellite, self.study_area_polygon_filename, self.near_real_time, self.algorithm,
                            self.version]
 
@@ -436,7 +436,7 @@ class VIIRSRange:
                     running_futures = {}
 
                     for pass_time in self.pass_times:
-                        running_future = concurrency_pool.submit(VIIRSDataset, granule_datetime=pass_time,
+                        running_future = concurrency_pool.submit(VIIRSDataset, data_time=pass_time,
                                                                  study_area_polygon_filename=self.study_area_polygon_filename,
                                                                  algorithm=self.algorithm, version=self.version,
                                                                  satellite=satellite)
@@ -496,13 +496,13 @@ class VIIRSRange:
         start_time = start_time if start_time is not None else self.start_time
         end_time = end_time if end_time is not None else self.end_time
 
-        dataset_datetimes = numpy.sort(list(self.datasets.keys()))
+        dataset_times = numpy.sort(list(self.datasets.keys()))
 
         # find first and last times within specified time interval
-        start_index = numpy.searchsorted(dataset_datetimes, start_time)
-        end_index = numpy.searchsorted(dataset_datetimes, end_time)
+        start_index = numpy.searchsorted(dataset_times, start_time)
+        end_index = numpy.searchsorted(dataset_times, end_time)
 
-        pass_datetimes = dataset_datetimes[start_index:end_index]
+        pass_times = dataset_times[start_index:end_index]
 
         if variables is None:
             variables = ['sst', 'sses']
@@ -512,14 +512,14 @@ class VIIRSRange:
         for variable in variables:
             scenes_data = []
 
-            for pass_datetime in pass_datetimes:
-                if len(self.datasets[pass_datetime]) > 0:
-                    if satellite is not None and satellite in self.datasets[pass_datetime]:
-                        dataset = self.datasets[pass_datetime][satellite]
+            for pass_time in pass_times:
+                if len(self.datasets[pass_time]) > 0:
+                    if satellite is not None and satellite in self.datasets[pass_time]:
+                        dataset = self.datasets[pass_time][satellite]
                         scene_data = dataset.data(variable, sses_correction)
                     else:
                         scene_data = numpy.nanmean(numpy.stack([dataset.data(variable, sses_correction) for dataset in
-                                                                self.datasets[pass_datetime].values()], axis=0), axis=0)
+                                                                self.datasets[pass_time].values()], axis=0), axis=0)
 
                     if numpy.any(~numpy.isnan(scene_data)):
                         scenes_data.append(scene_data)
@@ -562,13 +562,13 @@ class VIIRSRange:
 
         # write a raster for each pass retrieved scene
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            for dataset_datetime, current_satellite in self.datasets.items():
+            for dataset_time, current_satellite in self.datasets.items():
                 if current_satellite is None or current_satellite == satellite:
-                    dataset = self.datasets[dataset_datetime][current_satellite]
+                    dataset = self.datasets[dataset_time][current_satellite]
 
                     concurrency_pool.submit(dataset.write_rasters, output_dir, variables=variables,
                                             filename_prefix=f'{filename_prefix}_' +
-                                                            f'{dataset_datetime.strftime("%Y%m%d%H%M%S")}',
+                                                            f'{dataset_time.strftime("%Y%m%d%H%M%S")}',
                                             fill_value=fill_value, drivers=driver, sses_correction=sses_correction)
 
     def write_raster(self, output_dir: str, filename_prefix: str = None, filename_suffix: str = None,
@@ -763,7 +763,7 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
     lines = []
 
     for datetime_index in range(len(datetime_range)):
-        current_datetime = datetime_range[datetime_index]
+        current_time = datetime_range[datetime_index]
 
         # find number of cycles from the first orbit to the present day
         num_cycles = int((datetime.datetime.now() - start_time).days / 16)
@@ -772,29 +772,29 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
         for cycle_index in range(0, num_cycles):
             # get current datetime of interest
             cycle_offset = VIIRS_PERIOD * cycle_index
-            cycle_datetime = current_datetime + cycle_offset
+            cycle_time = current_time + cycle_offset
 
             try:
                 # get dataset of new datetime
-                dataset = VIIRSDataset(cycle_datetime, satellite, study_area_polygon_filename, algorithm, version)
+                dataset = VIIRSDataset(cycle_time, satellite, study_area_polygon_filename, algorithm, version)
 
                 # check if dataset falls within polygon extent
                 if dataset.data_extent.is_valid:
                     if study_area_polygon.intersects(dataset.data_extent):
                         # get duration from current cycle start
-                        cycle_duration = cycle_datetime - (start_time + cycle_offset)
+                        cycle_duration = cycle_time - (start_time + cycle_offset)
 
                         print(
-                            f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")} {cycle_duration.total_seconds()}: ' +
+                            f'{cycle_time.strftime("%Y%m%dT%H%M%S")} {cycle_duration.total_seconds()}: ' +
                             f'valid scene (checked {cycle_index + 1} cycle(s))')
-                        lines.append(f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")},{cycle_duration.total_seconds()}')
+                        lines.append(f'{cycle_time.strftime("%Y%m%dT%H%M%S")},{cycle_duration.total_seconds()}')
 
                 # if we get to here, break and continue to the next datetime
                 break
             except _utilities.NoDataError as error:
                 print(error)
         else:
-            print(f'{current_datetime.strftime("%Y%m%dT%H%M%S")}: missing dataset across all cycles')
+            print(f'{current_time.strftime("%Y%m%dT%H%M%S")}: missing dataset across all cycles')
 
         # write lines to file
         with open(output_filename, 'w') as output_file:

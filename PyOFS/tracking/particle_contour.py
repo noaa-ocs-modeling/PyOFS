@@ -347,18 +347,18 @@ if __name__ == '__main__':
     register_matplotlib_converters()
 
     data_path = r"C:\Data\develop\output\test\rtofs_20190313.nc"
-    data_datetime = datetime.datetime(2019, 3, 13)
+    data_time = datetime.datetime(2019, 3, 13)
     contour_center = (-123.79820, 37.31710)
     contour_radius = 100000
 
-    if not os.path.exists(data_path):
-        from PyOFS.dataset import wcofs
-
-        print('Writing data...')
-        wcofs.WCOFSDataset(data_datetime).to_xarray(variables=['ssu', 'ssv']).to_netcdf(data_path)
-
     print('Collecting data...')
-    data = xarray.open_dataset(data_path)
+    if os.path.exists(data_path):
+        data = xarray.open_dataset(data_path)
+    else:
+        from PyOFS.dataset import rtofs
+
+        data = rtofs.RTOFSDataset(data_time).to_xarray(variables=['ssu', 'ssv'])
+        data.to_netcdf(data_path)
 
     print('Creating velocity field...')
     velocity_field = VelocityField(data, u_name='ssu', v_name='ssv')

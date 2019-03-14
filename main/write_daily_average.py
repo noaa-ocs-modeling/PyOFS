@@ -102,7 +102,7 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
             del viirs_range
         elif observation == 'sss':
             smap_dataset = smap.SMAPDataset()
-            smap_dataset.write_rasters(observation_dir, data_datetime=start_of_day, fill_value=LEAFLET_NODATA_VALUE,
+            smap_dataset.write_rasters(observation_dir, data_time=start_of_day, fill_value=LEAFLET_NODATA_VALUE,
                                        driver='GTiff', variables=['sss'])
             del smap_dataset
     except Exception as error:

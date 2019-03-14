@@ -253,9 +253,9 @@ class HFRRange:
 
         # create layer using OGR, then add features using QGIS
         for hfr_time in time_interval_selection['time']:
-            hfr_datetime = datetime.datetime.utcfromtimestamp(
+            hfr_time = datetime.datetime.utcfromtimestamp(
                 (hfr_time.values - numpy.datetime64('1970-01-01T00:00:00Z')) / numpy.timedelta64(1, 's'))
-            layer_name = f'{hfr_datetime.strftime("%Y%m%dT%H%M%S")}'
+            layer_name = f'{hfr_time.strftime("%Y%m%dT%H%M%S")}'
 
             hfr_data = time_interval_selection.sel(time=hfr_time)
 

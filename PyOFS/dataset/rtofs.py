@@ -84,9 +84,9 @@ class RTOFSDataset:
             model_date = datetime.datetime.now()
 
         if type(model_date) is datetime.date:
-            self.model_datetime = datetime.datetime.combine(model_date, datetime.datetime.min.time())
+            self.model_time = datetime.datetime.combine(model_date, datetime.datetime.min.time())
         else:
-            self.model_datetime = model_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            self.model_time = model_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
         self.source = source
         self.time_interval = time_interval
@@ -104,7 +104,7 @@ class RTOFSDataset:
         self.netcdf_datasets = {}
         self.dataset_locks = {}
 
-        date_string = self.model_datetime.strftime('%Y%m%d')
+        date_string = self.model_time.strftime('%Y%m%d')
 
         if self.time_interval == 'daily':
             for forecast_direction, datasets in DATASET_STRUCTURE[self.source].items():
@@ -152,7 +152,7 @@ class RTOFSDataset:
             self.study_area_transform = rasterio.transform.from_origin(self.study_area_west, self.study_area_north,
                                                                        lon_pixel_size, lat_pixel_size)
         else:
-            raise _utilities.NoDataError(f'No RTOFS datasets found for {self.model_datetime}.')
+            raise _utilities.NoDataError(f'No RTOFS datasets found for {self.model_time}.')
 
     def data(self, variable: str, time: datetime.datetime, crop: bool = True) -> numpy.ndarray:
         """
@@ -164,7 +164,7 @@ class RTOFSDataset:
         :return: array of data
         """
 
-        if time >= self.model_datetime:
+        if time >= self.model_time:
             direction = 'forecast'
         else:
             direction = 'nowcast'
@@ -184,18 +184,18 @@ class RTOFSDataset:
 
                         # TODO study areas that cross over longitude +74.16 may have problems here
                         if crop:
-                            selection = data_variable.sel(time=time,
-                                                          lon=slice(self.study_area_west + 360,
-                                                                    self.study_area_east + 360),
-                                                          lat=slice(self.study_area_south, self.study_area_north))
+                            selection = data_variable.sel(time=time, method='nearest').sel(
+                                lon=slice(self.study_area_west + 360,
+                                          self.study_area_east + 360),
+                                lat=slice(self.study_area_south, self.study_area_north))
                             selection = numpy.squeeze(selection).values
                         else:
-                            western_selection = data_variable.sel(time=time,
-                                                                  lon=slice(180, numpy.max(self.raw_lon)),
-                                                                  lat=slice(numpy.min(self.lat), numpy.max(self.lat)))
-                            eastern_selection = data_variable.sel(time=time,
-                                                                  lon=slice(numpy.min(self.raw_lon), 180),
-                                                                  lat=slice(numpy.min(self.lat), numpy.max(self.lat)))
+                            western_selection = data_variable.sel(time=time, method='nearest').sel(
+                                lon=slice(180, numpy.max(self.raw_lon)),
+                                lat=slice(numpy.min(self.lat), numpy.max(self.lat)))
+                            eastern_selection = data_variable.sel(time=time, method='nearest').sel(
+                                lon=slice(numpy.min(self.raw_lon), 180),
+                                lat=slice(numpy.min(self.lat), numpy.max(self.lat)))
                             selection = numpy.concatenate((numpy.squeeze(western_selection),
                                                            numpy.squeeze(eastern_selection)), axis=1)
 
@@ -205,62 +205,7 @@ class RTOFSDataset:
                     raise ValueError(f'Variable must be not one of {list(DATA_VARIABLES.keys())}.')
             else:
                 logging.warning(f'{direction} does not exist in ' +
-                                f'RTOFS dataset for {self.model_datetime.strftime("%Y%m%d")}.')
-        else:
-            raise ValueError(f'Direction must be one of {list(DATASET_STRUCTURE[self.source].keys())}.')
-
-    def data_average(self, variable: str, start_time: datetime.datetime, end_time: datetime.datetime,
-                     crop: bool = True) -> numpy.ndarray:
-        """
-        Get data of specified variable at specified hour.
-
-        :param variable: name of variable to retrieve
-        :param crop: whether to crop to study area extent
-        :return: array of data
-        """
-
-        if time >= self.model_datetime:
-            direction = 'forecast'
-        else:
-            direction = 'nowcast'
-
-        if self.time_interval == 'daily':
-            time = time.replace(hour=0, minute=0, second=0, microsecond=0)
-
-        if direction in DATASET_STRUCTURE[self.source]:
-            if len(self.netcdf_datasets[direction]) > 0:
-                if variable in DATA_VARIABLES:
-                    datasets = DATA_VARIABLES[variable][self.source]
-                    dataset_name, variable_name = next(iter(datasets.items()))
-
-                    with self.dataset_locks[direction][dataset_name]:
-                        data_variable = self.netcdf_datasets[direction][dataset_name][
-                            DATA_VARIABLES[variable][self.source][dataset_name]]
-
-                        # TODO study areas that cross over longitude +74.16 may have problems here
-                        if crop:
-                            selection = data_variable.sel(time=time,
-                                                          lon=slice(self.study_area_west + 360,
-                                                                    self.study_area_east + 360),
-                                                          lat=slice(self.study_area_south, self.study_area_north))
-                            selection = numpy.squeeze(selection).values
-                        else:
-                            western_selection = data_variable.sel(time=time,
-                                                                  lon=slice(180, numpy.max(self.raw_lon)),
-                                                                  lat=slice(numpy.min(self.lat), numpy.max(self.lat)))
-                            eastern_selection = data_variable.sel(time=time,
-                                                                  lon=slice(numpy.min(self.raw_lon), 180),
-                                                                  lat=slice(numpy.min(self.lat), numpy.max(self.lat)))
-                            selection = numpy.concatenate((numpy.squeeze(western_selection),
-                                                           numpy.squeeze(eastern_selection)), axis=1)
-
-                        selection = numpy.flipud(selection)
-                        return selection
-                else:
-                    raise ValueError(f'Variable must be not one of {list(DATA_VARIABLES.keys())}.')
-            else:
-                logging.warning(f'{direction} does not exist in ' +
-                                f'RTOFS dataset for {self.model_datetime.strftime("%Y%m%d")}.')
+                                f'RTOFS dataset for {self.model_time.strftime("%Y%m%d")}.')
         else:
             raise ValueError(f'Direction must be one of {list(DATASET_STRUCTURE[self.source].keys())}.')
 
@@ -289,7 +234,7 @@ class RTOFSDataset:
         if self.time_interval == 'daily':
             time = time.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        time_delta = int((time - self.model_datetime).total_seconds() / (24 * 60 * 60))
+        time_delta = int((time - self.model_time).total_seconds() / (24 * 60 * 60))
         direction = 'forecast' if time_delta >= 0 else 'nowcast'
         time_delta_string = f'{direction[0]}{abs(time_delta) + 1 if direction == "forecast" else abs(time_delta):03}'
 
@@ -329,7 +274,7 @@ class RTOFSDataset:
                     'nodata': numpy.array([fill_value]).astype(variable_mean.dtype).item()
                 }
 
-                output_filename = f'{filename_prefix}_{variable}_{self.model_datetime.strftime("%Y%m%d")}' + \
+                output_filename = f'{filename_prefix}_{variable}_{self.model_time.strftime("%Y%m%d")}' + \
                                   f'_{time_delta_string}{filename_suffix}'
                 output_filename = os.path.join(output_dir, output_filename)
 
@@ -410,7 +355,12 @@ class RTOFSDataset:
             'lon': self.lon
         })
 
-        variables_data = [self.data(variable=variable) for variable in variables]
+        variables_data = {}
+
+        for variable in variables:
+            variable_data = [self.data(variable=variable, time=self.model_time + datetime.timedelta(days=day_delta))
+                             for day_delta in range(-3, 8 + 1)]
+            variables_data[variable] = numpy.stack(variable_data)
 
         for variable, variable_data in variables_data.items():
             output_dataset.update(
@@ -429,7 +379,7 @@ class RTOFSDataset:
         self.to_xarray(variables).to_netcdf(output_file)
 
     def __repr__(self):
-        used_params = [self.model_datetime.__repr__()]
+        used_params = [self.model_time.__repr__()]
         optional_params = [self.source, self.time_interval, self.study_area_polygon_filename]
 
         for param in optional_params:
