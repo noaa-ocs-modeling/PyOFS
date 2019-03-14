@@ -50,7 +50,7 @@ if __name__ == '__main__':
 
     sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
-    from config import DATA_DIR
+    from PyOFS import DATA_DIR
 
     json_path = os.path.join(DATA_DIR, r'reference\model_dates.json')
     input_dir = os.path.join(DATA_DIR, 'output')

@@ -7,18 +7,19 @@ Created on Aug 21, 2018
 @author: zachary.burnett
 """
 
-import sys
-
 import datetime
 import logging
 import os
-import pytz
+import sys
 from typing import Collection, Union
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
-from PyOFS import dir_structure, DATA_DIR
-from PyOFS.dataset import hfr, viirs, rtofs, wcofs, smap
+import pytz
+
+from main import dir_structure
+from PyOFS import DATA_DIR
+from PyOFS.dataset import hfr, rtofs, smap, viirs, wcofs
 
 JSON_PATH = os.path.join(DATA_DIR, r'reference\model_dates.json')
 LOG_DIR = os.path.join(DATA_DIR, 'log')
@@ -321,7 +322,7 @@ def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, d
     logging.root.manager.loggerDict['fiona._env'].setLevel(logging.CRITICAL)
 
     # write initial message
-    logging.info('Starting file conversion...')
+    logging.info(f'Starting file conversion for {output_date}')
 
     logging.info('Processing HFR SSUV...')
     write_observation(output_dir, output_date, 'ssuv')
