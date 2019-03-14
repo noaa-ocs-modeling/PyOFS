@@ -324,8 +324,7 @@ if __name__ == '__main__':
 
     print('Collecting data...')
     # data = wcofs.WCOFSDataset(model_datetime, source='avg').to_xarray(variables=('ssu', 'ssv'))
-    data = hfr.HFRRange(model_datetime, model_datetime + datetime.timedelta(days=1),
-                        source=r'C:\Data\OFS\develop\output\test\hfradar_uswc_6km.nc').to_xarray(
+    data = hfr.HFRRange(model_datetime, model_datetime + datetime.timedelta(days=1)).to_xarray(
         variables=['ssu', 'ssv'], mean=False)
 
     print('Creating velocity field...')

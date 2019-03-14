@@ -19,7 +19,7 @@ import pytz
 
 from main import dir_structure
 from PyOFS import DATA_DIR
-from PyOFS.dataset import hfr, rtofs, smap, viirs, wcofs
+from PyOFS.dataset import rtofs, hfr, viirs, smap, wcofs
 
 JSON_PATH = os.path.join(DATA_DIR, r'reference\model_dates.json')
 LOG_DIR = os.path.join(DATA_DIR, 'log')
