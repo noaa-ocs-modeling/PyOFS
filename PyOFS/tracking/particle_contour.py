@@ -70,55 +70,51 @@ class VelocityField:
         self.x_delta = float(numpy.nanmean(numpy.diff(self.field['x'])))
         self.y_delta = float(numpy.nanmean(numpy.diff(self.field['y'])))
 
-    def u(self, lon: float, lat: float, time: datetime.datetime) -> float:
+    def u(self, point: Tuple[float, float], time: datetime.datetime) -> float:
         """
         u velocity in m/s at coordinates
 
-        :param lon: longitude
-        :param lat: latitude
+        :param point: lon / lat tuple
         :param time: time
         :return: u value at coordinate in m/s
         """
 
-        x, y = pyproj.transform(WGS84, WebMercator, lon, lat)
+        x, y = pyproj.transform(WGS84, WebMercator, *point)
         return self.field['u'].sel(time=time, x=x, y=y, method='nearest').values.item()
 
-    def v(self, lon: float, lat: float, time: datetime.datetime) -> float:
+    def v(self, point: Tuple[float, float], time: datetime.datetime) -> float:
         """
         v velocity in m/s at coordinates
 
-        :param lon: longitude
-        :param lat: latitude
+        :param point: lon / lat tuple
         :param time: time
         :return: v value at coordinate in m/s
         """
 
-        x, y = pyproj.transform(WGS84, WebMercator, lon, lat)
+        x, y = pyproj.transform(WGS84, WebMercator, *point)
         return self.field['v'].sel(time=time, x=x, y=y, method='nearest').values.item()
 
-    def velocity(self, lon: float, lat: float, time: datetime.datetime) -> float:
+    def velocity(self, point: Tuple[float, float], time: datetime.datetime) -> float:
         """
         absolute velocity in m/s at coordinate
 
-        :param lon: longitude
-        :param lat: latitude
+        :param point: lon / lat tuple
         :param time: time
         :return: magnitude of uv vector in m/s
         """
 
-        return math.sqrt(self.u(lon, lat, time) ** 2 + self.v(lon, lat, time) ** 2)
+        return math.sqrt(self.u(point, time) ** 2 + self.v(point, time) ** 2)
 
-    def direction(self, lon: float, lat: float, time: datetime.datetime) -> float:
+    def direction(self, point: Tuple[float, float], time: datetime.datetime) -> float:
         """
         angle of uv vector
 
-        :param lon: longitude
-        :param lat: latitude
+        :param point: lon / lat tuple
         :param time: time
         :return: degree from north of uv vector
         """
 
-        return (math.atan2(self.u(lon, lat, time), self.v(lon, lat, time)) + math.pi) * (180 / math.pi)
+        return (math.atan2(self.u(point, time), self.v(point, time)) + math.pi) * (180 / math.pi)
 
     def plot(self, time: datetime.datetime, color: str = None):
         quiver_plot = pyplot.quiver(X=self.field['x'], Y=self.field['y'],
@@ -126,20 +122,39 @@ class VelocityField:
                                     V=self.field['v'].sel(time=time, method='nearest'), C=color, units='width')
         pyplot.quiverkey(quiver_plot, 0.9, 0.9, 2, r'$2 \frac{m}{s}$', labelpos='E', coordinates='figure')
 
-    def __getitem__(self, lon: float, lat: float, time: datetime.datetime) -> Tuple[float, float]:
+    def __getitem__(self, point: Tuple[float, float], time: datetime.datetime) -> numpy.array:
         """
         velocity vector (u, v) in m/s at coordinates
 
-        :param lon: longitude
-        :param lat: latitude
+        :param point: lon / lat tuple
         :param time: time
         :return: tuple of (u, v)
         """
 
-        return self.u(lon, lat, time), self.v(lon, lat, time)
+        return numpy.array([self.u(point, time), self.v(point, time)])
 
     def __repr__(self):
         return str(self.field)
+
+
+def track_particle(point: Tuple[float, float], time: datetime.datetime, delta_t: datetime.timedelta,
+                   velocity_field: VelocityField, order: int = 4) -> numpy.array:
+    point = numpy.array(point)
+    k1 = delta_t.total_seconds() * velocity_field[point, time]
+
+    if order == 1:
+        return k1
+    elif order > 1:
+        k2 = delta_t.total_seconds() * velocity_field[point + k1 / 2, time + delta_t / 2]
+
+        if order == 2:
+            return point + k2
+        elif order > 2:
+            k3 = delta_t.total_seconds() * velocity_field[point + k2 / 2, time + delta_t / 2]
+            k4 = delta_t.total_seconds() * velocity_field[point + k3, time + delta_t]
+
+            if order == 4:
+                return point + k1 / 6 + k2 / 3 + k3 / 3 + k4 / 6
 
 
 class Particle:
@@ -147,37 +162,34 @@ class Particle:
     Particle simulation.
     """
 
-    def __init__(self, field: VelocityField, lon: float, lat: float, time: datetime.datetime):
+    def __init__(self, field: VelocityField, point: Tuple[float, float], time: datetime.datetime):
         """
         Create new particle within in the given velocity field.
 
         :param field: velocity field
-        :param lon: starting longitude
-        :param lat: starting latitude
+        :param point: lon / lat tuple
         :param time: starting time
         """
 
         self.field = field
         self.time = time
-        self.x, self.y = pyproj.transform(WGS84, WebMercator, lon, lat)
-        self.u = self.field.u(lon, lat, time)
-        self.v = self.field.v(lon, lat, time)
+        self.point = numpy.array(pyproj.transform(WGS84, WebMercator, point[0], point[1]))
+        self.vector = numpy.array([self.field.u(point, time), self.field.v(point, time)])
 
-    def step(self, t_delta: datetime.timedelta = None):
+    def step(self, delta_t: datetime.timedelta = None):
         """
         Step particle by given time delta.
 
-        :param t_delta: time delta
+        :param delta_t: time delta
         """
 
-        if t_delta is None:
-            t_delta = self.field.t_delta
+        if delta_t is None:
+            delta_t = self.field.t_delta
 
-        if not numpy.isnan(self.u) and not numpy.isnan(self.v):
-            self.x += t_delta.total_seconds() * self.u
-            self.y += t_delta.total_seconds() * self.v
+        if not any(numpy.isnan(self.vector)):
+            self.point = track_particle(self.point, self.time, delta_t, self.field)
 
-        self.time += t_delta
+        self.time += delta_t
 
     def coordinates(self) -> tuple:
         """
@@ -185,18 +197,10 @@ class Particle:
         :return tuple of GCS coordinates
         """
 
-        return pyproj.transform(WebMercator, WGS84, self.x, self.y)
-
-    def velocity(self):
-        """
-        current velocity within velocity field
-        :return: tuple of velocity vector (u, v)
-        """
-
-        return self.u, self.v
+        return pyproj.transform(WebMercator, WGS84, *self.point)
 
     def plot(self, color: str = None):
-        lon, lat = pyproj.transform(WebMercator, WGS84, self.x, self.y)
+        lon, lat = pyproj.transform(WebMercator, WGS84, *self.point)
 
         if color is None:
             pyplot.plot(lon, lat)
@@ -204,7 +208,7 @@ class Particle:
             pyplot.plot(lon, lat, color=color)
 
     def __str__(self):
-        return f'{self.time} {self.coordinates()} -> {self.velocity()}'
+        return f'{self.time} {self.coordinates()} -> {self.vector}'
 
 
 class ParticleContour:
@@ -226,9 +230,9 @@ class ParticleContour:
         self.particles = []
 
         for point in points:
-            self.particles.append(Particle(field, point[0], point[1], time))
+            self.particles.append(Particle(field, point, time))
 
-        self.polygon = shapely.geometry.Polygon([(particle.x, particle.y) for particle in self.particles])
+        self.polygon = shapely.geometry.Polygon([particle.point for particle in self.particles])
 
     def step(self, t_delta: datetime.timedelta = None):
         """
@@ -245,10 +249,10 @@ class ParticleContour:
         for particle in self.particles:
             particle.step(t_delta)
 
-        self.polygon = shapely.geometry.Polygon([(particle.x, particle.y) for particle in self.particles])
+        self.polygon = shapely.geometry.Polygon([particle.point for particle in self.particles])
 
     def plot(self, color: str = None):
-        lon, lat = zip(*[pyproj.transform(WebMercator, WGS84, particle.x, particle.y) for particle in self.particles])
+        lon, lat = zip(*[pyproj.transform(WebMercator, WGS84, *particle.point) for particle in self.particles])
 
         if color is None:
             pyplot.plot(lon, lat)
@@ -346,8 +350,8 @@ if __name__ == '__main__':
 
     register_matplotlib_converters()
 
-    data_path = r"C:\Data\develop\output\test\rtofs_20190313.nc"
-    data_time = datetime.datetime(2019, 3, 13)
+    data_path = r"C:\Data\develop\output\test\rtofs_20190324.nc"
+    data_time = datetime.datetime.now() - datetime.timedelta(days=1)
     contour_center = (-123.79820, 37.31710)
     contour_radius = 100000
 
@@ -357,7 +361,7 @@ if __name__ == '__main__':
     else:
         from PyOFS.dataset import rtofs
 
-        data = rtofs.RTOFSDataset(data_time).to_xarray(variables=['ssu', 'ssv'])
+        data = rtofs.RTOFSDataset(data_time)
         data.to_netcdf(data_path)
 
     print('Creating velocity field...')

@@ -354,6 +354,8 @@ class RTOFSDataset:
 
         if self.time_interval == 'daily':
             times = [self.model_time + datetime.timedelta(days=day_delta) for day_delta in TIME_DELTAS['daily']]
+        else:
+            times = None
 
         if mean:
             coordinates = OrderedDict({
@@ -370,7 +372,7 @@ class RTOFSDataset:
         variables_data = {}
 
         for variable in variables:
-            variable_data = [self.data(variable=variable, time=time) for time in times]
+            variable_data = [self.data(variable=variable, time=time, crop=False) for time in times]
 
             variable_data = numpy.stack(variable_data, axis=0)
 
