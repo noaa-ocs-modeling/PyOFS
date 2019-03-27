@@ -50,6 +50,7 @@ WCOFS_MODEL_RUN_HOUR = 3
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, 'reference', 'wcofs.gpkg:study_area')
 WCOFS_4KM_GRID_FILENAME = os.path.join(DATA_DIR, 'reference', 'wcofs_4km_grid.nc')
 WCOFS_2KM_GRID_FILENAME = os.path.join(DATA_DIR, 'reference', 'wcofs_2km_grid.nc')
+VALID_SOURCE_STRINGS = ['stations', 'fields', 'avg', '2ds']
 
 GLOBAL_LOCK = threading.Lock()
 
@@ -99,12 +100,10 @@ class WCOFSDataset:
         else:
             self.model_time = model_date.replace(hour=3, minute=0, second=0, microsecond=0)
 
-        valid_source_strings = ['stations', 'fields', 'avg', '2ds']
-
         if source is None:
             source = 'avg'
-        elif source not in valid_source_strings:
-            raise ValueError(f'Location must be one of {valid_source_strings}')
+        elif source not in VALID_SOURCE_STRINGS:
+            raise ValueError(f'Location must be one of {VALID_SOURCE_STRINGS}')
 
         self.source = source
 
@@ -151,8 +150,8 @@ class WCOFSDataset:
             else:
                 for hour in self.time_deltas:
                     model_type = 'n' if hour <= 0 else 'f'
-                    url = f'{source}/{month_string}/nos.{self.wcofs_string}.{self.location}.{model_type}' + \
-                          f'{abs(hour):03}.{date_string}.t{self.cycle:02}z.nc'
+                    url = f'{source}/{month_string}/nos.{self.wcofs_string}.{self.source}.{model_type}' + \
+                          f'{abs(hour):03}.{date_string}.t{WCOFS_MODEL_RUN_HOUR:02}z.nc'
 
                     try:
                         self.netcdf_datasets[hour] = xarray.open_dataset(url, decode_times=False)
@@ -169,6 +168,11 @@ class WCOFSDataset:
                 if WCOFSDataset.variable_grids is None:
                     WCOFSDataset.variable_grids = {}
 
+                    variable_names = {}
+
+                    for data_variable, source_variables in DATA_VARIABLES.items():
+                        variable_names[source_variables[self.source]] = data_variable
+
                     for netcdf_variable_name, netcdf_variable in sample_dataset.data_vars.items():
                         if 'location' in netcdf_variable.attrs:
                             grid_name = GRID_LOCATIONS[netcdf_variable.location]
@@ -181,6 +185,9 @@ class WCOFSDataset:
                                     break
 
                             WCOFSDataset.variable_grids[variable_name] = grid_name
+                        elif netcdf_variable_name in variable_names:
+                            grid_name = netcdf_variable_name if netcdf_variable_name in ['u', 'v'] else 'rho'
+                            WCOFSDataset.variable_grids[variable_names[netcdf_variable_name]] = grid_name
 
             with GLOBAL_LOCK:
                 if WCOFSDataset.data_coordinates is None:
@@ -284,6 +291,7 @@ class WCOFSDataset:
                     with self.dataset_locks[dataset_index]:
                         # get surface layer; the last layer (of 40) at dimension 1
                         if variable in ['ssu', 'ssv']:
+                            # correct for angles
                             raw_u = self.netcdf_datasets[dataset_index][DATA_VARIABLES['ssu'][self.source]][day_index,
                                     -1, :-1, :].values
                             raw_v = self.netcdf_datasets[dataset_index][DATA_VARIABLES['ssv'][self.source]][day_index,
@@ -729,7 +737,7 @@ class WCOFSRange:
     Range of WCOFS datasets.
     """
 
-    def __init__(self, start_time: datetime.datetime, end_time: datetime.datetime, source: str = '2ds',
+    def __init__(self, start_time: datetime.datetime, end_time: datetime.datetime, source: str = None,
                  time_deltas: list = None, x_size: float = None, y_size: float = None, grid_filename: str = None,
                  source_url: str = None, wcofs_string: str = 'wcofs'):
         """
@@ -746,6 +754,11 @@ class WCOFSRange:
         :param wcofs_string: WCOFS string in filename
         :raises NoDataError: if data does not exist
         """
+
+        if source is None:
+            source = 'avg'
+        elif source not in VALID_SOURCE_STRINGS:
+            raise ValueError(f'Location must be one of {VALID_SOURCE_STRINGS}')
 
         self.source = source
         self.time_deltas = time_deltas

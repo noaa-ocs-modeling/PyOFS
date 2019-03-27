@@ -351,9 +351,9 @@ if __name__ == '__main__':
     register_matplotlib_converters()
 
     data_time = datetime.datetime.now() - datetime.timedelta(days=1)
-    data_path = os.path.join(r"C:\Data\develop\output\test", f'rtofs_{data_time.strftime("%Y%m%d")}.nc')
+    data_path = os.path.join(r"C:\Data\develop\output\test", f'wcofs_{data_time.strftime("%Y%m%d")}.nc')
     contour_center = (-123.79820, 37.31710)
-    contour_radius = 100000
+    contour_radius = 10000
 
     print('Collecting data...')
     if not os.path.exists(data_path):
