@@ -143,7 +143,7 @@ def track_particle(point: Tuple[float, float], time: datetime.datetime, delta_t:
     k1 = delta_t.total_seconds() * velocity_field[point, time]
 
     if order == 1:
-        return k1
+        return point + k1
     elif order > 1:
         k2 = delta_t.total_seconds() * velocity_field[point + k1 / 2, time + delta_t / 2]
 
@@ -350,19 +350,18 @@ if __name__ == '__main__':
 
     register_matplotlib_converters()
 
-    data_path = r"C:\Data\develop\output\test\rtofs_20190324.nc"
     data_time = datetime.datetime.now() - datetime.timedelta(days=1)
+    data_path = os.path.join(r"C:\Data\develop\output\test", f'rtofs_{data_time.strftime("%Y%m%d")}.nc')
     contour_center = (-123.79820, 37.31710)
     contour_radius = 100000
 
     print('Collecting data...')
-    if os.path.exists(data_path):
-        data = xarray.open_dataset(data_path)
-    else:
+    if not os.path.exists(data_path):
         from PyOFS.dataset import rtofs
 
         data = rtofs.RTOFSDataset(data_time)
-        data.to_netcdf(data_path)
+        data.to_netcdf(data_path, variables=('ssu', 'ssv'), mean=False)
+    data = xarray.open_dataset(data_path)
 
     print('Creating velocity field...')
     velocity_field = VelocityField(data, u_name='ssu', v_name='ssv')

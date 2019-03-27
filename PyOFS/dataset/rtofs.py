@@ -136,7 +136,6 @@ class RTOFSDataset:
             # for some reason RTOFS has longitude values shifted by 360
             self.raw_lon = sample_dataset['lon'].values
             self.lon = self.raw_lon - 180 - numpy.min(self.raw_lon)
-
             self.lat = sample_dataset['lat'].values
 
             lon_pixel_size = sample_dataset['lon'].resolution
@@ -190,7 +189,10 @@ class RTOFSDataset:
                                 lon=slice(self.study_area_west + 360,
                                           self.study_area_east + 360),
                                 lat=slice(self.study_area_south, self.study_area_north))
-                            selection = numpy.squeeze(selection).values
+
+                            selection['lon'] = selection['lon'] - 180 - numpy.min(selection['lon'])
+
+                            # selection = selection.squeeze()
                         else:
                             western_selection = data_variable.sel(time=time, method='nearest').sel(
                                 lon=slice(180, numpy.max(self.raw_lon)),
@@ -198,10 +200,9 @@ class RTOFSDataset:
                             eastern_selection = data_variable.sel(time=time, method='nearest').sel(
                                 lon=slice(numpy.min(self.raw_lon), 180),
                                 lat=slice(numpy.min(self.lat), numpy.max(self.lat)))
-                            selection = numpy.concatenate((numpy.squeeze(western_selection),
-                                                           numpy.squeeze(eastern_selection)), axis=1)
+                            selection = numpy.concatenate((western_selection, eastern_selection), axis=1)
 
-                        selection = numpy.flipud(selection)
+                        selection = numpy.flip(selection)
                         return selection
                 else:
                     raise ValueError(f'Variable must be not one of {list(DATA_VARIABLES.keys())}.')
@@ -341,7 +342,7 @@ class RTOFSDataset:
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(output_data, 1)
 
-    def to_xarray(self, variables: Collection[str] = ('sst', 'sses'), mean: bool = True) -> xarray.Dataset:
+    def to_xarray(self, variables: Collection[str] = None, mean: bool = True) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
 
@@ -350,6 +351,9 @@ class RTOFSDataset:
         :return: xarray dataset of given variables
         """
 
+        if variables is None:
+            variables = ('sst', 'sss', 'ssu', 'ssv', 'ssh')
+
         output_dataset = xarray.Dataset()
 
         if self.time_interval == 'daily':
@@ -357,24 +361,26 @@ class RTOFSDataset:
         else:
             times = None
 
-        if mean:
-            coordinates = OrderedDict({
-                'lat': self.lat,
-                'lon': self.lon
-            })
-        else:
-            coordinates = OrderedDict({
-                'time': times,
-                'lat': self.lat,
-                'lon': self.lon
-            })
-
+        coordinates = None
         variables_data = {}
 
         for variable in variables:
-            variable_data = [self.data(variable=variable, time=time, crop=False) for time in times]
+            variable_data = [self.data(variable=variable, time=time) for time in times]
+
+            if mean:
+                coordinates = OrderedDict({
+                    'lat': variable_data[0]['lat'].values,
+                    'lon': variable_data[0]['lon'].values
+                })
+            else:
+                coordinates = OrderedDict({
+                    'time': times,
+                    'lat': variable_data[0]['lat'].values,
+                    'lon': variable_data[0]['lon'].values
+                })
 
             variable_data = numpy.stack(variable_data, axis=0)
+            variable_data = numpy.squeeze(variable_data)
 
             if mean:
                 variable_data = numpy.nanmean(variable_data, axis=0)
@@ -387,15 +393,16 @@ class RTOFSDataset:
 
         return output_dataset
 
-    def to_netcdf(self, output_file: str, variables: Collection[str] = None):
+    def to_netcdf(self, output_file: str, variables: Collection[str] = None, mean: bool = True):
         """
         Writes to NetCDF file.
 
         :param output_file: output file to write
+        :param mean: whether to average all time indices
         :param variables: variables to use
         """
 
-        self.to_xarray(variables).to_netcdf(output_file)
+        self.to_xarray(variables, mean).to_netcdf(output_file)
 
     def __repr__(self):
         used_params = [self.model_time.__repr__()]
