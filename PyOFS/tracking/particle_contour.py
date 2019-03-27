@@ -174,7 +174,7 @@ class Particle:
         self.field = field
         self.time = time
         self.point = numpy.array(pyproj.transform(WGS84, WebMercator, point[0], point[1]))
-        self.vector = numpy.array([self.field.u(point, time), self.field.v(point, time)])
+        self.vector = self.field[pyproj.transform(WebMercator, WGS84, self.point[0], self.point[1]), self.time]
 
     def step(self, delta_t: datetime.timedelta = None):
         """
@@ -190,6 +190,7 @@ class Particle:
             self.point = track_particle(self.point, self.time, delta_t, self.field)
 
         self.time += delta_t
+        self.vector = self.field[pyproj.transform(WebMercator, WGS84, self.point[0], self.point[1]), self.time]
 
     def coordinates(self) -> tuple:
         """
