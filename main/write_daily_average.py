@@ -357,10 +357,12 @@ if __name__ == '__main__':
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = MODEL_DAY_DELTAS['WCOFS']
 
+    # from PyOFS.dataset import _utilities
+    #
     # model_run_dates = _utilities.range_daily(datetime.datetime.now(),
     #                                          datetime.datetime(2018, 12, 1))
     # for model_run_date in model_run_dates:
-    #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path=log_path)
+    #     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas, log_path=log_path)
 
     model_run_date = datetime.date.today()
     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas, log_path=log_path)
