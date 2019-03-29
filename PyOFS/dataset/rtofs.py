@@ -24,8 +24,8 @@ import rasterio.warp
 import xarray
 from shapely import geometry
 
+import _utilities
 from PyOFS import CRS_EPSG, DATA_DIR
-from PyOFS.dataset import _utilities
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)

@@ -19,8 +19,8 @@ import rasterio
 import scipy.interpolate
 import xarray
 
+import _utilities
 from PyOFS import CRS_EPSG, DATA_DIR
-from PyOFS.dataset import _utilities
 
 DATA_VARIABLES = {'ssu': 'u', 'ssv': 'v', 'dopx': 'DOPx', 'dopy': 'DOPy'}
 
@@ -156,12 +156,10 @@ class HFRRange:
         if end_time is None:
             end_time = self.end_time
 
-        output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(time=slice(start_time, end_time)).values
+        output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(time=slice(start_time, end_time))
 
         if dop_threshold is not None:
-            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=slice(start_time, end_time)) <= dop_threshold) & (
-                    self.netcdf_dataset['DOPy'].sel(time=slice(start_time, end_time)) <= dop_threshold)).values
-            output_data[~dop_mask] = numpy.nan
+            output_data.values[~self.dop_mask(dop_threshold)] = numpy.nan
 
         output_data = numpy.nanmean(output_data, axis=0)
 
@@ -444,9 +442,28 @@ class HFRRange:
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(numpy.flipud(raster_data), 1)
 
+    def dop_mask(self, threshold: float, start_time: datetime.datetime = None, end_time: datetime.datetime = None):
+        """
+        Get mask of time series with a dilution of precision (DOP) below the given threshold.
+
+        :param threshold: DOP threshold
+        :param start_time: start time
+        :param end_time: end time
+        :return: boolean mask
+        """
+
+        if start_time is None:
+            start_time = self.start_time
+
+        if end_time is None:
+            end_time = self.end_time
+
+        dop_x = self.netcdf_dataset['DOPx'].sel(time=slice(start_time, end_time))
+        dop_y = self.netcdf_dataset['DOPy'].sel(time=slice(start_time, end_time))
+        return ((dop_x <= threshold) & (dop_y <= threshold)).values
+
     def to_xarray(self, variables: Collection[str] = None, start_time: datetime.datetime = None,
-                  end_time: datetime.datetime = None, mean: bool = True,
-                  dop_threshold: float = 0.5) -> xarray.Dataset:
+                  end_time: datetime.datetime = None, mean: bool = True, dop_threshold: float = 0.5) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
 
@@ -471,8 +488,8 @@ class HFRRange:
 
         if mean:
             for variable in variables:
-                output_data = self.data_average(variable, start_time=start_time,
-                                                end_time=end_time, dop_threshold=dop_threshold)
+                output_data = self.data_average(variable, start_time=start_time, end_time=end_time,
+                                                dop_threshold=dop_threshold)
 
                 output_dataset.update({variable: xarray.DataArray(output_data,
                                                                   coords={'lat': self.netcdf_dataset['lat'],
@@ -480,19 +497,12 @@ class HFRRange:
                                                                   dims=('lat', 'lon'))})
         else:
             for variable in variables:
-                output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(
-                    time=slice(start_time, end_time)).values
+                output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(time=slice(start_time, end_time))
 
                 if dop_threshold is not None:
-                    dop_mask = ((self.netcdf_dataset['DOPx'] <= dop_threshold) & (
-                            self.netcdf_dataset['DOPy'] <= dop_threshold)).values
-                    output_data[~dop_mask] = numpy.nan
+                    output_data.values[~self.dop_mask(dop_threshold)] = numpy.nan
 
-                output_dataset.update({variable: xarray.DataArray(output_data,
-                                                                  coords={'time': self.netcdf_dataset['time'],
-                                                                          'lat': self.netcdf_dataset['lat'],
-                                                                          'lon': self.netcdf_dataset['lon']},
-                                                                  dims=('time', 'lat', 'lon'))})
+                output_dataset.update({variable: output_data})
 
         return output_dataset
 

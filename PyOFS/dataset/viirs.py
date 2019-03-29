@@ -25,8 +25,8 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
+import _utilities
 from PyOFS import CRS_EPSG, DATA_DIR
-from PyOFS.dataset import _utilities
 
 VIIRS_START_TIME = datetime.datetime.strptime('2012-03-01 00:10:00', '%Y-%m-%d %H:%M:%S')
 VIIRS_PERIOD = datetime.timedelta(days=16)
@@ -256,6 +256,7 @@ class VIIRSDataset:
         Retrieve data of given variable. Use 'sst_sses' to retrieve SST corrected with sensor-specific error statistic (SSES)
 
         :param variable: variable name (one of 'sst', 'sses', or 'sst_sses')
+        :param sses_correction: whether to apply sensor bias
         :return: matrix of data in Celsius
         """
 
@@ -268,6 +269,7 @@ class VIIRSDataset:
         """
         Return matrix of sea surface temperature.
 
+        :param sses_correction: whether to apply sensor bias
         :return: matrix of SST in Celsius
         """
 

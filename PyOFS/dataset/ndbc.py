@@ -22,8 +22,8 @@ import shapely
 import shapely.geometry
 import xarray
 
+import _utilities
 from PyOFS import CRS_EPSG, DATA_DIR
-from PyOFS.dataset import _utilities
 
 MEASUREMENT_VARIABLES = ['water_temperature', 'conductivity', 'salinity', 'o2_saturation', 'dissolved_oxygen',
                          'chlorophyll_concentration', 'turbidity', 'water_ph', 'water_eh']

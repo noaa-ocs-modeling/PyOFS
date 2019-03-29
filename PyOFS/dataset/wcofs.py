@@ -25,8 +25,8 @@ import xarray
 from rasterio.io import MemoryFile
 from scipy import interpolate
 
+import _utilities
 from PyOFS import CRS_EPSG, DATA_DIR
-from PyOFS.dataset import _utilities
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
@@ -1086,7 +1086,8 @@ class WCOFSRange:
             output_grid_coordinates[variable]['lon'] = numpy.arange(west, east, x_size)
             output_grid_coordinates[variable]['lat'] = numpy.arange(south, north, y_size)
 
-        start_time = datetime.datetime.now()
+        if start_time is None:
+            start_time = datetime.datetime.now()
 
         variable_data_stack_averages = {}
 
@@ -1230,8 +1231,7 @@ class WCOFSRange:
                         output_raster.write(masked_data, 1)
 
     def write_vector(self, output_filename: str, variables: Collection[str] = None,
-                     start_time: datetime.datetime = None,
-                     end_time: datetime.datetime = None):
+                     start_time: datetime.datetime = None, end_time: datetime.datetime = None):
         """
         Write average of surface velocity vector data for all hours in the given time interval to a single layer of the provided output file.
 
@@ -1244,7 +1244,8 @@ class WCOFSRange:
         if variables is None:
             variables = list(DATA_VARIABLES.keys())
 
-        start_time = datetime.datetime.now()
+        if start_time is None:
+            start_time = datetime.datetime.now()
 
         variable_data_stack_averages = {}
 
