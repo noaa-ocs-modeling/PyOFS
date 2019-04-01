@@ -8,12 +8,11 @@ Created on Feb 27, 2019
 """
 
 import datetime
+import math
 import os
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 import cartopy.feature
-import haversine
-import math
 import numpy
 import pyproj
 import shapely.geometry
@@ -116,62 +115,63 @@ class VectorField:
 
         return vector
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'{self.__class__.__name__}({self.delta_t})'
 
 
-class RankineEddy(VectorField):
-    def __init__(self, center: Tuple[float, float], radius: float, angular_velocity: float, time_deltas: numpy.array):
+class RankineVortex(VectorField):
+    def __init__(self, center: Tuple[float, float], radius: float, period: datetime.timedelta,
+                 time_deltas: numpy.array):
         """
-        Construct a 2-dimensional Rankine eddy (a solid rotating disk surrounded by inverse falloff of tangential velocity).
+        Construct a 2-dimensional solid rotating disk surrounded by inverse falloff of tangential velocity.
 
-        :param center: (lon, lat) point
-        :param radius: radius of central solid rotation
-        :param angular_velocity: velocity of central solid rotation (rad/s)
+        :param center: tuple of geographic coordinates
+        :param radius: radius of central solid rotation in meters
+        :param period: rotational period
         :param time_deltas: time differences
         """
 
         self.center = numpy.array(center)
         self.radius = radius
-        self.angular_velocity = angular_velocity
+        self.angular_velocity = 2 * math.pi / period.total_seconds()
 
         super().__init__(time_deltas)
 
     def u(self, point: numpy.array, time: datetime.datetime) -> float:
-        return -self.velocity(point, time) * math.cos(math.atan2(*(point - self.center)))
+        return -self.velocity(point, time) * math.cos(
+            math.atan2(*(point - numpy.array(pyproj.transform(WGS84, WebMercator, *self.center)))))
 
     def v(self, point: numpy.array, time: datetime.datetime) -> float:
-        return self.velocity(point, time) * math.sin(math.atan2(*(point - self.center)))
+        return self.velocity(point, time) * math.sin(
+            math.atan2(*(point - numpy.array(pyproj.transform(WGS84, WebMercator, *self.center)))))
 
     def velocity(self, point: numpy.array, time: datetime.datetime) -> float:
-        distance = haversine.haversine(self.center, point, unit='m')
+        radial_distance = math.sqrt(
+            numpy.sum((point - numpy.array(pyproj.transform(WGS84, WebMercator, *self.center))) ** 2))
 
-        if distance <= self.radius:
-            return self.angular_velocity * distance
+        if radial_distance <= self.radius:
+            return self.angular_velocity * radial_distance
         else:
-            return self.angular_velocity * self.radius ** 2 / distance
+            return self.angular_velocity * self.radius ** 2 / radial_distance
 
     def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs):
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
         points = []
-
-        radii = numpy.linspace(1, self.radius, 20)
+        radii = numpy.linspace(1, self.radius * 2, 20)
 
         for radius in radii:
-            center_x, center_y = pyproj.transform(WGS84, WebMercator, self.center[0], self.center[1])
+            linear_center = pyproj.transform(WGS84, WebMercator, *self.center)
             num_points = 50
-            points.extend(
-                [pyproj.transform(WebMercator, WGS84, math.cos(2 * math.pi / num_points * x) * radius + center_x,
-                                  math.sin(2 * math.pi / num_points * x) * radius + center_y) for x in
-                 range(0, num_points + 1)])
+            points.extend([(math.cos(2 * math.pi / num_points * point_index) * radius + linear_center[0],
+                            math.sin(2 * math.pi / num_points * point_index) * radius + linear_center[1]) for
+                           point_index in range(0, num_points + 1)])
 
-        u = [self.u(point, time) for point in points]
-        v = [self.v(point, time) for point in points]
+        vectors = [self[point, time] for point in points]
+        points = list(zip(*pyproj.transform(WebMercator, WGS84, *zip(*points))))
 
-        quiver_plot = axis.quiver([point[0] for point in points], [point[1] for point in points], u, v, units='width',
-                                  **kwargs)
+        quiver_plot = axis.quiver(*zip(*points), *zip(*vectors), units='width', **kwargs)
         axis.quiverkey(quiver_plot, 0.9, 0.9, 1, r'$1 \frac{m}{s}$', labelpos='E', coordinates='figure')
 
 
@@ -254,20 +254,20 @@ class Particle:
     Particle simulation.
     """
 
-    def __init__(self, point: Tuple[float, float], time: datetime.datetime, field: VectorField):
+    def __init__(self, location: Tuple[float, float], time: datetime.datetime, field: VectorField):
         """
         Create new particle within in the given velocity field.
 
-        :param point: (lon, lat) point
+        :param location: (lon, lat) point
         :param time: starting time
         :param field: velocity field
         """
 
-        self.point = numpy.array(pyproj.transform(WGS84, WebMercator, point[0], point[1]))
+        self.locations = [numpy.array(pyproj.transform(WGS84, WebMercator, location[0], location[1]))]
         self.time = time
         self.field = field
 
-        self.vector = self.field[self.point, self.time]
+        self.vector = self.field[self.coordinates(), self.time]
 
     def step(self, delta_t: datetime.timedelta = None, order: int = 1):
         """
@@ -284,51 +284,64 @@ class Particle:
         delta_vector = numpy.array([0, 0])
 
         if not any(numpy.isnan(self.vector)):
-            k1 = delta_seconds * velocity_field[self.point, self.time]
+            k1 = delta_seconds * self.field[self.coordinates(), self.time]
 
             if order == 1:
                 delta_vector = k1
             elif order > 1:
-                k2 = delta_seconds * velocity_field[self.point + k1 / 2, self.time + (delta_t / 2)]
+                k2 = delta_seconds * self.field[self.coordinates() + k1 / 2, self.time + (delta_t / 2)]
 
                 if order == 2:
                     delta_vector = k2
                 elif order > 2:
-                    k3 = delta_seconds * velocity_field[self.point + k2 / 2, self.time + (delta_t / 2)]
-                    k4 = delta_seconds * velocity_field[self.point + k3, self.time + delta_t]
+                    k3 = delta_seconds * self.field[self.coordinates() + k2 / 2, self.time + (delta_t / 2)]
+                    k4 = delta_seconds * self.field[self.coordinates() + k3, self.time + delta_t]
 
                     if order == 4:
                         delta_vector = k1 / 6 + k2 / 3 + k3 / 3 + k4 / 6
 
-        self.point += delta_vector
+        self.locations.append(self.coordinates() + delta_vector)
         self.time += delta_t
 
-        self.vector = self.field[self.point, self.time]
+        self.vector = self.field[self.coordinates(), self.time]
 
-    def coordinates(self) -> tuple:
+    def coordinates(self) -> numpy.array:
         """
-        current coordinates
-        :return tuple of GCS coordinates
+        Get current linear coordinates.
+
+        :return tuple of projected coordinates
         """
 
-        return pyproj.transform(WebMercator, WGS84, *self.point)
+        return self.locations[-1]
 
-    def plot(self, axis: pyplot.Axes = None, **kwargs):
+    def geometry(self) -> shapely.geometry.Point:
+        """
+        Get current location as point.
+
+        :return point geometry
+        """
+
+        return shapely.geometry.Point(*self.coordinates())
+
+    def plot(self, locations: Union[int, slice] = -1, axis: pyplot.Axes = None, **kwargs):
         """
         Plot particle as point.
 
+        :param locations: indices of locations to plot
         :param axis: pyplot axis on which to plot
         """
 
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
-        lon, lat = pyproj.transform(WebMercator, WGS84, *self.point)
+        axis.plot(*pyproj.transform(WebMercator, WGS84, *zip(*self.locations[locations])), linestyle='--', marker='o',
+                  **kwargs)
 
-        axis.plot(lon, lat, **kwargs)
-
-    def __str__(self):
+    def __str__(self) -> str:
         return f'{self.time} {self.coordinates()} -> {self.vector}'
+
+    def __repr__(self):
+        return str(self)
 
 
 class ParticleContour:
@@ -379,20 +392,19 @@ class ParticleContour:
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
-        lon, lat = zip(*[pyproj.transform(WebMercator, WGS84, *particle.point) for particle in self.particles])
+        axis.plot(*zip(*[pyproj.transform(WebMercator, WGS84, *particle.coordinates()) for particle in
+                         self.particles + [self.particles[0]]]), **kwargs)
 
-        axis.plot(lon, lat, **kwargs)
+    def geometry(self) -> shapely.geometry.Polygon:
+        return shapely.geometry.Polygon([particle.coordinates() for particle in self.particles])
 
-    def geometry(self):
-        return shapely.geometry.Polygon([particle.point for particle in self.particles])
-
-    def area(self):
+    def area(self) -> float:
         return self.geometry().area
 
-    def bounds(self):
+    def bounds(self) -> Tuple[float, float, float, float]:
         return self.geometry().bounds
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f'contour at time {self.time} with bounds {self.bounds()} and area {self.area()} m^2'
 
 
@@ -476,14 +488,17 @@ class PointContour(ParticleContour):
     def __init__(self, point: numpy.array, time: datetime.datetime, field: VectorField):
         super().__init__([point], time, field)
 
-    def geometry(self):
-        return shapely.geometry.Point(self.particles[0].point)
+    def geometry(self) -> shapely.geometry.Point:
+        return self.particles[0].geometry()
+
+    def coordinates(self):
+        return self.particles[0].coordinates()
 
     def plot(self, axis: pyplot.Axes = None, **kwargs):
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
-        lon, lat = pyproj.transform(WebMercator, WGS84, *self.particles[0].point)
+        lon, lat = pyproj.transform(WebMercator, WGS84, *self.particles[0].coordinates())
 
         axis.plot(lon, lat, **kwargs)
 
@@ -494,23 +509,23 @@ if __name__ == '__main__':
     register_matplotlib_converters()
 
     source = 'rankine'
-    order = 2
+    order = 4
 
     contour_center = (-123.79820, 37.31710)
-    contour_radius = 6000
-    data_time = datetime.datetime(2019, 3, 30)
+    contour_radius = 3000
+    data_time = datetime.datetime(2019, 3, 31)
 
-    contour_shape = 'point'
+    contour_shape = 'circle'
 
+    print('Creating velocity field...')
     if source == 'rankine':
-        print('Creating velocity field...')
-        eddy_center = contour_center
-        time_deltas = [datetime.timedelta(hours=1) for hour in range(24)]
-        velocity_field = RankineEddy(eddy_center, contour_radius * 2, 0.5, time_deltas)
-
-        print('Creating starting contour...')
+        hours = 12
+        velocity_field = RankineVortex(contour_center, contour_radius * 2, datetime.timedelta(hours=12),
+                                       [datetime.timedelta(hours=1) for hour in range(hours)])
     else:
-        data_path = os.path.join(r"C:\Data\OFS\develop\output\test",
+        from PyOFS import DATA_DIR
+
+        data_path = os.path.join(DATA_DIR, r"develop\output\test",
                                  f'{source.lower()}_{data_time.strftime("%Y%m%d")}.nc')
 
         print('Collecting data...')
@@ -533,35 +548,39 @@ if __name__ == '__main__':
 
         vector_dataset = xarray.open_dataset(data_path)
 
-        print('Creating velocity field...')
         velocity_field = VectorDataset(vector_dataset, u_name='ssu', v_name='ssv')
         data_time = _utilities.datetime64_to_time(velocity_field.dataset['time'][0])
 
     print('Creating starting contour...')
-
     if contour_shape == 'circle':
-        contour = CircleContour(contour_center, contour_radius, data_time, velocity_field)
-    elif contour_shape == 'rectangle':
-        point = pyproj.transform(WGS84, WebMercator, *contour_center)
+        point = numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center)) + contour_radius / 2
+        point = pyproj.transform(WebMercator, WGS84, *point)
+        contour = CircleContour(point, contour_radius, data_time, velocity_field)
+    elif contour_shape == 'square':
+        point = numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center)) + contour_radius / 2
         southwest_corner = pyproj.transform(WebMercator, WGS84, *(point[0] - contour_radius, point[1] - contour_radius))
         northeast_corner = pyproj.transform(WebMercator, WGS84, *(point[0] + contour_radius, point[1] + contour_radius))
         contour = RectangleContour(southwest_corner[0], northeast_corner[0], southwest_corner[1], northeast_corner[1],
                                    data_time, velocity_field)
     else:
-        point = numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))
-        point = pyproj.transform(WebMercator, WGS84, *(point + contour_radius))
+        point = numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center)) + contour_radius / 2
+        point = pyproj.transform(WebMercator, WGS84, *point)
         contour = PointContour(point, data_time, velocity_field)
 
     print(f'Contour created: {contour}')
 
     figure = pyplot.figure()
     ordinal = lambda n: f'{n}{"tsnrhtdd"[(math.floor(n / 10) % 10 != 1) * (n % 10 < 4) * n % 10::4]}'
-    figure.suptitle(
-        f'{ordinal(order)} order {source.upper()} contour with {contour_radius / 1000} km radius from {contour_center}')
+    figure.suptitle(f'{ordinal(order)} order {source.upper()} {contour_shape} contour with {contour_radius / 1000} km' +
+                    f' radius from {contour_center}')
 
     area_axis = figure.add_subplot(1, 2, 1)
     area_axis.set_xlabel('time')
     area_axis.set_ylabel('area (m^2)')
+
+    # radius_axis = figure.add_subplot(1, 2, 1)
+    # radius_axis.set_xlabel('time')
+    # radius_axis.set_ylabel('radial distance (m)')
 
     map_axis = figure.add_subplot(1, 2, 2, projection=cartopy.crs.PlateCarree())
     map_axis.set_prop_cycle(
@@ -570,10 +589,9 @@ if __name__ == '__main__':
     map_axis.add_feature(cartopy.feature.LAND)
 
     areas = {}
+    # radii = {}
 
     velocity_field.plot(data_time, map_axis)
-    contour.plot(map_axis, markersize=14)
-    pyplot.show()
 
     for time_delta in velocity_field.time_deltas:
         if type(time_delta) is numpy.timedelta64:
@@ -585,13 +603,25 @@ if __name__ == '__main__':
         contour.plot(map_axis)
 
         previous_area = contour.area()
-        contour.step(time_delta, order)
-        current_area = contour.area()
-        print(f'step {time_delta} to {contour.time}: change in area was {current_area - previous_area} m^2')
+        # previous_radius = haversine.haversine(contour_center,
+        #                                       pyproj.transform(WebMercator, WGS84, *contour.coordinates()), unit='m')
+        areas[contour.time] = previous_area
+        # radii[contour.time] = previous_radius
 
-        areas[contour.time] = current_area
+        contour.step(time_delta, order)
+
+        current_area = contour.area()
+        # current_radius = haversine.haversine(contour_center,
+        #                                      pyproj.transform(WebMercator, WGS84, *contour.coordinates()), unit='m')
+
+        print(f'step {time_delta} to {contour.time}: change in area was {current_area - previous_area} m^2')
+        # print(f'step {time_delta} to {contour.time}: change in radius was {current_radius - previous_radius} m')
 
     area_axis.plot(areas.keys(), areas.values())
+    # radius_axis.plot(radii.keys(), radii.values())
+
+    # for particle in contour.particles:
+    #     particle.plot(slice(0, -1), map_axis)
 
     pyplot.show()
 

@@ -10,13 +10,13 @@ Created on Jun 13, 2018
 import datetime
 import ftplib
 import logging
+import math
 import os
 from collections import OrderedDict
 from concurrent import futures
 from typing import Collection
 
 import fiona
-import math
 import numpy
 import rasterio
 import rasterio.features
