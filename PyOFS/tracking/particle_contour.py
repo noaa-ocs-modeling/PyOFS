@@ -17,7 +17,7 @@ import numpy
 import pyproj
 import shapely.geometry
 import xarray
-from matplotlib import pyplot
+from matplotlib import pyplot, quiver
 
 import _utilities
 
@@ -85,12 +85,13 @@ class VectorField:
 
         return math.atan2(self.u(point, time), self.v(point, time))
 
-    def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs):
+    def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs) -> quiver.Quiver:
         """
         Plot vector field at the given time.
 
         :param time: time at which to plot
         :param axis: pyplot axis on which to plot
+        :return: quiver plot
         """
 
         pass
@@ -151,7 +152,7 @@ class RankineVortex(VectorField):
         else:
             return self.angular_velocity * self.radius ** 2 / radial_distance
 
-    def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs):
+    def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs) -> quiver.Quiver:
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
@@ -169,6 +170,8 @@ class RankineVortex(VectorField):
 
         quiver_plot = axis.quiver(*zip(*points), *zip(*vectors), units='width', **kwargs)
         axis.quiverkey(quiver_plot, 0.9, 0.9, 1, r'$1 \frac{m}{s}$', labelpos='E', coordinates='figure')
+
+        return quiver_plot
 
 
 class VectorDataset(VectorField):
@@ -233,7 +236,7 @@ class VectorDataset(VectorField):
 
         return self.dataset['v'].sel(time=time, x=x_query, y=y_query, method='nearest').values.item()
 
-    def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs):
+    def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs) -> quiver.Quiver:
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
@@ -243,6 +246,8 @@ class VectorDataset(VectorField):
         quiver_plot = axis.quiver(lon, lat, self.dataset['u'].sel(time=time, method='nearest'),
                                   self.dataset['v'].sel(time=time, method='nearest'), units='width', **kwargs)
         axis.quiverkey(quiver_plot, 0.9, 0.9, 1, r'$1 \frac{m}{s}$', labelpos='E', coordinates='figure')
+
+        return quiver_plot
 
 
 class Particle:
@@ -326,19 +331,20 @@ class Particle:
 
         return shapely.geometry.Point(*self.coordinates())
 
-    def plot(self, locations: Union[int, slice] = -1, axis: pyplot.Axes = None, **kwargs):
+    def plot(self, locations: Union[int, slice] = -1, axis: pyplot.Axes = None, **kwargs) -> pyplot.Line2D:
         """
         Plot particle as point.
 
         :param locations: indices of locations to plot
         :param axis: pyplot axis on which to plot
+        :return: plot
         """
 
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
-        axis.plot(*pyproj.transform(WebMercator, WGS84, *zip(*self.locations[locations])), linestyle='--', marker='o',
-                  **kwargs)
+        return axis.plot(*pyproj.transform(WebMercator, WGS84, *zip(*self.locations[locations])), linestyle='--',
+                         marker='o', **kwargs)
 
     def __str__(self) -> str:
         return f'{self.time} {self.coordinates()} -> {self.vector}'
@@ -385,18 +391,19 @@ class ParticleContour:
         for particle in self.particles:
             particle.step(delta_t, order)
 
-    def plot(self, axis: pyplot.Axes = None, **kwargs):
+    def plot(self, axis: pyplot.Axes = None, **kwargs) -> pyplot.Line2D:
         """
         Plot the current state of the contour.
 
         :param axis: pyplot axis on which to plot
+        :return: plot
         """
 
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
-        axis.plot(*zip(*[pyproj.transform(WebMercator, WGS84, *particle.coordinates()) for particle in
-                         self.particles + [self.particles[0]]]), **kwargs)
+        return axis.plot(*zip(*[pyproj.transform(WebMercator, WGS84, *particle.coordinates()) for particle in
+                                self.particles + [self.particles[0]]]), **kwargs)
 
     def geometry(self) -> shapely.geometry.Polygon:
         return shapely.geometry.Polygon([particle.coordinates() for particle in self.particles])
@@ -497,13 +504,13 @@ class PointContour(ParticleContour):
     def coordinates(self):
         return self.particles[0].coordinates()
 
-    def plot(self, axis: pyplot.Axes = None, **kwargs):
+    def plot(self, axis: pyplot.Axes = None, **kwargs) -> pyplot.Line2D:
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
         lon, lat = pyproj.transform(WebMercator, WGS84, *self.particles[0].coordinates())
 
-        axis.plot(lon, lat, **kwargs)
+        return axis.plot(lon, lat, **kwargs)
 
 
 def translate_geographic_coordinates(point: numpy.array, offset: numpy.array) -> numpy.array:
@@ -529,7 +536,7 @@ if __name__ == '__main__':
 
     register_matplotlib_converters()
 
-    source = 'hfr'
+    source = 'rankine'
     contour_shape = 'circle'
     order = 4
 
@@ -606,7 +613,7 @@ if __name__ == '__main__':
     areas = {}
     # radial_distances = {}
 
-    # velocity_field.plot(data_time, map_axis)
+    velocity_field.plot(data_time, map_axis)
 
     for time_delta in velocity_field.time_deltas:
         if type(time_delta) is numpy.timedelta64:
