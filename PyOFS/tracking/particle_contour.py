@@ -131,23 +131,20 @@ class RankineVortex(VectorField):
         :param time_deltas: time differences
         """
 
-        self.center = numpy.array(center)
+        self.center = numpy.array(pyproj.transform(WGS84, WebMercator, *center))
         self.radius = radius
         self.angular_velocity = 2 * math.pi / period.total_seconds()
 
         super().__init__(time_deltas)
 
     def u(self, point: numpy.array, time: datetime.datetime) -> float:
-        return -self.velocity(point, time) * math.cos(
-            math.atan2(*(point - numpy.array(pyproj.transform(WGS84, WebMercator, *self.center)))))
+        return -self.velocity(point, time) * math.cos(math.atan2(*(point - self.center)))
 
     def v(self, point: numpy.array, time: datetime.datetime) -> float:
-        return self.velocity(point, time) * math.sin(
-            math.atan2(*(point - numpy.array(pyproj.transform(WGS84, WebMercator, *self.center)))))
+        return self.velocity(point, time) * math.sin(math.atan2(*(point - self.center)))
 
     def velocity(self, point: numpy.array, time: datetime.datetime) -> float:
-        radial_distance = math.sqrt(
-            numpy.sum((point - numpy.array(pyproj.transform(WGS84, WebMercator, *self.center))) ** 2))
+        radial_distance = numpy.sqrt(numpy.sum((point - self.center) ** 2))
 
         if radial_distance <= self.radius:
             return self.angular_velocity * radial_distance
@@ -162,10 +159,9 @@ class RankineVortex(VectorField):
         radii = numpy.linspace(1, self.radius * 2, 20)
 
         for radius in radii:
-            linear_center = pyproj.transform(WGS84, WebMercator, *self.center)
             num_points = 50
-            points.extend([(math.cos(2 * math.pi / num_points * point_index) * radius + linear_center[0],
-                            math.sin(2 * math.pi / num_points * point_index) * radius + linear_center[1]) for
+            points.extend([(math.cos(2 * math.pi / num_points * point_index) * radius + self.center[0],
+                            math.sin(2 * math.pi / num_points * point_index) * radius + self.center[1]) for
                            point_index in range(0, num_points + 1)])
 
         vectors = [self[point, time] for point in points]
@@ -281,24 +277,31 @@ class Particle:
             delta_t = self.field.delta_t
 
         delta_seconds = delta_t.total_seconds()
-        delta_vector = numpy.array([0, 0])
 
-        if not any(numpy.isnan(self.vector)):
+        if order > 0 and not any(numpy.isnan(self.vector)):
             k1 = delta_seconds * self.field[self.coordinates(), self.time]
 
-            if order == 1:
-                delta_vector = k1
-            elif order > 1:
+            if order > 1:
                 k2 = delta_seconds * self.field[self.coordinates() + k1 / 2, self.time + (delta_t / 2)]
 
-                if order == 2:
-                    delta_vector = k2
-                elif order > 2:
+                if order > 2:
                     k3 = delta_seconds * self.field[self.coordinates() + k2 / 2, self.time + (delta_t / 2)]
-                    k4 = delta_seconds * self.field[self.coordinates() + k3, self.time + delta_t]
 
-                    if order == 4:
-                        delta_vector = k1 / 6 + k2 / 3 + k3 / 3 + k4 / 6
+                    if order > 3:
+                        k4 = delta_seconds * self.field[self.coordinates() + k3, self.time + delta_t]
+
+                        if order > 4:
+                            raise ValueError('Methods above 4th order are not implemented.')
+                        else:
+                            delta_vector = 1 / 6 * k1 + 1 / 3 * k2 + 1 / 3 * k3 + 1 / 6 * k4
+                    else:
+                        delta_vector = 1 / 6 * k1 + 2 / 3 * k2 + 1 / 6 * k3
+                else:
+                    delta_vector = k2
+            else:
+                delta_vector = k1
+        else:
+            delta_vector = numpy.array([0, 0])
 
         self.locations.append(self.coordinates() + delta_vector)
         self.time += delta_t
@@ -503,30 +506,48 @@ class PointContour(ParticleContour):
         axis.plot(lon, lat, **kwargs)
 
 
+def translate_geographic_coordinates(point: numpy.array, offset: numpy.array) -> numpy.array:
+    """
+    Add meter offset to geographic coordinates using WebMercator.
+
+    :param point: geographic coordinates
+    :param offset: translation vector in meters
+    :return: new geographic coordinates
+    """
+
+    if type(point) is not numpy.array:
+        point = numpy.array(point)
+
+    if type(offset) is not numpy.array:
+        offset = numpy.array(offset)
+
+    return numpy.array(pyproj.transform(WebMercator, WGS84, *(pyproj.transform(WGS84, WebMercator, *point)) + offset))
+
+
 if __name__ == '__main__':
     from pandas.plotting import register_matplotlib_converters
 
     register_matplotlib_converters()
 
-    source = 'rankine'
+    source = 'hfr'
+    contour_shape = 'circle'
     order = 4
 
     contour_center = (-123.79820, 37.31710)
     contour_radius = 3000
     data_time = datetime.datetime(2019, 3, 31)
 
-    contour_shape = 'circle'
-
     print('Creating velocity field...')
     if source == 'rankine':
-        hours = 12
-        velocity_field = RankineVortex(contour_center, contour_radius * 2, datetime.timedelta(hours=12),
+        hours = 36
+        vortex_radius = contour_radius * 10
+        vortex_center = translate_geographic_coordinates(contour_center, contour_radius * -5)
+        velocity_field = RankineVortex(vortex_center, vortex_radius, datetime.timedelta(hours=12),
                                        [datetime.timedelta(hours=1) for hour in range(hours)])
     else:
         from PyOFS import DATA_DIR
 
-        data_path = os.path.join(DATA_DIR, r"develop\output\test",
-                                 f'{source.lower()}_{data_time.strftime("%Y%m%d")}.nc')
+        data_path = os.path.join(DATA_DIR, 'output', 'test', f'{source.lower()}_{data_time.strftime("%Y%m%d")}.nc')
 
         print('Collecting data...')
         if not os.path.exists(data_path):
@@ -553,19 +574,14 @@ if __name__ == '__main__':
 
     print('Creating starting contour...')
     if contour_shape == 'circle':
-        point = numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center)) + contour_radius / 2
-        point = pyproj.transform(WebMercator, WGS84, *point)
-        contour = CircleContour(point, contour_radius, data_time, velocity_field)
+        contour = CircleContour(contour_center, contour_radius, data_time, velocity_field)
     elif contour_shape == 'square':
-        point = numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center)) + contour_radius / 2
-        southwest_corner = pyproj.transform(WebMercator, WGS84, *(point[0] - contour_radius, point[1] - contour_radius))
-        northeast_corner = pyproj.transform(WebMercator, WGS84, *(point[0] + contour_radius, point[1] + contour_radius))
+        southwest_corner = translate_geographic_coordinates(contour_center, -contour_radius)
+        northeast_corner = translate_geographic_coordinates(contour_center, contour_radius)
         contour = RectangleContour(southwest_corner[0], northeast_corner[0], southwest_corner[1], northeast_corner[1],
                                    data_time, velocity_field)
     else:
-        point = numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center)) + contour_radius / 2
-        point = pyproj.transform(WebMercator, WGS84, *point)
-        contour = PointContour(point, data_time, velocity_field)
+        contour = PointContour(contour_center, data_time, velocity_field)
 
     print(f'Contour created: {contour}')
 
@@ -577,10 +593,9 @@ if __name__ == '__main__':
     area_axis = figure.add_subplot(1, 2, 1)
     area_axis.set_xlabel('time')
     area_axis.set_ylabel('area (m^2)')
-
-    # radius_axis = figure.add_subplot(1, 2, 1)
-    # radius_axis.set_xlabel('time')
-    # radius_axis.set_ylabel('radial distance (m)')
+    # radial_distances_axis = figure.add_subplot(1, 2, 1)
+    # radial_distances_axis.set_xlabel('time')
+    # radial_distances_axis.set_ylabel('radial distance (m)')
 
     map_axis = figure.add_subplot(1, 2, 2, projection=cartopy.crs.PlateCarree())
     map_axis.set_prop_cycle(
@@ -589,9 +604,9 @@ if __name__ == '__main__':
     map_axis.add_feature(cartopy.feature.LAND)
 
     areas = {}
-    # radii = {}
+    # radial_distances = {}
 
-    velocity_field.plot(data_time, map_axis)
+    # velocity_field.plot(data_time, map_axis)
 
     for time_delta in velocity_field.time_deltas:
         if type(time_delta) is numpy.timedelta64:
@@ -603,22 +618,24 @@ if __name__ == '__main__':
         contour.plot(map_axis)
 
         previous_area = contour.area()
-        # previous_radius = haversine.haversine(contour_center,
-        #                                       pyproj.transform(WebMercator, WGS84, *contour.coordinates()), unit='m')
+        # previous_radial_distance = numpy.sqrt(numpy.sum(
+        #     (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
+
         areas[contour.time] = previous_area
-        # radii[contour.time] = previous_radius
+        # radial_distances[contour.time] = previous_radial_distance
 
         contour.step(time_delta, order)
 
         current_area = contour.area()
-        # current_radius = haversine.haversine(contour_center,
-        #                                      pyproj.transform(WebMercator, WGS84, *contour.coordinates()), unit='m')
+        # current_radial_distance = numpy.sqrt(numpy.sum(
+        #     (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
 
         print(f'step {time_delta} to {contour.time}: change in area was {current_area - previous_area} m^2')
-        # print(f'step {time_delta} to {contour.time}: change in radius was {current_radius - previous_radius} m')
+        # print(
+        #     f'step {time_delta} to {contour.time}: change in radius was {current_radial_distance - previous_radial_distance} m')
 
     area_axis.plot(areas.keys(), areas.values())
-    # radius_axis.plot(radii.keys(), radii.values())
+    # radial_distances_axis.plot(radial_distances.keys(), radial_distances.values())
 
     # for particle in contour.particles:
     #     particle.plot(slice(0, -1), map_axis)
