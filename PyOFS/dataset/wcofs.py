@@ -1373,19 +1373,21 @@ class WCOFSRange:
                     if time_deltas is None:
                         time_deltas = sorted(model_time_data.keys(), reverse=True)
 
-                data_stack = numpy.stack([time_delta_data for time_delta, time_delta_data in sorted(data.items())],
-                                         axis=0)
+                data_array = xarray.concat([time_delta_data for time_delta, time_delta_data in sorted(data.items())],
+                                           'time')
 
-                data_array = xarray.DataArray(data_stack,
-                                              coords={
-                                                  'time': sorted(data.keys()),
-                                                  'time_delta': time_deltas,
-                                                  'lon': ((f'{grid}_eta', f'{grid}_xi'),
-                                                          self.data_coordinates[grid]['lon']),
-                                                  'lat': ((f'{grid}_eta', f'{grid}_xi'),
-                                                          self.data_coordinates[grid]['lat'])
-                                              },
-                                              dims=('time', 'time_delta', f'{grid}_eta', f'{grid}_xi'))
+                # data_stack = numpy.stack([time_delta_data for time_delta, time_delta_data in sorted(data.items())],
+                #                          axis=0)
+                # data_array = xarray.DataArray(data_stack,
+                #                               coords={
+                #                                   'time': sorted(data.keys()),
+                #                                   'time_delta': time_deltas,
+                #                                   'lon': ((f'{grid}_eta', f'{grid}_xi'),
+                #                                           self.data_coordinates[grid]['lon']),
+                #                                   'lat': ((f'{grid}_eta', f'{grid}_xi'),
+                #                                           self.data_coordinates[grid]['lat'])
+                #                               },
+                #                               dims=('time', 'time_delta', f'{grid}_eta', f'{grid}_xi'))
 
                 data_array.attrs['grid'] = grid
                 data_arrays[variable] = data_array

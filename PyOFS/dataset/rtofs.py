@@ -190,7 +190,7 @@ class RTOFSDataset:
                                           self.study_area_east + 360),
                                 lat=slice(self.study_area_south, self.study_area_north))
 
-                            selection['lon'] = selection['lon'] - 180 - numpy.min(selection['lon'])
+                            # selection['lon'] = selection['lon'] - 180 - numpy.min(selection['lon'])
 
                             # selection = selection.squeeze()
                         else:
