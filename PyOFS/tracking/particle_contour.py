@@ -8,11 +8,11 @@ Created on Feb 27, 2019
 """
 
 import datetime
-import math
 import os
 from typing import List, Tuple, Union
 
 import cartopy.feature
+import math
 import numpy
 import pyproj
 import shapely.geometry
