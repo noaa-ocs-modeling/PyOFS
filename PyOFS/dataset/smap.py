@@ -22,8 +22,7 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-from PyOFS import DATA_DIR, CRS_EPSG
-from PyOFS.dataset import _utilities
+from PyOFS import CRS_EPSG, DATA_DIR, utilities
 
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 
@@ -127,11 +126,11 @@ class SMAPDataset:
 
         return self.netcdf_dataset.geospatial_lon_resolution, self.netcdf_dataset.geospatial_lat_resolution
 
-    def data(self, data_datetime: datetime.datetime, variable: str = 'sss') -> numpy.ndarray:
+    def data(self, data_time: datetime.datetime, variable: str = 'sss') -> numpy.ndarray:
         """
         Retrieve SMOS SSS data.
 
-        :param data_datetime: datetime to retrieve (only uses month)
+        :param data_time: datetime to retrieve (only uses month)
         :param variable: SMOS variable to retrieve
         :return: array of data
         """
@@ -139,34 +138,34 @@ class SMAPDataset:
         output_data = None
 
         if variable == 'sss':
-            output_data = self._sss(data_datetime)
+            output_data = self._sss(data_time)
 
         return output_data
 
-    def _sss(self, data_datetime: datetime.datetime) -> numpy.ndarray:
+    def _sss(self, data_time: datetime.datetime) -> numpy.ndarray:
         """
         Retrieve SMOS SSS data.
 
-        :param data_datetime: datetime to retrieve (only uses month)
+        :param data_time: datetime to retrieve (only uses month)
         :return: array of data
         """
 
         # SMOS has data on month-long resolution
-        data_datetime = datetime.datetime(data_datetime.year, data_datetime.month, 16)
+        data_time = datetime.datetime(data_time.year, data_time.month, 16)
 
-        if numpy.datetime64(data_datetime) in self.netcdf_dataset['times'].values:
-            return self.netcdf_dataset['smap_sss'].sel(times=data_datetime).values
+        if numpy.datetime64(data_time) in self.netcdf_dataset['times'].values:
+            return self.netcdf_dataset['smap_sss'].sel(times=data_time).values
         else:
-            raise _utilities.NoDataError(f'No data exists for {data_datetime.strftime("%Y%m%dT%H%M%S")}.')
+            raise utilities.NoDataError(f'No data exists for {data_time.strftime("%Y%m%dT%H%M%S")}.')
 
-    def write_rasters(self, output_dir: str, data_datetime: datetime.datetime,
+    def write_rasters(self, output_dir: str, data_time: datetime.datetime,
                       variables: Collection[str] = tuple(['sss']),
                       filename_prefix: str = 'smos', fill_value: float = -9999.0, driver: str = 'GTiff'):
         """
         Write SMOS rasters to file using data from given variables.
 
         :param output_dir: path to output directory
-        :param data_datetime: datetime to retrieve (only uses month)
+        :param data_time: datetime to retrieve (only uses month)
         :param variables: variable names to write
         :param filename_prefix: prefix for output filenames
         :param fill_value: desired fill value of output
@@ -174,7 +173,7 @@ class SMAPDataset:
         """
 
         for variable in variables:
-            input_data = self.data(data_datetime, variable)
+            input_data = self.data(data_time, variable)
 
             if input_data is not None and not numpy.isnan(input_data).all():
                 if fill_value is not -9999.0:

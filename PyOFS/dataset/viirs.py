@@ -10,13 +10,13 @@ Created on Jun 13, 2018
 import datetime
 import ftplib
 import logging
-import math
 import os
 from collections import OrderedDict
 from concurrent import futures
 from typing import Collection
 
 import fiona
+import math
 import numpy
 import rasterio
 import rasterio.features
@@ -25,10 +25,9 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-from PyOFS import DATA_DIR, CRS_EPSG
-from PyOFS.dataset import _utilities
+from PyOFS import CRS_EPSG, DATA_DIR, utilities
 
-VIIRS_START_DATETIME = datetime.datetime.strptime('2012-03-01 00:10:00', '%Y-%m-%d %H:%M:%S')
+VIIRS_START_TIME = datetime.datetime.strptime('2012-03-01 00:10:00', '%Y-%m-%d %H:%M:%S')
 VIIRS_PERIOD = datetime.timedelta(days=16)
 
 PASS_TIMES_FILENAME = os.path.join(DATA_DIR, r"reference\viirs_pass_times.txt")
@@ -59,13 +58,13 @@ class VIIRSDataset:
     study_area_bounds = None
     study_area_coordinates = None
 
-    def __init__(self, granule_datetime: datetime.datetime = None, satellite: str = 'NPP',
+    def __init__(self, data_time: datetime.datetime = None, satellite: str = 'NPP',
                  study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, algorithm: str = 'OSPO',
                  version: str = None):
         """
         Retrieve VIIRS NetCDF dataset from NOAA with given datetime.
 
-        :param granule_datetime: dataset datetime
+        :param data_time: dataset datetime
         :param satellite: VIIRS platform
         :param study_area_polygon_filename: filename of vector file containing study area boundary
         :param algorithm: either 'STAR' or 'OSPO'
@@ -73,11 +72,11 @@ class VIIRSDataset:
         :raises NoDataError: if dataset does not exist
         """
 
-        if granule_datetime is None:
-            granule_datetime = datetime.datetime.now()
+        if data_time is None:
+            data_time = datetime.datetime.now()
 
         # round minute to nearest 10 minutes (VIIRS data interval)
-        self.granule_datetime = _utilities.round_to_ten_minutes(granule_datetime)
+        self.data_time = utilities.round_to_ten_minutes(data_time)
 
         self.satellite = satellite
 
@@ -87,13 +86,13 @@ class VIIRSDataset:
             study_area_polygon_layer_name = None
 
         # use NRT flag if granule is less than 13 days old
-        self.near_real_time = datetime.datetime.now() - granule_datetime <= datetime.timedelta(days=13)
+        self.near_real_time = datetime.datetime.now() - data_time <= datetime.timedelta(days=13)
         self.algorithm = algorithm
 
         if version is None:
-            if granule_datetime >= datetime.datetime(2018, 11, 7, 15, 10):
+            if data_time >= datetime.datetime(2018, 11, 7, 15, 10):
                 self.version = '2.60'
-            elif granule_datetime >= datetime.datetime(2017, 9, 14, 12, 50):
+            elif data_time >= datetime.datetime(2017, 9, 14, 12, 50):
                 self.version = '2.41'
             else:
                 self.version = '2.40'
@@ -102,13 +101,13 @@ class VIIRSDataset:
 
         self.url = None
 
-        month_dir = f'{self.granule_datetime.year}/{self.granule_datetime.timetuple().tm_yday:03}'
-        filename = f'{self.granule_datetime.strftime("%Y%m%d%H%M%S")}-' + \
+        month_dir = f'{self.data_time.year}/{self.data_time.timetuple().tm_yday:03}'
+        filename = f'{self.data_time.strftime("%Y%m%d%H%M%S")}-' + \
                    f'{self.algorithm}-L3U_GHRSST-SSTsubskin-VIIRS_{self.satellite.upper()}-ACSPO_V{self.version}-v02.0-fv01.0.nc'
 
         # TODO N20 does not yet have a reanalysis archive on NESDIS (as of March 8th, 2019)
         if self.satellite.upper() == 'N20' and not self.near_real_time:
-            raise _utilities.NoDataError(f'{self.satellite.upper()} does not yet have a reanalysis archive')
+            raise utilities.NoDataError(f'{self.satellite.upper()} does not yet have a reanalysis archive')
 
         for source, source_url in SOURCE_URLS['OpenDAP'].items():
             if self.near_real_time:
@@ -158,7 +157,7 @@ class VIIRSDataset:
                             os.mkdir(output_dir)
 
                         output_filename = os.path.join(output_dir,
-                                                       f'viirs_{self.granule_datetime.strftime("%Y%m%dT%H%M")}.nc')
+                                                       f'viirs_{self.data_time.strftime("%Y%m%dT%H%M")}.nc')
 
                         if os.path.exists(output_filename):
                             os.remove(output_filename)
@@ -181,7 +180,7 @@ class VIIRSDataset:
                     break
 
         if self.url is None:
-            raise _utilities.NoDataError(f'No VIIRS dataset found at {self.granule_datetime} UTC.')
+            raise utilities.NoDataError(f'No VIIRS dataset found at {self.data_time} UTC.')
 
         # construct rectangular polygon of granule extent
         if 'geospatial_bounds' in self.netcdf_dataset.attrs:
@@ -203,13 +202,13 @@ class VIIRSDataset:
                     shapely.geometry.Polygon(
                         [(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
         else:
-            logging.warning(f'{self.granule_datetime} UTC: Dataset has no stored bounds...')
+            logging.warning(f'{self.data_time} UTC: Dataset has no stored bounds...')
 
         lon_pixel_size = self.netcdf_dataset.geospatial_lon_resolution
         lat_pixel_size = self.netcdf_dataset.geospatial_lat_resolution
 
         if VIIRSDataset.study_area_extent is None:
-            logging.debug(f'Calculating indices and transform from granule at {self.granule_datetime} UTC...')
+            logging.debug(f'Calculating indices and transform from granule at {self.data_time} UTC...')
 
             # get first record in layer
             with fiona.open(self.study_area_polygon_filename, layer=study_area_polygon_layer_name) as vector_layer:
@@ -256,6 +255,7 @@ class VIIRSDataset:
         Retrieve data of given variable. Use 'sst_sses' to retrieve SST corrected with sensor-specific error statistic (SSES)
 
         :param variable: variable name (one of 'sst', 'sses', or 'sst_sses')
+        :param sses_correction: whether to apply sensor bias
         :return: matrix of data in Celsius
         """
 
@@ -268,6 +268,7 @@ class VIIRSDataset:
         """
         Return matrix of sea surface temperature.
 
+        :param sses_correction: whether to apply sensor bias
         :return: matrix of SST in Celsius
         """
 
@@ -289,7 +290,7 @@ class VIIRSDataset:
 
                     if mismatch_percentage > 0:
                         logging.warning(
-                            f'{self.granule_datetime} UTC: SSES extent mismatch at {mismatch_percentage:.1f}%')
+                            f'{self.data_time} UTC: SSES extent mismatch at {mismatch_percentage:.1f}%')
 
                     output_sst_data -= sses
 
@@ -367,7 +368,7 @@ class VIIRSDataset:
                     output_raster.write(input_data, 1)
 
     def __repr__(self):
-        used_params = [self.granule_datetime.__repr__()]
+        used_params = [self.data_time.__repr__()]
         optional_params = [self.satellite, self.study_area_polygon_filename, self.near_real_time, self.algorithm,
                            self.version]
 
@@ -391,15 +392,15 @@ class VIIRSRange:
     study_area_transform = None
     study_area_index_bounds = None
 
-    def __init__(self, start_datetime: datetime.datetime, end_datetime: datetime.datetime,
+    def __init__(self, start_time: datetime.datetime, end_time: datetime.datetime,
                  satellites: list = ('NPP', 'N20'), study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
                  pass_times_filename: str = PASS_TIMES_FILENAME, algorithm: str = 'OSPO',
                  version: str = None):
         """
         Collect VIIRS datasets within time interval.
 
-        :param start_datetime: beginning of time interval (in UTC)
-        :param end_datetime: end of time interval (in UTC)
+        :param start_time: beginning of time interval (in UTC)
+        :param end_time: end of time interval (in UTC)
         :param satellites: VIIRS platforms
         :param study_area_polygon_filename: filename of vector file of study area boundary
         :param pass_times_filename: path to text file with pass times
@@ -408,12 +409,12 @@ class VIIRSRange:
         :raises NoDataError: if data does not exist
         """
 
-        self.start_datetime = start_datetime
-        if end_datetime > datetime.datetime.utcnow():
+        self.start_time = start_time
+        if end_time > datetime.datetime.utcnow():
             # VIIRS near real time delay is 2 hours behind UTC
-            self.end_datetime = datetime.datetime.utcnow() - NRT_DELAY
+            self.end_time = datetime.datetime.utcnow() - NRT_DELAY
         else:
-            self.end_datetime = end_datetime
+            self.end_time = end_time
 
         self.satellites = satellites
 
@@ -422,7 +423,7 @@ class VIIRSRange:
         self.algorithm = algorithm
         self.version = version
 
-        self.pass_times = get_pass_times(self.start_datetime, self.end_datetime, self.viirs_pass_times_filename)
+        self.pass_times = get_pass_times(self.start_time, self.end_time, self.viirs_pass_times_filename)
 
         if len(self.pass_times) > 0:
             logging.info(f'Collecting VIIRS data from {len(self.pass_times)} passes between ' +
@@ -436,7 +437,7 @@ class VIIRSRange:
                     running_futures = {}
 
                     for pass_time in self.pass_times:
-                        running_future = concurrency_pool.submit(VIIRSDataset, granule_datetime=pass_time,
+                        running_future = concurrency_pool.submit(VIIRSDataset, data_time=pass_time,
                                                                  study_area_polygon_filename=self.study_area_polygon_filename,
                                                                  algorithm=self.algorithm, version=self.version,
                                                                  satellite=satellite)
@@ -459,12 +460,12 @@ class VIIRSRange:
 
                 logging.debug(f'VIIRS data was found in {len(self.datasets)} passes.')
             else:
-                raise _utilities.NoDataError(
-                    f'No VIIRS datasets found between {self.start_datetime} UTC and {self.end_datetime} UTC.')
+                raise utilities.NoDataError(
+                    f'No VIIRS datasets found between {self.start_time} UTC and {self.end_time} UTC.')
 
         else:
-            raise _utilities.NoDataError(
-                f'There are no VIIRS passes between {self.start_datetime} UTC and {self.end_datetime} UTC.')
+            raise utilities.NoDataError(
+                f'There are no VIIRS passes between {self.start_time} UTC and {self.end_time} UTC.')
 
     def cell_size(self) -> tuple:
         """
@@ -478,14 +479,14 @@ class VIIRSRange:
         return (sample_dataset.netcdf_dataset.geospatial_lon_resolution,
                 sample_dataset.netcdf_dataset.geospatial_lat_resolution)
 
-    def data(self, start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
+    def data(self, start_time: datetime.datetime = None, end_time: datetime.datetime = None,
              average: bool = False, sses_correction: bool = False, variables: Collection[str] = tuple('sst'),
              satellite: str = None) -> dict:
         """
         Get VIIRS data (either overlapped or averaged) from the given time interval.
 
-        :param start_datetime: beginning of time interval (in UTC)
-        :param end_datetime: end of time interval (in UTC)
+        :param start_time: beginning of time interval (in UTC)
+        :param end_time: end of time interval (in UTC)
         :param average: whether to average rasters, otherwise overlap them
         :param sses_correction: whether to subtract SSES bias from L3 sea surface temperature data
         :param variables: variables to write (either 'sst' or 'sses')
@@ -493,16 +494,16 @@ class VIIRSRange:
         :return dictionary of data per variable
         """
 
-        start_datetime = start_datetime if start_datetime is not None else self.start_datetime
-        end_datetime = end_datetime if end_datetime is not None else self.end_datetime
+        start_time = start_time if start_time is not None else self.start_time
+        end_time = end_time if end_time is not None else self.end_time
 
-        dataset_datetimes = numpy.sort(list(self.datasets.keys()))
+        dataset_times = numpy.sort(list(self.datasets.keys()))
 
         # find first and last times within specified time interval
-        start_index = numpy.searchsorted(dataset_datetimes, start_datetime)
-        end_index = numpy.searchsorted(dataset_datetimes, end_datetime)
+        start_index = numpy.searchsorted(dataset_times, start_time)
+        end_index = numpy.searchsorted(dataset_times, end_time)
 
-        pass_datetimes = dataset_datetimes[start_index:end_index]
+        pass_times = dataset_times[start_index:end_index]
 
         if variables is None:
             variables = ['sst', 'sses']
@@ -512,14 +513,14 @@ class VIIRSRange:
         for variable in variables:
             scenes_data = []
 
-            for pass_datetime in pass_datetimes:
-                if len(self.datasets[pass_datetime]) > 0:
-                    if satellite is not None and satellite in self.datasets[pass_datetime]:
-                        dataset = self.datasets[pass_datetime][satellite]
+            for pass_time in pass_times:
+                if len(self.datasets[pass_time]) > 0:
+                    if satellite is not None and satellite in self.datasets[pass_time]:
+                        dataset = self.datasets[pass_time][satellite]
                         scene_data = dataset.data(variable, sses_correction)
                     else:
                         scene_data = numpy.nanmean(numpy.stack([dataset.data(variable, sses_correction) for dataset in
-                                                                self.datasets[pass_datetime].values()], axis=0), axis=0)
+                                                                self.datasets[pass_time].values()], axis=0), axis=0)
 
                     if numpy.any(~numpy.isnan(scene_data)):
                         scenes_data.append(scene_data)
@@ -562,17 +563,17 @@ class VIIRSRange:
 
         # write a raster for each pass retrieved scene
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            for dataset_datetime, current_satellite in self.datasets.items():
+            for dataset_time, current_satellite in self.datasets.items():
                 if current_satellite is None or current_satellite == satellite:
-                    dataset = self.datasets[dataset_datetime][current_satellite]
+                    dataset = self.datasets[dataset_time][current_satellite]
 
                     concurrency_pool.submit(dataset.write_rasters, output_dir, variables=variables,
                                             filename_prefix=f'{filename_prefix}_' +
-                                                            f'{dataset_datetime.strftime("%Y%m%d%H%M%S")}',
+                                                            f'{dataset_time.strftime("%Y%m%d%H%M%S")}',
                                             fill_value=fill_value, drivers=driver, sses_correction=sses_correction)
 
     def write_raster(self, output_dir: str, filename_prefix: str = None, filename_suffix: str = None,
-                     start_datetime: datetime.datetime = None, end_datetime: datetime.datetime = None,
+                     start_time: datetime.datetime = None, end_time: datetime.datetime = None,
                      average: bool = False, fill_value: float = -9999, driver: str = 'GTiff',
                      sses_correction: bool = False, variables: Collection[str] = tuple(['sst']), satellite: str = None):
 
@@ -582,8 +583,8 @@ class VIIRSRange:
         :param output_dir: path to output directory
         :param filename_prefix: prefix for output filenames
         :param filename_suffix: suffix for output filenames
-        :param start_datetime: beginning of time interval (in UTC)
-        :param end_datetime: end of time interval (in UTC)
+        :param start_time: beginning of time interval (in UTC)
+        :param end_time: end of time interval (in UTC)
         :param average: whether to average rasters, otherwise overlap them
         :param fill_value: desired fill value of output
         :param driver: string of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
@@ -592,13 +593,13 @@ class VIIRSRange:
         :param satellite: VIIRS platform to retrieve; if not specified, will average from both satellites
         """
 
-        if start_datetime is None:
-            start_datetime = self.start_datetime
+        if start_time is None:
+            start_time = self.start_time
 
-        if end_datetime is None:
-            end_datetime = self.end_datetime
+        if end_time is None:
+            end_time = self.end_time
 
-        variable_data = self.data(start_datetime, end_datetime, average, sses_correction, variables, satellite)
+        variable_data = self.data(start_time, end_time, average, sses_correction, variables, satellite)
 
         for variable, output_data in variable_data.items():
             if output_data is not None and numpy.any(~numpy.isnan(output_data)):
@@ -633,14 +634,14 @@ class VIIRSRange:
                     current_filename_prefix = filename_prefix
 
                 if filename_suffix is None:
-                    start_datetime_string = start_datetime.strftime("%Y%m%d%H%M")
-                    end_datetime_string = end_datetime.strftime("%Y%m%d%H%M")
+                    start_time_string = start_time.strftime("%Y%m%d%H%M")
+                    end_time_string = end_time.strftime("%Y%m%d%H%M")
 
-                    if '0000' in start_datetime_string and '0000' in end_datetime_string:
-                        start_datetime_string = start_datetime_string.replace("0000", "")
-                        end_datetime_string = end_datetime_string.replace("0000", "")
+                    if '0000' in start_time_string and '0000' in end_time_string:
+                        start_time_string = start_time_string.replace("0000", "")
+                        end_time_string = end_time_string.replace("0000", "")
 
-                    current_filename_suffix = f'{start_datetime_string}_{end_datetime_string}'
+                    current_filename_suffix = f'{start_time_string}_{end_time_string}'
                 else:
                     current_filename_suffix = filename_suffix
 
@@ -652,7 +653,7 @@ class VIIRSRange:
                     output_raster.write(raster_data, 1)
             else:
                 logging.warning(
-                    f'No {"VIIRS" if satellite is None else "VIIRS " + satellite} {variable} found between {start_datetime} and {end_datetime}.')
+                    f'No {"VIIRS" if satellite is None else "VIIRS " + satellite} {variable} found between {start_time} and {end_time}.')
 
     def to_xarray(self, variables: Collection[str] = ('sst', 'sses'), mean: bool = True, sses_correction: bool = False,
                   satellites: list = None) -> xarray.Dataset:
@@ -710,7 +711,7 @@ class VIIRSRange:
         self.to_xarray(variables, mean, sses_correction, satellites).to_netcdf(output_file)
 
     def __repr__(self):
-        used_params = [self.start_datetime.__repr__(), self.end_datetime.__repr__()]
+        used_params = [self.start_time.__repr__(), self.end_time.__repr__()]
         optional_params = [self.satellites, self.study_area_polygon_filename, self.viirs_pass_times_filename,
                            self.algorithm, self.version]
 
@@ -727,7 +728,7 @@ class VIIRSRange:
 
 
 def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
-                           start_datetime: datetime.datetime = VIIRS_START_DATETIME,
+                           start_time: datetime.datetime = VIIRS_START_TIME,
                            output_filename: str = PASS_TIMES_FILENAME, num_periods: int = 1,
                            algorithm: str = 'STAR', version: str = '2.40'):
     """
@@ -735,21 +736,21 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
 
     :param satellite: satellite for which to store pass times, either NPP or N20
     :param study_area_polygon_filename: path to vector file containing polygon of study area
-    :param start_datetime: beginning of given VIIRS period (in UTC)
+    :param start_time: beginning of given VIIRS period (in UTC)
     :param output_filename: path to output file
     :param num_periods: number of periods to store
     :param algorithm: either 'STAR' or 'OSPO'
     :param version: ACSPO Version number (2.40 - 2.41)
     """
 
-    start_datetime = _utilities.round_to_ten_minutes(start_datetime)
-    end_datetime = _utilities.round_to_ten_minutes(start_datetime + (VIIRS_PERIOD * num_periods))
+    start_time = utilities.round_to_ten_minutes(start_time)
+    end_time = utilities.round_to_ten_minutes(start_time + (VIIRS_PERIOD * num_periods))
 
     print(
-        f'Getting pass times between {start_datetime.strftime("%Y-%m-%d %H:%M:%S")} and ' +
-        f'{end_datetime.strftime("%Y-%m-%d %H:%M:%S")}')
+        f'Getting pass times between {start_time.strftime("%Y-%m-%d %H:%M:%S")} and ' +
+        f'{end_time.strftime("%Y-%m-%d %H:%M:%S")}')
 
-    datetime_range = _utilities.ten_minute_range(start_datetime, end_datetime)
+    datetime_range = utilities.ten_minute_range(start_time, end_time)
 
     study_area_polygon_geopackage, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
 
@@ -763,38 +764,38 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
     lines = []
 
     for datetime_index in range(len(datetime_range)):
-        current_datetime = datetime_range[datetime_index]
+        current_time = datetime_range[datetime_index]
 
         # find number of cycles from the first orbit to the present day
-        num_cycles = int((datetime.datetime.now() - start_datetime).days / 16)
+        num_cycles = int((datetime.datetime.now() - start_time).days / 16)
 
         # iterate over each cycle
         for cycle_index in range(0, num_cycles):
             # get current datetime of interest
             cycle_offset = VIIRS_PERIOD * cycle_index
-            cycle_datetime = current_datetime + cycle_offset
+            cycle_time = current_time + cycle_offset
 
             try:
                 # get dataset of new datetime
-                dataset = VIIRSDataset(cycle_datetime, satellite, study_area_polygon_filename, algorithm, version)
+                dataset = VIIRSDataset(cycle_time, satellite, study_area_polygon_filename, algorithm, version)
 
                 # check if dataset falls within polygon extent
                 if dataset.data_extent.is_valid:
                     if study_area_polygon.intersects(dataset.data_extent):
                         # get duration from current cycle start
-                        cycle_duration = cycle_datetime - (start_datetime + cycle_offset)
+                        cycle_duration = cycle_time - (start_time + cycle_offset)
 
                         print(
-                            f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")} {cycle_duration.total_seconds()}: ' +
+                            f'{cycle_time.strftime("%Y%m%dT%H%M%S")} {cycle_duration.total_seconds()}: ' +
                             f'valid scene (checked {cycle_index + 1} cycle(s))')
-                        lines.append(f'{cycle_datetime.strftime("%Y%m%dT%H%M%S")},{cycle_duration.total_seconds()}')
+                        lines.append(f'{cycle_time.strftime("%Y%m%dT%H%M%S")},{cycle_duration.total_seconds()}')
 
                 # if we get to here, break and continue to the next datetime
                 break
-            except _utilities.NoDataError as error:
+            except utilities.NoDataError as error:
                 print(error)
         else:
-            print(f'{current_datetime.strftime("%Y%m%dT%H%M%S")}: missing dataset across all cycles')
+            print(f'{current_time.strftime("%Y%m%dT%H%M%S")}: missing dataset across all cycles')
 
         # write lines to file
         with open(output_filename, 'w') as output_file:
@@ -803,42 +804,42 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
         print('Wrote data to file')
 
 
-def get_pass_times(start_datetime: datetime.datetime, end_datetime: datetime.datetime,
+def get_pass_times(start_time: datetime.datetime, end_time: datetime.datetime,
                    pass_times_filename: str = PASS_TIMES_FILENAME):
     """
     Retreive array of datetimes of VIIRS passes within the given time interval, given initial period durations.
 
-    :param start_datetime: beginning of time interval (in UTC)
-    :param end_datetime: end of time interval (in UTC)
+    :param start_time: beginning of time interval (in UTC)
+    :param end_time: end of time interval (in UTC)
     :param pass_times_filename: filename of text file with durations of first VIIRS period
     :return:
     """
 
     # get datetime of first pass in given file
     first_pass_row = numpy.genfromtxt(pass_times_filename, dtype=str, delimiter=',')[0, :]
-    viirs_start_datetime = datetime.datetime.strptime(first_pass_row[0], '%Y%m%dT%H%M%S') - datetime.timedelta(
+    viirs_start_time = datetime.datetime.strptime(first_pass_row[0], '%Y%m%dT%H%M%S') - datetime.timedelta(
         seconds=float(first_pass_row[1]))
 
     # get starting datetime of the current VIIRS period
-    period_start_datetime = viirs_start_datetime + datetime.timedelta(
-        days=numpy.floor((start_datetime - viirs_start_datetime).days / 16) * 16)
+    period_start_time = viirs_start_time + datetime.timedelta(
+        days=numpy.floor((start_time - viirs_start_time).days / 16) * 16)
 
     # get array of seconds since the start of the first 16-day VIIRS period
     pass_durations = numpy.genfromtxt(pass_times_filename, dtype=str, delimiter=',')[:, 1].T.astype(numpy.float32)
     pass_durations = numpy.asarray([datetime.timedelta(seconds=float(duration)) for duration in pass_durations])
 
     # add extra VIIRS periods to end of pass durations
-    if end_datetime > (period_start_datetime + VIIRS_PERIOD):
-        extra_periods = math.ceil((end_datetime - period_start_datetime) / VIIRS_PERIOD) - 1
+    if end_time > (period_start_time + VIIRS_PERIOD):
+        extra_periods = math.ceil((end_time - period_start_time) / VIIRS_PERIOD) - 1
         for period in range(extra_periods):
             pass_durations = numpy.append(pass_durations, pass_durations[-360:] + pass_durations[-1])
 
     # get datetimes of VIIRS passes within the given time interval
-    pass_times = period_start_datetime + pass_durations
+    pass_times = period_start_time + pass_durations
 
     # find starting and ending times within the given time interval
-    start_index = numpy.searchsorted(pass_times, start_datetime)
-    end_index = numpy.searchsorted(pass_times, end_datetime)
+    start_index = numpy.searchsorted(pass_times, start_time)
+    end_index = numpy.searchsorted(pass_times, end_time)
 
     # ensure at least one datetime in range
     if start_index == end_index:
@@ -853,10 +854,10 @@ def get_pass_times(start_datetime: datetime.datetime, end_datetime: datetime.dat
 if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIR, r'output\test')
 
-    start_datetime = datetime.datetime.utcnow() - datetime.timedelta(days=1)
-    end_datetime = start_datetime + datetime.timedelta(days=1)
+    start_time = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+    end_time = start_time + datetime.timedelta(days=1)
 
-    viirs_range = VIIRSRange(start_datetime, end_datetime)
+    viirs_range = VIIRSRange(start_time, end_time)
     viirs_range.write_raster(output_dir)
 
     print('done')

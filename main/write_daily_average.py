@@ -92,21 +92,23 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
 
             viirs_range = viirs.VIIRSRange(start_of_day_in_utc, end_of_day_in_utc)
             viirs_range.write_raster(observation_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_morning',
-                                     start_datetime=start_of_day_in_utc, end_datetime=noon_in_utc,
+                                     start_time=start_of_day_in_utc, end_time=noon_in_utc,
                                      fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', sses_correction=False,
                                      variables=['sst'])
             viirs_range.write_raster(observation_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_night',
-                                     start_datetime=noon_in_utc, end_datetime=end_of_day_in_utc,
+                                     start_time=noon_in_utc, end_time=end_of_day_in_utc,
                                      fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', sses_correction=False,
                                      variables=['sst'])
             del viirs_range
         elif observation == 'sss':
             smap_dataset = smap.SMAPDataset()
-            smap_dataset.write_rasters(observation_dir, data_datetime=start_of_day, fill_value=LEAFLET_NODATA_VALUE,
+            smap_dataset.write_rasters(observation_dir, data_time=start_of_day, fill_value=LEAFLET_NODATA_VALUE,
                                        driver='GTiff', variables=['sss'])
             del smap_dataset
     except Exception as error:
-        logging.warning(error)
+        error_type, exc_obj, error_traceback = sys.exc_info()
+        filename = os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]
+        logging.warning(f'{error} ({filename}:{error_traceback.tb_lineno})')
 
 
 def write_rtofs(output_dir: str, model_run_date: Union[datetime.datetime, datetime.date],
@@ -177,7 +179,9 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                     logging.info(f'Skipping RTOFS day {day_delta} uv')
         del rtofs_dataset
     except Exception as error:
-        logging.warning(error)
+        error_type, exc_obj, error_traceback = sys.exc_info()
+        filename = os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]
+        logging.warning(f'{error} ({filename}:{error_traceback.tb_lineno})')
 
 
 def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, datetime.date, int, float],
@@ -294,7 +298,9 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
         if grid_size_km == 2:
             wcofs.reset_dataset_grid()
     except Exception as error:
-        logging.warning(error)
+        error_type, exc_obj, error_traceback = sys.exc_info()
+        filename = os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]
+        logging.warning(f'{error} ({filename}:{error_traceback.tb_lineno})')
 
 
 def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, datetime.date, int, float],
@@ -357,12 +363,10 @@ if __name__ == '__main__':
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = MODEL_DAY_DELTAS['WCOFS']
 
-    # from PyOFS.dataset import _utilities
-    #
     # model_run_dates = _utilities.range_daily(datetime.datetime.now(),
     #                                          datetime.datetime(2018, 12, 1))
     # for model_run_date in model_run_dates:
-    #     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas, log_path=log_path)
+    #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path=log_path)
 
     model_run_date = datetime.date.today()
     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas, log_path=log_path)

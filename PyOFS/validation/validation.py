@@ -1,9 +1,9 @@
 import datetime
 import os
+import sys
 from concurrent import futures
 
 import numpy
-import sys
 import xarray
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
@@ -17,12 +17,12 @@ WORKSPACE_DIR = os.path.join(DATA_DIR, 'validation')
 UTC_OFFSET = 8
 
 
-def to_netcdf(start_datetime: datetime.datetime, end_datetime: datetime.datetime, output_dir: str):
+def to_netcdf(start_time: datetime.datetime, end_time: datetime.datetime, output_dir: str):
     """
     Writes HFR, VIIRS, and WCOFS data to NetCDF files at the given filenames.
 
-    :param start_datetime: Start of time interval.
-    :param end_datetime: End of time interval.
+    :param start_time: Start of time interval.
+    :param end_time: End of time interval.
     :param output_dir: Output directory.
     """
 
@@ -40,21 +40,21 @@ def to_netcdf(start_datetime: datetime.datetime, end_datetime: datetime.datetime
 
     # write HFR NetCDF file if it does not exist
     if not os.path.exists(nc_filenames['hfr']):
-        hfr_range = hfr.HFRRange(start_datetime, end_datetime)
+        hfr_range = hfr.HFRRange(start_time, end_time)
         hfr_range.to_netcdf(nc_filenames['hfr'])
 
     # write VIIRS NetCDF file if it does not exist
     if not os.path.exists(nc_filenames['viirs']):
-        utc_start_datetime = start_datetime + datetime.timedelta(hours=UTC_OFFSET)
-        utc_end_datetime = end_datetime + datetime.timedelta(hours=UTC_OFFSET)
+        utc_start_time = start_time + datetime.timedelta(hours=UTC_OFFSET)
+        utc_end_time = end_time + datetime.timedelta(hours=UTC_OFFSET)
 
-        viirs_range = viirs.VIIRSRange(utc_start_datetime, utc_end_datetime)
+        viirs_range = viirs.VIIRSRange(utc_start_time, utc_end_time)
         viirs_range.to_netcdf(nc_filenames['viirs'], variables=['sst'])
 
     # write WCOFS NetCDF files if they do not exist
     if not os.path.exists(nc_filenames['wcofs_u_noDA']) or not os.path.exists(
             nc_filenames['wcofs_v_noDA']) or not os.path.exists(nc_filenames['wcofs_sst_noDA']):
-        wcofs_range_noDA = wcofs.WCOFSRange(start_datetime, end_datetime, source='avg',
+        wcofs_range_noDA = wcofs.WCOFSRange(start_time, end_time, source='avg',
                                             grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME,
                                             source_url=os.path.join(DATA_DIR, 'input', 'wcofs', 'avg'),
                                             wcofs_string='wcofs4')
@@ -68,7 +68,7 @@ def to_netcdf(start_datetime: datetime.datetime, end_datetime: datetime.datetime
             nc_filenames['wcofs_u_DA']) or not os.path.exists(nc_filenames['wcofs_v_DA']):
         from PyOFS.dataset import wcofs
 
-        wcofs_range = wcofs.WCOFSRange(start_datetime, end_datetime, source='avg')
+        wcofs_range = wcofs.WCOFSRange(start_time, end_time, source='avg')
 
         # TODO find a way to combine WCOFS variables without raising MemoryError
         wcofs_range.to_netcdf(nc_filenames['wcofs_sst_DA'], variables=['temp'])
@@ -255,14 +255,14 @@ def r_squ(x: numpy.ndarray, y: numpy.ndarray) -> float:
 
 if __name__ == '__main__':
     # setup start and ending times
-    start_datetime = datetime.datetime(2018, 11, 11)
-    end_datetime = start_datetime + datetime.timedelta(days=1)
+    start_time = datetime.datetime(2018, 11, 11)
+    end_time = start_time + datetime.timedelta(days=1)
 
-    day_dir = os.path.join(WORKSPACE_DIR, start_datetime.strftime('%Y%m%d'))
+    day_dir = os.path.join(WORKSPACE_DIR, start_time.strftime('%Y%m%d'))
     if not os.path.exists(day_dir):
         os.mkdir(day_dir)
 
-    to_netcdf(start_datetime, end_datetime, day_dir)
+    to_netcdf(start_time, end_time, day_dir)
 
     datasets = from_netcdf(day_dir)
 
