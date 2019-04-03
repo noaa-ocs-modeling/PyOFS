@@ -25,8 +25,7 @@ import xarray
 from rasterio.io import MemoryFile
 from scipy import interpolate
 
-import _utilities
-from PyOFS import CRS_EPSG, DATA_DIR
+from PyOFS import CRS_EPSG, DATA_DIR, utilities
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
@@ -253,7 +252,7 @@ class WCOFSDataset:
                         WCOFSDataset.grid_bounds[grid_name] = (west, north, east, south)
 
         else:
-            raise _utilities.NoDataError(
+            raise utilities.NoDataError(
                 f'No WCOFS datasets found for {self.model_time} at the given time deltas ({self.time_deltas}).')
 
     def bounds(self, variable: str = 'psi') -> tuple:
@@ -769,19 +768,19 @@ class WCOFSRange:
         self.wcofs_string = wcofs_string
 
         if self.source == 'avg':
-            self.start_time = _utilities.round_to_day(start_time)
-            self.end_time = _utilities.round_to_day(end_time)
+            self.start_time = utilities.round_to_day(start_time)
+            self.end_time = utilities.round_to_day(end_time)
         else:
-            self.start_time = _utilities.round_to_hour(start_time)
-            self.end_time = _utilities.round_to_hour(end_time)
+            self.start_time = utilities.round_to_hour(start_time)
+            self.end_time = utilities.round_to_hour(end_time)
 
         logging.info(f'Collecting WCOFS stack between {self.start_time} and {self.end_time}...')
 
         # get all possible model dates that could overlap with the given time interval
         overlapping_start_time = self.start_time - datetime.timedelta(hours=WCOFS_MODEL_HOURS['f'] - 24)
         overlapping_end_time = self.end_time + datetime.timedelta(hours=-WCOFS_MODEL_HOURS['n'] - 24)
-        model_dates = _utilities.range_daily(_utilities.round_to_day(overlapping_start_time, 'floor'),
-                                             _utilities.round_to_day(overlapping_end_time, 'ceiling'))
+        model_dates = utilities.range_daily(utilities.round_to_day(overlapping_start_time, 'floor'),
+                                            utilities.round_to_day(overlapping_end_time, 'ceiling'))
 
         self.datasets = {}
 
@@ -859,7 +858,7 @@ class WCOFSRange:
             for completed_future in futures.as_completed(running_futures):
                 model_date = running_futures[completed_future]
 
-                if type(completed_future.exception()) is not _utilities.NoDataError:
+                if type(completed_future.exception()) is not utilities.NoDataError:
                     result = completed_future.result()
                     self.datasets[model_date] = result
 
@@ -872,7 +871,7 @@ class WCOFSRange:
             self.data_coordinates = WCOFSDataset.data_coordinates
             self.variable_grids = WCOFSDataset.variable_grids
         else:
-            raise _utilities.NoDataError(
+            raise utilities.NoDataError(
                 f'No WCOFS datasets found between {self.start_time} and {self.end_time}.')
 
     def data(self, variable: str, model_time: datetime.datetime, time_delta: int) -> numpy.ndarray:
@@ -948,11 +947,11 @@ class WCOFSRange:
         end_time = end_time if end_time is not None else self.end_time
 
         if self.source == 'avg':
-            time_range = _utilities.range_daily(_utilities.round_to_day(start_time),
-                                                _utilities.round_to_day(end_time))
+            time_range = utilities.range_daily(utilities.round_to_day(start_time),
+                                               utilities.round_to_day(end_time))
         else:
-            time_range = _utilities.range_hourly(_utilities.round_to_hour(start_time),
-                                                 _utilities.round_to_hour(end_time))
+            time_range = utilities.range_hourly(utilities.round_to_hour(start_time),
+                                                utilities.round_to_hour(end_time))
 
         output_data = {}
 
@@ -1355,11 +1354,11 @@ class WCOFSRange:
                 grid = self.variable_grids[variable]
 
                 if self.source == 'avg':
-                    model_times = _utilities.range_daily(_utilities.round_to_day(self.start_time),
-                                                         _utilities.round_to_day(self.end_time))
+                    model_times = utilities.range_daily(utilities.round_to_day(self.start_time),
+                                                        utilities.round_to_day(self.end_time))
                 else:
-                    model_times = _utilities.range_hourly(_utilities.round_to_hour(self.start_time),
-                                                          _utilities.round_to_hour(self.end_time))
+                    model_times = utilities.range_hourly(utilities.round_to_hour(self.start_time),
+                                                         utilities.round_to_hour(self.end_time))
 
                 data = {}
                 time_deltas = None

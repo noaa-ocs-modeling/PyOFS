@@ -22,8 +22,7 @@ import shapely
 import shapely.geometry
 import xarray
 
-import _utilities
-from PyOFS import CRS_EPSG, DATA_DIR
+from PyOFS import CRS_EPSG, DATA_DIR, utilities
 
 MEASUREMENT_VARIABLES = ['water_temperature', 'conductivity', 'salinity', 'o2_saturation', 'dissolved_oxygen',
                          'chlorophyll_concentration', 'turbidity', 'water_ph', 'water_eh']
@@ -60,7 +59,7 @@ class NDBCStation:
             self.latitude = self.netcdf_dataset['latitude'].values.item()
             self.valid = True
         except:
-            raise _utilities.NoDataError(f'No NDBC dataset found at {self.url}')
+            raise utilities.NoDataError(f'No NDBC dataset found at {self.url}')
 
     def geometry(self) -> shapely.geometry.Point:
         """
@@ -135,7 +134,7 @@ class NDBCRange:
             for completed_future in futures.as_completed(running_futures):
                 station_name = running_futures[completed_future]
 
-                if type(completed_future.exception()) is not _utilities.NoDataError:
+                if type(completed_future.exception()) is not utilities.NoDataError:
                     result = completed_future.result()
                     logging.info(f'Collecting NDBC data from station {station_name}...')
                     self.stations[station_name] = result
@@ -143,7 +142,7 @@ class NDBCRange:
             del running_futures
 
         if len(self.stations) == 0:
-            raise _utilities.NoDataError(
+            raise utilities.NoDataError(
                 f'No NDBC datasets found between {self.start_time} and {self.end_time}.')
 
     def write_vector(self, output_filename: str, layer_name: str, start_time: datetime.datetime = None,

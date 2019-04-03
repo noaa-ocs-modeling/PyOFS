@@ -25,8 +25,7 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-import _utilities
-from PyOFS import CRS_EPSG, DATA_DIR
+from PyOFS import CRS_EPSG, DATA_DIR, utilities
 
 VIIRS_START_TIME = datetime.datetime.strptime('2012-03-01 00:10:00', '%Y-%m-%d %H:%M:%S')
 VIIRS_PERIOD = datetime.timedelta(days=16)
@@ -77,7 +76,7 @@ class VIIRSDataset:
             data_time = datetime.datetime.now()
 
         # round minute to nearest 10 minutes (VIIRS data interval)
-        self.data_time = _utilities.round_to_ten_minutes(data_time)
+        self.data_time = utilities.round_to_ten_minutes(data_time)
 
         self.satellite = satellite
 
@@ -108,7 +107,7 @@ class VIIRSDataset:
 
         # TODO N20 does not yet have a reanalysis archive on NESDIS (as of March 8th, 2019)
         if self.satellite.upper() == 'N20' and not self.near_real_time:
-            raise _utilities.NoDataError(f'{self.satellite.upper()} does not yet have a reanalysis archive')
+            raise utilities.NoDataError(f'{self.satellite.upper()} does not yet have a reanalysis archive')
 
         for source, source_url in SOURCE_URLS['OpenDAP'].items():
             if self.near_real_time:
@@ -181,7 +180,7 @@ class VIIRSDataset:
                     break
 
         if self.url is None:
-            raise _utilities.NoDataError(f'No VIIRS dataset found at {self.data_time} UTC.')
+            raise utilities.NoDataError(f'No VIIRS dataset found at {self.data_time} UTC.')
 
         # construct rectangular polygon of granule extent
         if 'geospatial_bounds' in self.netcdf_dataset.attrs:
@@ -461,11 +460,11 @@ class VIIRSRange:
 
                 logging.debug(f'VIIRS data was found in {len(self.datasets)} passes.')
             else:
-                raise _utilities.NoDataError(
+                raise utilities.NoDataError(
                     f'No VIIRS datasets found between {self.start_time} UTC and {self.end_time} UTC.')
 
         else:
-            raise _utilities.NoDataError(
+            raise utilities.NoDataError(
                 f'There are no VIIRS passes between {self.start_time} UTC and {self.end_time} UTC.')
 
     def cell_size(self) -> tuple:
@@ -744,14 +743,14 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
     :param version: ACSPO Version number (2.40 - 2.41)
     """
 
-    start_time = _utilities.round_to_ten_minutes(start_time)
-    end_time = _utilities.round_to_ten_minutes(start_time + (VIIRS_PERIOD * num_periods))
+    start_time = utilities.round_to_ten_minutes(start_time)
+    end_time = utilities.round_to_ten_minutes(start_time + (VIIRS_PERIOD * num_periods))
 
     print(
         f'Getting pass times between {start_time.strftime("%Y-%m-%d %H:%M:%S")} and ' +
         f'{end_time.strftime("%Y-%m-%d %H:%M:%S")}')
 
-    datetime_range = _utilities.ten_minute_range(start_time, end_time)
+    datetime_range = utilities.ten_minute_range(start_time, end_time)
 
     study_area_polygon_geopackage, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
 
@@ -793,7 +792,7 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
 
                 # if we get to here, break and continue to the next datetime
                 break
-            except _utilities.NoDataError as error:
+            except utilities.NoDataError as error:
                 print(error)
         else:
             print(f'{current_time.strftime("%Y%m%dT%H%M%S")}: missing dataset across all cycles')

@@ -22,8 +22,7 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-import _utilities
-from PyOFS import CRS_EPSG, DATA_DIR
+from PyOFS import CRS_EPSG, DATA_DIR, utilities
 
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 
@@ -157,7 +156,7 @@ class SMAPDataset:
         if numpy.datetime64(data_time) in self.netcdf_dataset['times'].values:
             return self.netcdf_dataset['smap_sss'].sel(times=data_time).values
         else:
-            raise _utilities.NoDataError(f'No data exists for {data_time.strftime("%Y%m%dT%H%M%S")}.')
+            raise utilities.NoDataError(f'No data exists for {data_time.strftime("%Y%m%dT%H%M%S")}.')
 
     def write_rasters(self, output_dir: str, data_time: datetime.datetime,
                       variables: Collection[str] = tuple(['sss']),

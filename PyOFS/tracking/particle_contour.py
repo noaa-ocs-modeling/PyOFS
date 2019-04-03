@@ -20,8 +20,6 @@ import shapely.geometry
 import xarray
 from matplotlib import pyplot, quiver
 
-import _utilities
-
 WGS84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
 WebMercator = pyproj.Proj(
     '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs')
@@ -557,7 +555,7 @@ if __name__ == '__main__':
         vortex_period = datetime.timedelta(days=5)
         velocity_field = RankineVortex(vortex_center, vortex_radius, vortex_period, time_deltas)
     else:
-        from PyOFS import DATA_DIR
+        from PyOFS import DATA_DIR, utilities
 
         data_path = os.path.join(DATA_DIR, 'output', 'test', f'{source.lower()}_{data_time.strftime("%Y%m%d")}.nc')
 
@@ -582,7 +580,7 @@ if __name__ == '__main__':
         vector_dataset = xarray.open_dataset(data_path)
 
         velocity_field = VectorDataset(vector_dataset, u_name='ssu', v_name='ssv')
-        data_time = _utilities.datetime64_to_time(velocity_field.dataset['time'][0])
+        data_time = utilities.datetime64_to_time(velocity_field.dataset['time'][0])
 
     print('Creating starting contour...')
     if contour_shape == 'circle':

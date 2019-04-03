@@ -19,8 +19,7 @@ import rasterio
 import scipy.interpolate
 import xarray
 
-import _utilities
-from PyOFS import CRS_EPSG, DATA_DIR
+from PyOFS import CRS_EPSG, DATA_DIR, utilities
 
 DATA_VARIABLES = {'ssu': 'u', 'ssv': 'v', 'dopx': 'DOPx', 'dopy': 'DOPy'}
 
@@ -91,7 +90,7 @@ class HFRRange:
         try:
             self.netcdf_dataset = xarray.open_dataset(self.url)
         except OSError:
-            raise _utilities.NoDataError(f'No HFR dataset found at {self.url}')
+            raise utilities.NoDataError(f'No HFR dataset found at {self.url}')
 
         raw_times = self.netcdf_dataset['time']
 

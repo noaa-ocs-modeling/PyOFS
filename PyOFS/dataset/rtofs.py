@@ -24,8 +24,7 @@ import rasterio.warp
 import xarray
 from shapely import geometry
 
-import _utilities
-from PyOFS import CRS_EPSG, DATA_DIR
+from PyOFS import CRS_EPSG, DATA_DIR, utilities
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
@@ -153,7 +152,7 @@ class RTOFSDataset:
             self.study_area_transform = rasterio.transform.from_origin(self.study_area_west, self.study_area_north,
                                                                        lon_pixel_size, lat_pixel_size)
         else:
-            raise _utilities.NoDataError(f'No RTOFS datasets found for {self.model_time}.')
+            raise utilities.NoDataError(f'No RTOFS datasets found for {self.model_time}.')
 
     def data(self, variable: str, time: datetime.datetime, crop: bool = True) -> numpy.ndarray:
         """
