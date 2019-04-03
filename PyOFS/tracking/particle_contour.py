@@ -536,7 +536,7 @@ if __name__ == '__main__':
 
     register_matplotlib_converters()
 
-    source = 'rankine'
+    source = 'hfr'
     contour_shape = 'circle'
     order = 4
 
@@ -549,7 +549,8 @@ if __name__ == '__main__':
         hours = 36
         vortex_radius = contour_radius * 10
         vortex_center = translate_geographic_coordinates(contour_center, contour_radius * -5)
-        velocity_field = RankineVortex(vortex_center, vortex_radius, datetime.timedelta(hours=12),
+        vortex_period = datetime.timedelta(hours=12)
+        velocity_field = RankineVortex(vortex_center, vortex_radius, vortex_period,
                                        [datetime.timedelta(hours=1) for hour in range(hours)])
     else:
         from PyOFS import DATA_DIR
@@ -597,12 +598,14 @@ if __name__ == '__main__':
     figure.suptitle(f'{ordinal(order)} order {source.upper()} {contour_shape} contour with {contour_radius / 1000} km' +
                     f' radius from {contour_center}')
 
-    area_axis = figure.add_subplot(1, 2, 1)
-    area_axis.set_xlabel('time')
-    area_axis.set_ylabel('area (m^2)')
-    # radial_distances_axis = figure.add_subplot(1, 2, 1)
-    # radial_distances_axis.set_xlabel('time')
-    # radial_distances_axis.set_ylabel('radial distance (m)')
+    if contour_shape == 'point':
+        radial_distances_axis = figure.add_subplot(1, 2, 1)
+        radial_distances_axis.set_xlabel('time')
+        radial_distances_axis.set_ylabel('radial distance (m)')
+    else:
+        area_axis = figure.add_subplot(1, 2, 1)
+        area_axis.set_xlabel('time')
+        area_axis.set_ylabel('area (m^2)')
 
     map_axis = figure.add_subplot(1, 2, 2, projection=cartopy.crs.PlateCarree())
     map_axis.set_prop_cycle(
@@ -610,8 +613,10 @@ if __name__ == '__main__':
                numpy.linspace(0, 1, len(velocity_field.time_deltas) + 1)])
     map_axis.add_feature(cartopy.feature.LAND)
 
-    areas = {}
-    # radial_distances = {}
+    if contour_shape == 'point':
+        radial_distances = {}
+    else:
+        areas = {}
 
     velocity_field.plot(data_time, map_axis)
 
@@ -622,30 +627,38 @@ if __name__ == '__main__':
         if type(time_delta) is int:
             time_delta = datetime.timedelta(seconds=time_delta * 1e-9)
 
-        contour.plot(map_axis)
+        if contour_shape == 'point':
+            previous_radial_distance = numpy.sqrt(numpy.sum(
+                (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
+        else:
+            contour.plot(map_axis)
+            previous_area = contour.area()
 
-        previous_area = contour.area()
-        # previous_radial_distance = numpy.sqrt(numpy.sum(
-        #     (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
-
-        areas[contour.time] = previous_area
-        # radial_distances[contour.time] = previous_radial_distance
+        if contour_shape == 'point':
+            radial_distances[contour.time] = previous_radial_distance
+        else:
+            areas[contour.time] = previous_area
 
         contour.step(time_delta, order)
 
-        current_area = contour.area()
-        # current_radial_distance = numpy.sqrt(numpy.sum(
-        #     (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
+        if contour_shape == 'point':
+            current_radial_distance = numpy.sqrt(numpy.sum(
+                (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
+        else:
+            current_area = contour.area()
 
-        print(f'step {time_delta} to {contour.time}: change in area was {current_area - previous_area} m^2')
-        # print(
-        #     f'step {time_delta} to {contour.time}: change in radius was {current_radial_distance - previous_radial_distance} m')
+        if contour_shape == 'point':
+            print(
+                f'step {time_delta} to {contour.time}: change in radius was {current_radial_distance - previous_radial_distance} m')
+        else:
+            print(f'step {time_delta} to {contour.time}: change in area was {current_area - previous_area} m^2')
 
-    area_axis.plot(areas.keys(), areas.values())
-    # radial_distances_axis.plot(radial_distances.keys(), radial_distances.values())
-
-    # for particle in contour.particles:
-    #     particle.plot(slice(0, -1), map_axis)
+    if contour_shape == 'point':
+        radial_distances_axis.plot(radial_distances.keys(), radial_distances.values())
+        for particle in contour.particles:
+            particle.plot(slice(0, -1), map_axis)
+    else:
+        area_axis.plot(areas.keys(), areas.values())
 
     pyplot.show()
 
