@@ -106,7 +106,9 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
                                        driver='GTiff', variables=['sss'])
             del smap_dataset
     except Exception as error:
-        logging.warning(error)
+        error_type, exc_obj, error_traceback = sys.exc_info()
+        filename = os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]
+        logging.warning(f'{error} ({filename}:{error_traceback.tb_lineno})')
 
 
 def write_rtofs(output_dir: str, model_run_date: Union[datetime.datetime, datetime.date],
@@ -177,7 +179,9 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                     logging.info(f'Skipping RTOFS day {day_delta} uv')
         del rtofs_dataset
     except Exception as error:
-        logging.warning(error)
+        error_type, exc_obj, error_traceback = sys.exc_info()
+        filename = os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]
+        logging.warning(f'{error} ({filename}:{error_traceback.tb_lineno})')
 
 
 def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, datetime.date, int, float],
@@ -294,7 +298,9 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
         if grid_size_km == 2:
             wcofs.reset_dataset_grid()
     except Exception as error:
-        logging.warning(error)
+        error_type, exc_obj, error_traceback = sys.exc_info()
+        filename = os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]
+        logging.warning(f'{error} ({filename}:{error_traceback.tb_lineno})')
 
 
 def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, datetime.date, int, float],
