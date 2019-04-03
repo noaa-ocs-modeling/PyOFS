@@ -12,6 +12,7 @@ import os
 from typing import List, Tuple, Union
 
 import cartopy.feature
+import haversine
 import math
 import numpy
 import pyproj
@@ -536,22 +537,25 @@ if __name__ == '__main__':
 
     register_matplotlib_converters()
 
-    source = 'hfr'
-    contour_shape = 'circle'
+    source = 'rankine'
+    contour_shape = 'point'
     order = 4
 
     contour_center = (-123.79820, 37.31710)
     contour_radius = 3000
     data_time = datetime.datetime(2019, 3, 31)
 
+    period = datetime.timedelta(days=1)
+    time_delta = datetime.timedelta(hours=1)
+
+    time_deltas = [time_delta for index in range(int(period / time_delta))]
+
     print('Creating velocity field...')
     if source == 'rankine':
-        hours = 36
-        vortex_radius = contour_radius * 10
-        vortex_center = translate_geographic_coordinates(contour_center, contour_radius * -5)
-        vortex_period = datetime.timedelta(hours=12)
-        velocity_field = RankineVortex(vortex_center, vortex_radius, vortex_period,
-                                       [datetime.timedelta(hours=1) for hour in range(hours)])
+        vortex_radius = contour_radius * 5
+        vortex_center = translate_geographic_coordinates(contour_center, -(contour_radius * 2.5))
+        vortex_period = datetime.timedelta(days=5)
+        velocity_field = RankineVortex(vortex_center, vortex_radius, vortex_period, time_deltas)
     else:
         from PyOFS import DATA_DIR
 
@@ -598,67 +602,69 @@ if __name__ == '__main__':
     figure.suptitle(f'{ordinal(order)} order {source.upper()} {contour_shape} contour with {contour_radius / 1000} km' +
                     f' radius from {contour_center}')
 
-    if contour_shape == 'point':
-        radial_distances_axis = figure.add_subplot(1, 2, 1)
-        radial_distances_axis.set_xlabel('time')
-        radial_distances_axis.set_ylabel('radial distance (m)')
-    else:
-        area_axis = figure.add_subplot(1, 2, 1)
-        area_axis.set_xlabel('time')
-        area_axis.set_ylabel('area (m^2)')
-
     map_axis = figure.add_subplot(1, 2, 2, projection=cartopy.crs.PlateCarree())
     map_axis.set_prop_cycle(
         color=[pyplot.cm.cool(color_index) for color_index in
                numpy.linspace(0, 1, len(velocity_field.time_deltas) + 1)])
     map_axis.add_feature(cartopy.feature.LAND)
 
-    if contour_shape == 'point':
-        radial_distances = {}
-    else:
-        areas = {}
+    plot_axis = figure.add_subplot(1, 2, 1)
+    plot_axis.set_xlabel('time')
 
     velocity_field.plot(data_time, map_axis)
 
-    for time_delta in velocity_field.time_deltas:
-        if type(time_delta) is numpy.timedelta64:
-            time_delta = time_delta.item()
+    if contour_shape == 'point':
+        plot_axis.set_ylabel('radial distance (m)')
 
-        if type(time_delta) is int:
-            time_delta = datetime.timedelta(seconds=time_delta * 1e-9)
+        radial_distances = {}
 
-        if contour_shape == 'point':
-            previous_radial_distance = numpy.sqrt(numpy.sum(
-                (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
-        else:
-            contour.plot(map_axis)
-            previous_area = contour.area()
+        for time_delta in time_deltas:
+            if type(time_delta) is numpy.timedelta64:
+                time_delta = time_delta.item()
 
-        if contour_shape == 'point':
+            if type(time_delta) is int:
+                time_delta = datetime.timedelta(seconds=time_delta * 1e-9)
+
+            # previous_radial_distance = numpy.sqrt(numpy.sum(
+            #     (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
+            previous_radial_distance = haversine.haversine(pyproj.transform(WebMercator, WGS84, *contour.coordinates()),
+                                                           contour_center, unit='m')
+
             radial_distances[contour.time] = previous_radial_distance
-        else:
-            areas[contour.time] = previous_area
+            contour.step(time_delta, order)
 
-        contour.step(time_delta, order)
+            # current_radial_distance = numpy.sqrt(numpy.sum(
+            #     (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
+            current_radial_distance = haversine.haversine(pyproj.transform(WebMercator, WGS84, *contour.coordinates()),
+                                                          contour_center, unit='m')
 
-        if contour_shape == 'point':
-            current_radial_distance = numpy.sqrt(numpy.sum(
-                (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
-        else:
-            current_area = contour.area()
-
-        if contour_shape == 'point':
             print(
                 f'step {time_delta} to {contour.time}: change in radius was {current_radial_distance - previous_radial_distance} m')
-        else:
-            print(f'step {time_delta} to {contour.time}: change in area was {current_area - previous_area} m^2')
 
-    if contour_shape == 'point':
-        radial_distances_axis.plot(radial_distances.keys(), radial_distances.values())
+        plot_axis.plot(radial_distances.keys(), radial_distances.values())
+
         for particle in contour.particles:
             particle.plot(slice(0, -1), map_axis)
     else:
-        area_axis.plot(areas.keys(), areas.values())
+        plot_axis.set_ylabel('area (m^2)')
+
+        areas = {}
+
+        for time_delta in time_deltas:
+            if type(time_delta) is numpy.timedelta64:
+                time_delta = time_delta.item()
+
+            if type(time_delta) is int:
+                time_delta = datetime.timedelta(seconds=time_delta * 1e-9)
+
+            contour.plot(map_axis)
+            previous_area = contour.area()
+            areas[contour.time] = previous_area
+            contour.step(time_delta, order)
+            current_area = contour.area()
+            print(f'step {time_delta} to {contour.time}: change in area was {current_area - previous_area} m^2')
+
+        plot_axis.plot(areas.keys(), areas.values())
 
     pyplot.show()
 
