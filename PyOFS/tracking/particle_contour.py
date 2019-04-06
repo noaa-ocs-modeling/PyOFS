@@ -224,7 +224,7 @@ class VectorDataset(VectorField):
         x_query = point[0] if num_x_dims == 1 else point
         y_query = point[1] if num_y_dims == 1 else point
 
-        return self.dataset['u'].sel(time=time, x=x_query, y=y_query, method='nearest').values.item()
+        return self.dataset['u'].interp(time=time, x=x_query, y=y_query, method='nearest').values.item()
 
     def v(self, point: numpy.array, time: datetime.datetime) -> float:
         num_x_dims = len(self.dataset['x'].dims)
@@ -233,7 +233,7 @@ class VectorDataset(VectorField):
         x_query = point[0] if num_x_dims == 1 else point
         y_query = point[1] if num_y_dims == 1 else point
 
-        return self.dataset['v'].sel(time=time, x=x_query, y=y_query, method='nearest').values.item()
+        return self.dataset['v'].interp(time=time, x=x_query, y=y_query, method='nearest').values.item()
 
     def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs) -> quiver.Quiver:
         if axis is None:
@@ -283,27 +283,27 @@ class Particle:
         delta_seconds = delta_t.total_seconds()
 
         if order > 0 and not any(numpy.isnan(self.vector)):
-            k1 = delta_seconds * self.field[self.coordinates(), self.time]
+            k_1 = delta_seconds * self.field[self.coordinates(), self.time]
 
             if order > 1:
-                k2 = delta_seconds * self.field[self.coordinates() + k1 / 2, self.time + (delta_t / 2)]
+                k_2 = delta_seconds * self.field[self.coordinates() + k_1 / 2, self.time + (delta_t / 2)]
 
                 if order > 2:
-                    k3 = delta_seconds * self.field[self.coordinates() + k2 / 2, self.time + (delta_t / 2)]
+                    k_3 = delta_seconds * self.field[self.coordinates() + k_2 / 2, self.time + (delta_t / 2)]
 
                     if order > 3:
-                        k4 = delta_seconds * self.field[self.coordinates() + k3, self.time + delta_t]
+                        k_4 = delta_seconds * self.field[self.coordinates() + k_3, self.time + delta_t]
 
                         if order > 4:
                             raise ValueError('Methods above 4th order are not implemented.')
                         else:
-                            delta_vector = 1 / 6 * k1 + 1 / 3 * k2 + 1 / 3 * k3 + 1 / 6 * k4
+                            delta_vector = 1 / 6 * k_1 + 1 / 3 * k_2 + 1 / 3 * k_3 + 1 / 6 * k_4
                     else:
-                        delta_vector = 1 / 6 * k1 + 2 / 3 * k2 + 1 / 6 * k3
+                        delta_vector = 1 / 6 * k_1 + 2 / 3 * k_2 + 1 / 6 * k_3
                 else:
-                    delta_vector = k2
+                    delta_vector = k_2
             else:
-                delta_vector = k1
+                delta_vector = k_1
         else:
             delta_vector = numpy.array([0, 0])
 
@@ -535,81 +535,90 @@ if __name__ == '__main__':
 
     register_matplotlib_converters()
 
-    source = 'rankine'
-    contour_shape = 'point'
+    source = 'rtofs'
+    contour_shape = 'circle'
     order = 4
 
     contour_center = (-123.79820, 37.31710)
     contour_radius = 3000
-    data_time = datetime.datetime(2019, 3, 31)
+    start_time = datetime.datetime(2019, 4, 5)
 
-    period = datetime.timedelta(days=1)
-    time_delta = datetime.timedelta(hours=1)
+    period = datetime.timedelta(days=5)
+    time_delta = datetime.timedelta(hours=3)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
 
     print('Creating velocity field...')
     if source == 'rankine':
         vortex_radius = contour_radius * 5
-        vortex_center = translate_geographic_coordinates(contour_center, -(contour_radius * 2.5))
+        vortex_center = translate_geographic_coordinates(contour_center, numpy.array(
+            [-(contour_radius * 2.5), -(contour_radius * 2.5)]))
         vortex_period = datetime.timedelta(days=5)
         velocity_field = RankineVortex(vortex_center, vortex_radius, vortex_period, time_deltas)
+
+        # radii = range(1, vortex_radius * 2, 50)
+        # points = [numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center)) + numpy.array([radius, 0]) for
+        #           radius in radii]
+        # velocities = [velocity_field.velocity(point, start_time) for point in points]
+        # pyplot.plot(radii, velocities)
+        # pyplot.show()
     else:
         from PyOFS import DATA_DIR, utilities
 
-        data_path = os.path.join(DATA_DIR, 'output', 'test', f'{source.lower()}_{data_time.strftime("%Y%m%d")}.nc')
+        data_path = os.path.join(DATA_DIR, 'output', 'test', f'{source.lower()}_{start_time.strftime("%Y%m%d")}.nc')
 
         print('Collecting data...')
         if not os.path.exists(data_path):
             if source.upper() == 'HFR':
                 from PyOFS.dataset import hfr
 
-                vector_dataset = hfr.HFRRange(data_time, data_time + datetime.timedelta(days=1))
+                vector_dataset = hfr.HFRRange(start_time, start_time + datetime.timedelta(days=1))
                 vector_dataset.to_netcdf(data_path, variables=('ssu', 'ssv'), mean=False)
             elif source.upper() == 'RTOFS':
                 from PyOFS.dataset import rtofs
 
-                vector_dataset = rtofs.RTOFSDataset(data_time)
+                vector_dataset = rtofs.RTOFSDataset(start_time)
                 vector_dataset.to_netcdf(data_path, variables=('ssu', 'ssv'), mean=False)
             elif source.upper() == 'WCOFS':
                 from PyOFS.dataset import wcofs
 
-                vector_dataset = wcofs.WCOFSDataset(data_time)
+                vector_dataset = wcofs.WCOFSDataset(start_time)
                 vector_dataset.to_netcdf(data_path, variables=('ssu', 'ssv'))
 
         vector_dataset = xarray.open_dataset(data_path)
 
         velocity_field = VectorDataset(vector_dataset, u_name='ssu', v_name='ssv')
-        data_time = utilities.datetime64_to_time(velocity_field.dataset['time'][0])
+        start_time = utilities.datetime64_to_time(velocity_field.dataset['time'][0])
 
     print('Creating starting contour...')
     if contour_shape == 'circle':
-        contour = CircleContour(contour_center, contour_radius, data_time, velocity_field)
+        contour = CircleContour(contour_center, contour_radius, start_time, velocity_field)
     elif contour_shape == 'square':
         southwest_corner = translate_geographic_coordinates(contour_center, -contour_radius)
         northeast_corner = translate_geographic_coordinates(contour_center, contour_radius)
         contour = RectangleContour(southwest_corner[0], northeast_corner[0], southwest_corner[1], northeast_corner[1],
-                                   data_time, velocity_field)
+                                   start_time, velocity_field)
     else:
-        contour = PointContour(contour_center, data_time, velocity_field)
+        contour = PointContour(contour_center, start_time, velocity_field)
 
     print(f'Contour created: {contour}')
 
-    figure = pyplot.figure()
-    ordinal = lambda n: f'{n}{"tsnrhtdd"[(math.floor(n / 10) % 10 != 1) * (n % 10 < 4) * n % 10::4]}'
-    figure.suptitle(f'{ordinal(order)} order {source.upper()} {contour_shape} contour with {contour_radius / 1000} km' +
-                    f' radius from {contour_center}')
+    main_figure = pyplot.figure()
+    ordinal_string = lambda n: f'{n}{"tsnrhtdd"[(math.floor(n / 10) % 10 != 1) * (n % 10 < 4) * n % 10::4]}'
+    main_figure.suptitle(
+        f'{ordinal_string(order)} order {source.upper()} {contour_shape} contour with {contour_radius / 1000} km' +
+        f' radius from {contour_center}')
 
-    map_axis = figure.add_subplot(1, 2, 2, projection=cartopy.crs.PlateCarree())
+    map_axis = main_figure.add_subplot(1, 2, 2, projection=cartopy.crs.PlateCarree())
     map_axis.set_prop_cycle(
         color=[pyplot.cm.cool(color_index) for color_index in
                numpy.linspace(0, 1, len(velocity_field.time_deltas) + 1)])
     map_axis.add_feature(cartopy.feature.LAND)
 
-    plot_axis = figure.add_subplot(1, 2, 1)
+    plot_axis = main_figure.add_subplot(1, 2, 1)
     plot_axis.set_xlabel('time')
 
-    velocity_field.plot(data_time, map_axis)
+    # velocity_field.plot(start_time, map_axis)
 
     if contour_shape == 'point':
         plot_axis.set_ylabel('radial distance (m)')
@@ -637,7 +646,7 @@ if __name__ == '__main__':
                                                           contour_center, unit='m')
 
             print(
-                f'step {time_delta} to {contour.time}: change in radius was {current_radial_distance - previous_radial_distance} m')
+                f'step {time_delta} to {contour.time}: change in radius was {current_radial_distance - previous_radial_distance:.2f} m')
 
         plot_axis.plot(radial_distances.keys(), radial_distances.values())
 
@@ -660,7 +669,8 @@ if __name__ == '__main__':
             areas[contour.time] = previous_area
             contour.step(time_delta, order)
             current_area = contour.area()
-            print(f'step {time_delta} to {contour.time}: change in area was {current_area - previous_area} m^2')
+            print(f'step {time_delta} to {contour.time}: change in area was ' +
+                  f'{(current_area - previous_area) / previous_area * 100:.2f}%')
 
         plot_axis.plot(areas.keys(), areas.values())
 
