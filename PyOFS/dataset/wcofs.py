@@ -17,6 +17,7 @@ from typing import Collection
 import fiona
 import fiona.crs
 import numpy
+import pyproj
 import rasterio.control
 import rasterio.mask
 import rasterio.warp
@@ -29,6 +30,7 @@ from PyOFS import CRS_EPSG, DATA_DIR, utilities
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
+WCOFS_ROTATED_POLE = pyproj.Proj('+proj=ob_tran +o_proj=latlon +o_lat_p=37.4 +o_lon_p=-57.6 +ellps=WGS84')
 
 GRID_LOCATIONS = {'face': 'rho', 'edge1': 'u', 'edge2': 'v', 'node': 'psi'}
 COORDINATE_VARIABLES = ['grid', 'ocean_time', 'lon_rho', 'lat_rho', 'lon_u', 'lat_u', 'lon_v', 'lat_v', 'lon_psi',
@@ -266,12 +268,13 @@ class WCOFSDataset:
         grid_name = WCOFSDataset.variable_grids[variable]
         return WCOFSDataset.grid_bounds[grid_name]
 
-    def data(self, variable: str, time_delta: int) -> numpy.ndarray:
+    def data(self, variable: str, time_delta: int, native_grid: bool = False) -> numpy.ndarray:
         """
         Get data of specified variable at specified hour.
 
         :param variable: name of variable to retrieve
         :param time_delta: time index to retrieve (days for avg, hours for others)
+        :param native_grid: whether to return data in the native rotated pole coordinate sytem
         :return: array of data
         """
 
@@ -289,7 +292,7 @@ class WCOFSDataset:
                 if dataset_index in self.dataset_locks:
                     with self.dataset_locks[dataset_index]:
                         # get surface layer; the last layer (of 40) at dimension 1
-                        if variable in ['ssu', 'ssv']:
+                        if not native_grid and variable in ['ssu', 'ssv']:
                             # correct for angles
                             raw_u = self.netcdf_datasets[dataset_index][DATA_VARIABLES['ssu'][self.source]][day_index,
                                     -1, :-1, :].values

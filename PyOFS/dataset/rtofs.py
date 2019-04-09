@@ -154,7 +154,7 @@ class RTOFSDataset:
         else:
             raise utilities.NoDataError(f'No RTOFS datasets found for {self.model_time}.')
 
-    def data(self, variable: str, time: datetime.datetime, crop: bool = True) -> numpy.ndarray:
+    def data(self, variable: str, time: datetime.datetime, crop: bool = True) -> xarray.DataArray:
         """
         Get data of specified variable at specified hour.
 
@@ -185,13 +185,8 @@ class RTOFSDataset:
                         # TODO study areas that cross over longitude +74.16 may have problems here
                         if crop:
                             selection = data_variable.sel(time=time, method='nearest').sel(
-                                lon=slice(self.study_area_west + 360,
-                                          self.study_area_east + 360),
+                                lon=slice(self.study_area_west + 360, self.study_area_east + 360),
                                 lat=slice(self.study_area_south, self.study_area_north))
-
-                            # selection['lon'] = selection['lon'] - 180 - numpy.min(selection['lon'])
-
-                            # selection = selection.squeeze()
                         else:
                             western_selection = data_variable.sel(time=time, method='nearest').sel(
                                 lon=slice(180, numpy.max(self.raw_lon)),
@@ -201,7 +196,7 @@ class RTOFSDataset:
                                 lat=slice(numpy.min(self.lat), numpy.max(self.lat)))
                             selection = numpy.concatenate((western_selection, eastern_selection), axis=1)
 
-                        selection = numpy.flip(selection)
+                        selection = numpy.flip(selection.squeeze())
                         return selection
                 else:
                     raise ValueError(f'Variable must be not one of {list(DATA_VARIABLES.keys())}.')
@@ -240,7 +235,7 @@ class RTOFSDataset:
         direction = 'forecast' if time_delta >= 0 else 'nowcast'
         time_delta_string = f'{direction[0]}{abs(time_delta) + 1 if direction == "forecast" else abs(time_delta):03}'
 
-        variable_means = {variable: self.data(variable, time, crop) for variable in variables if
+        variable_means = {variable: self.data(variable, time, crop).values for variable in variables if
                           variable not in ['dir', 'mag']}
 
         if 'dir' in variables or 'mag' in variables:
@@ -248,12 +243,12 @@ class RTOFSDataset:
             v_name = 'ssv'
 
             if u_name not in variable_means:
-                u_data = self.data(u_name, time, crop)
+                u_data = self.data(u_name, time, crop).values
             else:
                 u_data = variable_means[u_name]
 
             if v_name not in variable_means:
-                v_data = self.data(v_name, time, crop)
+                v_data = self.data(v_name, time, crop).values
             else:
                 v_data = variable_means[v_name]
 
@@ -310,7 +305,7 @@ class RTOFSDataset:
         :param crop: whether to crop to study area extent
         """
 
-        output_data = self.data(variable, time, crop)
+        output_data = self.data(variable, time, crop).values
 
         if output_data is not None:
             if crop:

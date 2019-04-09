@@ -93,11 +93,11 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
             viirs_range = viirs.VIIRSRange(start_of_day_in_utc, end_of_day_in_utc)
             viirs_range.write_raster(observation_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_morning',
                                      start_time=start_of_day_in_utc, end_time=noon_in_utc,
-                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', sses_correction=False,
+                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', correct_sses=False,
                                      variables=['sst'])
             viirs_range.write_raster(observation_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_night',
                                      start_time=noon_in_utc, end_time=end_of_day_in_utc,
-                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', sses_correction=False,
+                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', correct_sses=False,
                                      variables=['sst'])
             del viirs_range
         elif observation == 'sss':
@@ -366,7 +366,7 @@ if __name__ == '__main__':
     # model_run_dates = _utilities.range_daily(datetime.datetime.now(),
     #                                          datetime.datetime(2018, 12, 1))
     # for model_run_date in model_run_dates:
-    #     write_daily_average(os.path.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path=log_path)
+    #     write_daily_average(os.jpath.join(DATA_DIR, DAILY_AVERAGES_DIR), model_run_date, day_deltas, log_path=log_path)
 
     model_run_date = datetime.date.today()
     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas, log_path=log_path)
