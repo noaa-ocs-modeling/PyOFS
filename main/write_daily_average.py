@@ -338,8 +338,7 @@ def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, d
     write_observation(output_dir, output_date, 'sss')
     logging.info(f'Wrote observations to {output_dir}')
 
-    # RTOFS forecast is finished at 1700 UTC
-    logging.info('Processing RTOFS...')
+    logging.info('Processing RTOFS...')  # RTOFS forecast is uploaded at 1700 UTC
     write_rtofs(output_dir, output_date, day_deltas)
     logging.info('Processing WCOFS...')
     write_wcofs(output_dir, output_date, day_deltas)

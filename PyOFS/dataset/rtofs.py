@@ -196,7 +196,7 @@ class RTOFSDataset:
                                 lat=slice(numpy.min(self.lat), numpy.max(self.lat)))
                             selection = numpy.concatenate((western_selection, eastern_selection), axis=1)
 
-                        selection = numpy.flip(selection.squeeze())
+                        selection = numpy.flip(selection.squeeze(), axis=0)
                         return selection
                 else:
                     raise ValueError(f'Variable must be not one of {list(DATA_VARIABLES.keys())}.')
