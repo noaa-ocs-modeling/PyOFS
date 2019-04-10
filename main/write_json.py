@@ -10,9 +10,12 @@ Created on Aug 30, 2018
 import functools
 import json
 import os
+import sys
+
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
 
-def get_directory_structure(root_dir):
+def get_directory_structure(root_dir: str) -> dict:
     """
     Creates a nested dictionary that represents the folder structure of rootdir
 
@@ -31,7 +34,7 @@ def get_directory_structure(root_dir):
     return output_dict
 
 
-def dir_structure_to_json(input_dir, json_path):
+def dir_structure_to_json(input_dir: str, json_path: str):
     """
     Write directory structure to JSON file.
 
@@ -46,13 +49,6 @@ def dir_structure_to_json(input_dir, json_path):
 
 
 if __name__ == '__main__':
-    import sys
-
-    sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
-
     from PyOFS import DATA_DIR
 
-    json_path = os.path.join(DATA_DIR, r'reference\model_dates.json')
-    input_dir = os.path.join(DATA_DIR, 'output')
-
-    dir_structure_to_json(input_dir, json_path)
+    dir_structure_to_json(os.path.join(DATA_DIR, 'output'), os.path.join(DATA_DIR, r'reference\files.json'))
