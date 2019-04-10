@@ -106,7 +106,7 @@ if __name__ == '__main__':
     logging.info(f'Downloaded {num_downloads} files. ' +
                  f'Total time: {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
+    print('done')
+
     if num_downloads == 0:
         exit(1)
-
-    print('done')
