@@ -17,7 +17,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.par
 
 import pytz
 
-from main import dir_structure
+from main import write_json
 from PyOFS import DATA_DIR
 from PyOFS.dataset import rtofs, hfr, viirs, smap, wcofs
 
@@ -93,11 +93,11 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
             viirs_range = viirs.VIIRSRange(start_of_day_in_utc, end_of_day_in_utc)
             viirs_range.write_raster(observation_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_morning',
                                      start_time=start_of_day_in_utc, end_time=noon_in_utc,
-                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', sses_correction=False,
+                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', correct_sses=False,
                                      variables=['sst'])
             viirs_range.write_raster(observation_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_night',
                                      start_time=noon_in_utc, end_time=end_of_day_in_utc,
-                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', sses_correction=False,
+                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', correct_sses=False,
                                      variables=['sst'])
             del viirs_range
         elif observation == 'sss':
@@ -338,6 +338,7 @@ def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, d
     write_observation(output_dir, output_date, 'sss')
     logging.info(f'Wrote observations to {output_dir}')
 
+    # RTOFS forecast is finished at 1700 UTC
     logging.info('Processing RTOFS...')
     write_rtofs(output_dir, output_date, day_deltas)
     logging.info('Processing WCOFS...')
@@ -372,6 +373,6 @@ if __name__ == '__main__':
     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas, log_path=log_path)
 
     # write new directory structure to JSON file
-    dir_structure.dir_structure_to_json(OUTPUT_DIR, JSON_PATH)
+    write_json.dir_structure_to_json(OUTPUT_DIR, JSON_PATH)
 
     print('done')
