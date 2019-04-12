@@ -578,7 +578,7 @@ if __name__ == '__main__':
     start_time = datetime.datetime(2019, 3, 30)
 
     period = datetime.timedelta(days=5)
-    time_delta = datetime.timedelta(hours=3)
+    time_delta = datetime.timedelta(hours=6)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
 
@@ -590,12 +590,20 @@ if __name__ == '__main__':
         vortex_period = datetime.timedelta(days=5)
         velocity_field = RankineVortex(vortex_center, vortex_radius, vortex_period, time_deltas)
 
-        # radii = range(1, vortex_radius * 2, 50)
-        # points = [numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center)) + numpy.array([radius, 0]) for
-        #           radius in radii]
-        # velocities = [velocity_field.velocity(point, start_time) for point in points]
-        # pyplot.plot(radii, velocities)
-        # pyplot.show()
+        radii = range(1, vortex_radius * 2, 50)
+        points = [numpy.array(pyproj.transform(WGS84, WebMercator, *vortex_center)) + numpy.array([radius, 0]) for
+                  radius in radii]
+        velocities = [velocity_field.velocity(point, start_time) for point in points]
+
+        main_figure = pyplot.figure()
+        main_figure.suptitle(
+            f'Rankine vortex with {vortex_period.total_seconds() / 3600} hour period ({velocity_field.angular_velocity:.6f} rad/s) and radius of {vortex_radius} m')
+        plot_axis = main_figure.add_subplot(1, 1, 1)
+        plot_axis.set_xlabel('distance from center (m)')
+        plot_axis.set_ylabel('tangential velocity (m/2)')
+
+        plot_axis.plot(radii, velocities)
+        pyplot.show()
     else:
         from PyOFS import DATA_DIR, utilities
 
@@ -647,7 +655,10 @@ if __name__ == '__main__':
     ordinal_string = lambda n: f'{n}{"tsnrhtdd"[(math.floor(n / 10) % 10 != 1) * (n % 10 < 4) * n % 10::4]}'
     main_figure.suptitle(
         f'{ordinal_string(order)} order {source.upper()} {contour_shape} contour with {contour_radius / 1000} km' +
-        f' radius from {contour_center}')
+        f' radius at {contour_center}, tracked every {time_delta.total_seconds() / 3600} hours over {period.total_seconds() / 3600} hours total')
+
+    plot_axis = main_figure.add_subplot(1, 2, 1)
+    plot_axis.set_xlabel('time')
 
     map_axis = main_figure.add_subplot(1, 2, 2, projection=cartopy.crs.PlateCarree())
     map_axis.set_prop_cycle(
@@ -655,15 +666,16 @@ if __name__ == '__main__':
                numpy.linspace(0, 1, len(velocity_field.time_deltas) + 1)])
     map_axis.add_feature(cartopy.feature.LAND)
 
-    plot_axis = main_figure.add_subplot(1, 2, 1)
-    plot_axis.set_xlabel('time')
-
     velocity_field.plot(start_time, map_axis)
 
-    if contour_shape == 'point':
-        plot_axis.set_ylabel('radial distance (m)')
+    values = {}
 
-        radial_distances = {}
+    if contour_shape == 'point':
+        plot_axis.set_ylabel('% of starting radial distance')
+
+        initial_value = haversine.haversine(pyproj.transform(WebMercator, WGS84, *contour.coordinates()),
+                                            contour_center, unit='m')
+        values[contour.time] = 100
 
         for time_delta in time_deltas:
             if type(time_delta) is numpy.timedelta64:
@@ -677,25 +689,24 @@ if __name__ == '__main__':
             previous_radial_distance = haversine.haversine(pyproj.transform(WebMercator, WGS84, *contour.coordinates()),
                                                            contour_center, unit='m')
 
-            radial_distances[contour.time] = previous_radial_distance
             contour.step(time_delta, order)
 
             # current_radial_distance = numpy.sqrt(numpy.sum(
             #     (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
             current_radial_distance = haversine.haversine(pyproj.transform(WebMercator, WGS84, *contour.coordinates()),
                                                           contour_center, unit='m')
+            values[contour.time] = (1 + (current_radial_distance - initial_value) / initial_value) * 100
 
-            print(
-                f'step {time_delta} to {contour.time}: change in radius was {current_radial_distance - previous_radial_distance:.2f} m')
-
-        plot_axis.plot(radial_distances.keys(), radial_distances.values())
+            print(f'step {time_delta} to {contour.time}: change in radius was ' +
+                  f'{(current_radial_distance - previous_radial_distance) / previous_radial_distance * 100:.2f}%')
 
         for particle in contour.particles:
             particle.plot(slice(0, -1), map_axis)
     else:
-        plot_axis.set_ylabel('area (m^2)')
+        plot_axis.set_ylabel('% of starting area')
 
-        areas = {}
+        initial_value = contour.area()
+        values[contour.time] = 100
 
         for time_delta in time_deltas:
             if type(time_delta) is numpy.timedelta64:
@@ -706,13 +717,15 @@ if __name__ == '__main__':
 
             contour.plot(map_axis)
             previous_area = contour.area()
-            areas[contour.time] = previous_area
+
             contour.step(time_delta, order)
             current_area = contour.area()
+            values[contour.time] = (1 + (current_area - initial_value) / initial_value) * 100
+
             print(f'step {time_delta} to {contour.time}: change in area was ' +
                   f'{(current_area - previous_area) / previous_area * 100:.2f}%')
 
-        plot_axis.plot(areas.keys(), areas.values())
+    plot_axis.plot(values.keys(), values.values(), '-o')
 
     pyplot.show()
 
