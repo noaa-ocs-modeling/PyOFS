@@ -577,7 +577,7 @@ if __name__ == '__main__':
     contour_radius = 3000
     start_time = datetime.datetime(2019, 3, 30)
 
-    period = datetime.timedelta(days=5)
+    period = datetime.timedelta(days=10)
     time_delta = datetime.timedelta(hours=6)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
@@ -595,15 +595,18 @@ if __name__ == '__main__':
                   radius in radii]
         velocities = [velocity_field.velocity(point, start_time) for point in points]
 
-        main_figure = pyplot.figure()
-        main_figure.suptitle(
-            f'Rankine vortex with {vortex_period.total_seconds() / 3600} hour period ({velocity_field.angular_velocity:.6f} rad/s) and radius of {vortex_radius} m')
-        plot_axis = main_figure.add_subplot(1, 1, 1)
-        plot_axis.set_xlabel('distance from center (m)')
-        plot_axis.set_ylabel('tangential velocity (m/2)')
-
-        plot_axis.plot(radii, velocities)
-        pyplot.show()
+        # main_figure = pyplot.figure()
+        # main_figure.suptitle(
+        #     f'Rankine vortex with {vortex_period.total_seconds() / 3600} hour period ({velocity_field.angular_velocity:.6f} rad/s) and radius of {vortex_radius} m')
+        # plot_axis = main_figure.add_subplot(1, 2, 1)
+        # plot_axis.set_xlabel('distance from center (m)')
+        # plot_axis.set_ylabel('tangential velocity (m/s)')
+        #
+        # map_axis = main_figure.add_subplot(1, 2, 2, projection=cartopy.crs.PlateCarree())
+        #
+        # plot_axis.plot(radii, velocities)
+        # velocity_field.plot(start_time, map_axis)
+        # pyplot.show()
     else:
         from PyOFS import DATA_DIR, utilities
 
