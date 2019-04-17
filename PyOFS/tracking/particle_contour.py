@@ -573,19 +573,19 @@ if __name__ == '__main__':
     contour_shape = 'circle'
     order = 4
 
-    contour_center = (-123.79820, 37.31710)
     contour_radius = 3000
-    start_time = datetime.datetime(2019, 3, 30)
+    contour_centers = [(-123.79820, 37.31710)]
+    start_time = datetime.datetime(2019, 4, 17)
 
-    period = datetime.timedelta(days=10)
-    time_delta = datetime.timedelta(hours=6)
+    period = datetime.timedelta(days=5)
+    time_delta = datetime.timedelta(hours=3)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
 
     print('Creating velocity field...')
     if source == 'rankine':
         vortex_radius = contour_radius * 5
-        vortex_center = translate_geographic_coordinates(contour_center, numpy.array(
+        vortex_center = translate_geographic_coordinates(contour_centers[0], numpy.array(
             [-(contour_radius * 2.5), -(contour_radius * 2.5)]))
         vortex_period = datetime.timedelta(days=5)
         velocity_field = RankineVortex(vortex_center, vortex_radius, vortex_period, time_deltas)
@@ -641,94 +641,107 @@ if __name__ == '__main__':
 
         start_time = utilities.datetime64_to_time(velocity_field.dataset['time'][0])
 
-    print('Creating starting contour...')
-    if contour_shape == 'circle':
-        contour = CircleContour(contour_center, contour_radius, start_time, velocity_field)
-    elif contour_shape == 'square':
-        southwest_corner = translate_geographic_coordinates(contour_center, -contour_radius)
-        northeast_corner = translate_geographic_coordinates(contour_center, contour_radius)
-        contour = RectangleContour(southwest_corner[0], northeast_corner[0], southwest_corner[1], northeast_corner[1],
-                                   start_time, velocity_field)
-    else:
-        contour = PointContour(contour_center, start_time, velocity_field)
+    contours = {}
 
-    print(f'Contour created: {contour}')
+    for contour_center in contour_centers:
+        print('Creating starting contour...')
+        if contour_shape == 'circle':
+            contour = CircleContour(contour_center, contour_radius, start_time, velocity_field)
+        elif contour_shape == 'square':
+            southwest_corner = translate_geographic_coordinates(contour_center, -contour_radius)
+            northeast_corner = translate_geographic_coordinates(contour_center, contour_radius)
+            contour = RectangleContour(southwest_corner[0], northeast_corner[0], southwest_corner[1],
+                                       northeast_corner[1],
+                                       start_time, velocity_field)
+        else:
+            contour = PointContour(contour_center, start_time, velocity_field)
+
+        print(f'Contour created: {contour}')
+
+        contours[tuple(contour_center)] = contour
+
+    plot_colors = pyplot.get_cmap("tab10").colors
+    contour_colors = [pyplot.cm.cool(color_index) for color_index in
+                      numpy.linspace(0, 1, len(velocity_field.time_deltas) + 1)]
 
     main_figure = pyplot.figure()
     ordinal_string = lambda n: f'{n}{"tsnrhtdd"[(math.floor(n / 10) % 10 != 1) * (n % 10 < 4) * n % 10::4]}'
     main_figure.suptitle(
-        f'{ordinal_string(order)} order {source.upper()} {contour_shape} contour with {contour_radius / 1000} km' +
-        f' radius at {contour_center}, tracked every {time_delta.total_seconds() / 3600} hours over {period.total_seconds() / 3600} hours total')
+        f'{ordinal_string(order)} order {source.upper()} {contour_shape} contours with {contour_radius / 1000} km' +
+        f' radius, tracked every {time_delta.total_seconds() / 3600} hours over {period.total_seconds() / 3600} hours total')
 
     plot_axis = main_figure.add_subplot(1, 2, 1)
     plot_axis.set_xlabel('time')
 
     map_axis = main_figure.add_subplot(1, 2, 2, projection=cartopy.crs.PlateCarree())
-    map_axis.set_prop_cycle(
-        color=[pyplot.cm.cool(color_index) for color_index in
-               numpy.linspace(0, 1, len(velocity_field.time_deltas) + 1)])
+    map_axis.set_prop_cycle(color=contour_colors)
     map_axis.add_feature(cartopy.feature.LAND)
 
     velocity_field.plot(start_time, map_axis)
 
-    values = {}
+    for contour_index, (contour_center, contour) in enumerate(contours.items()):
+        values = {}
 
-    if contour_shape == 'point':
-        plot_axis.set_ylabel('% of starting radial distance')
+        if contour_shape == 'point':
+            plot_axis.set_ylabel('% of starting radial distance')
 
-        initial_value = haversine.haversine(pyproj.transform(WebMercator, WGS84, *contour.coordinates()),
-                                            contour_center, unit='m')
-        values[contour.time] = 100
+            initial_value = haversine.haversine(pyproj.transform(WebMercator, WGS84, *contour.coordinates()),
+                                                contour_center, unit='m')
+            values[contour.time] = 100
 
-        for time_delta in time_deltas:
-            if type(time_delta) is numpy.timedelta64:
-                time_delta = time_delta.item()
+            for time_delta in time_deltas:
+                if type(time_delta) is numpy.timedelta64:
+                    time_delta = time_delta.item()
 
-            if type(time_delta) is int:
-                time_delta = datetime.timedelta(seconds=time_delta * 1e-9)
+                if type(time_delta) is int:
+                    time_delta = datetime.timedelta(seconds=time_delta * 1e-9)
 
-            # previous_radial_distance = numpy.sqrt(numpy.sum(
-            #     (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
-            previous_radial_distance = haversine.haversine(pyproj.transform(WebMercator, WGS84, *contour.coordinates()),
-                                                           contour_center, unit='m')
+                previous_radial_distance = numpy.sqrt(numpy.sum(
+                    (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
+                # previous_radial_distance = haversine.haversine(
+                #     pyproj.transform(WebMercator, WGS84, *contour.coordinates()),
+                #     contour_center, unit='m')
 
-            contour.step(time_delta, order)
+                contour.step(time_delta, order)
 
-            # current_radial_distance = numpy.sqrt(numpy.sum(
-            #     (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
-            current_radial_distance = haversine.haversine(pyproj.transform(WebMercator, WGS84, *contour.coordinates()),
-                                                          contour_center, unit='m')
-            values[contour.time] = (1 + (current_radial_distance - initial_value) / initial_value) * 100
+                current_radial_distance = numpy.sqrt(numpy.sum(
+                    (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
+                # current_radial_distance = haversine.haversine(
+                #     pyproj.transform(WebMercator, WGS84, *contour.coordinates()),
+                #     contour_center, unit='m')
+                values[contour.time] = (1 + (current_radial_distance - initial_value) / initial_value) * 100
 
-            print(f'step {time_delta} to {contour.time}: change in radius was ' +
-                  f'{(current_radial_distance - previous_radial_distance) / previous_radial_distance * 100:.2f}%')
+                print(f'step {time_delta} to {contour.time}: change in radius was ' +
+                      f'{(current_radial_distance - previous_radial_distance) / previous_radial_distance * 100:.2f}%')
 
-        for particle in contour.particles:
-            particle.plot(slice(0, -1), map_axis)
-    else:
-        plot_axis.set_ylabel('% of starting area')
+            for particle in contour.particles:
+                particle.plot(slice(0, -1), map_axis)
+        else:
+            plot_axis.set_ylabel('% of starting area')
+            # plot_axis.set_ylim([80, 180])
 
-        initial_value = contour.area()
-        values[contour.time] = 100
+            initial_value = contour.area()
+            values[contour.time] = 100
 
-        for time_delta in time_deltas:
-            if type(time_delta) is numpy.timedelta64:
-                time_delta = time_delta.item()
+            for time_delta in time_deltas:
+                if type(time_delta) is numpy.timedelta64:
+                    time_delta = time_delta.item()
 
-            if type(time_delta) is int:
-                time_delta = datetime.timedelta(seconds=time_delta * 1e-9)
+                if type(time_delta) is int:
+                    time_delta = datetime.timedelta(seconds=time_delta * 1e-9)
 
-            contour.plot(map_axis)
-            previous_area = contour.area()
+                contour.plot(map_axis)
+                previous_area = contour.area()
 
-            contour.step(time_delta, order)
-            current_area = contour.area()
-            values[contour.time] = (1 + (current_area - initial_value) / initial_value) * 100
+                contour.step(time_delta, order)
 
-            print(f'step {time_delta} to {contour.time}: change in area was ' +
-                  f'{(current_area - previous_area) / previous_area * 100:.2f}%')
+                current_area = contour.area()
+                values[contour.time] = (1 + (current_area - initial_value) / initial_value) * 100
 
-    plot_axis.plot(values.keys(), values.values(), '-o')
+                print(f'step {time_delta} to {contour.time}: change in area was ' +
+                      f'{(current_area - previous_area) / previous_area * 100:.2f}%')
+
+        plot_axis.plot(values.keys(), values.values(), '-o')
 
     pyplot.show()
 
