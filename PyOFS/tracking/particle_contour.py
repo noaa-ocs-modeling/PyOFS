@@ -230,8 +230,7 @@ class NonCartesianVectorDataset(VectorField):
     Vector field with time component using xarray dataset with multidimensional coordinates for u and v.
     """
 
-    def __init__(self, dataset: xarray.Dataset, u_name: str = 'u', u_dims: Tuple[str, str] = ('u_eta', 'u_xi'),
-                 v_name: str = 'v', v_dims: Tuple[str, str] = ('v_eta', 'v_xi'), x_name: str = 'lon',
+    def __init__(self, dataset: xarray.Dataset, u_name: str = 'u', v_name: str = 'v', x_name: str = 'lon',
                  y_name: str = 'lat', t_name: str = 'time', coordinate_system: pyproj.Proj = None):
         """
         Create new velocity field from given dataset.
@@ -247,34 +246,29 @@ class NonCartesianVectorDataset(VectorField):
 
         self.coordinate_system = coordinate_system if coordinate_system is not None else WGS84
 
-        variables_to_rename = {u_name: 'u', v_name: 'v', x_name: 'x', y_name: 'y', t_name: 'time'}
-        variables_to_rename.update(zip(u_dims, ['u_x', 'u_y']))
-        variables_to_rename.update(zip(v_dims, ['v_x', 'v_y']))
-        self.dataset = dataset.rename(variables_to_rename)
-
-        lon = self.dataset['x'].values
-        lat = self.dataset['y'].values
-
-        x, y = pyproj.transform(self.coordinate_system, WebMercator, lon, lat)
-
-        x = (self.dataset['x'].dims, x)
-        y = (self.dataset['y'].dims, y)
-
-        self.dataset['x'], self.dataset['y'] = x, y
+        self.dataset = dataset.rename({u_name: 'u', v_name: 'v', x_name: 'x', y_name: 'y', t_name: 'time'})
 
         super().__init__(numpy.diff(self.dataset['time'].values))
 
     def u(self, point: numpy.array, time: datetime.datetime) -> float:
-        return self.dataset['u'].interp(time=time, u_x=point, u_y=point, method='nearest').values.item()
+        geographic_point = pyproj.transform(WebMercator, WGS84, *point)
+        transformed_point = pyproj.transform(WGS84, self.coordinate_system, *geographic_point)
+
+        return self.dataset['u'].interp(time=time, x=transformed_point[0], y=transformed_point[1],
+                                        method='nearest').values.item()
 
     def v(self, point: numpy.array, time: datetime.datetime) -> float:
-        return self.dataset['v'].interp(time=time, v_x=point, v_y=point, method='nearest').values.item()
+        geographic_point = pyproj.transform(WebMercator, WGS84, *point)
+        transformed_point = pyproj.transform(WGS84, self.coordinate_system, *geographic_point)
+
+        return self.dataset['v'].interp(time=time, x=transformed_point[0], y=transformed_point[1],
+                                        method='nearest').values.item()
 
     def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs) -> quiver.Quiver:
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
-        lon, lat = pyproj.transform(WebMercator, WGS84, self.dataset['x'].values, self.dataset['y'].values)
+        lon, lat = pyproj.transform(self.coordinate_system, WGS84, *numpy.meshgrid(self.dataset['x'].values, self.dataset['y'].values))
 
         quiver_plot = axis.quiver(lon, lat, self.dataset['u'].sel(time=time, method='nearest'),
                                   self.dataset['v'].sel(time=time, method='nearest'), units='width', **kwargs)
@@ -569,7 +563,7 @@ if __name__ == '__main__':
 
     register_matplotlib_converters()
 
-    source = 'rankine'
+    source = 'wcofs'
     contour_shape = 'circle'
     order = 4
 
@@ -578,7 +572,7 @@ if __name__ == '__main__':
     start_time = datetime.datetime(2019, 4, 17)
 
     period = datetime.timedelta(days=5)
-    time_delta = datetime.timedelta(hours=3)
+    time_delta = datetime.timedelta(hours=6)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
 
@@ -628,14 +622,16 @@ if __name__ == '__main__':
             elif source.upper() == 'WCOFS':
                 from PyOFS.dataset import wcofs
 
-                vector_dataset = wcofs.WCOFSDataset(start_time)
-                vector_dataset.to_xarray(variables=('ssu', 'ssv')).to_netcdf(data_path)
+                vector_dataset = wcofs.WCOFSDataset(start_time).to_xarray(variables=('ssu', 'ssv'), native_grid=True)
+                vector_dataset.to_netcdf(data_path)
         else:
             vector_dataset = xarray.open_dataset(data_path)
 
         if source.upper() == 'WCOFS':
-            velocity_field = NonCartesianVectorDataset(vector_dataset, u_name='ssu', u_dims=('u_eta', 'u_xi'),
-                                                       v_name='ssv', v_dims=('v_eta', 'v_xi'))
+            from PyOFS.dataset.wcofs import WCOFS_ROTATED_POLE
+
+            velocity_field = NonCartesianVectorDataset(vector_dataset, u_name='ssu', v_name='ssv',
+                                                       coordinate_system=WCOFS_ROTATED_POLE)
         else:
             velocity_field = VectorDataset(vector_dataset, u_name='ssu', v_name='ssv')
 
@@ -651,8 +647,7 @@ if __name__ == '__main__':
             southwest_corner = translate_geographic_coordinates(contour_center, -contour_radius)
             northeast_corner = translate_geographic_coordinates(contour_center, contour_radius)
             contour = RectangleContour(southwest_corner[0], northeast_corner[0], southwest_corner[1],
-                                       northeast_corner[1],
-                                       start_time, velocity_field)
+                                       northeast_corner[1], start_time, velocity_field)
         else:
             contour = PointContour(contour_center, start_time, velocity_field)
 

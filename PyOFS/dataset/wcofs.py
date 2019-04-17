@@ -671,11 +671,12 @@ class WCOFSDataset:
 
         return record
 
-    def to_xarray(self, variables: Collection[str] = None) -> xarray.Dataset:
+    def to_xarray(self, variables: Collection[str] = None, native_grid: bool = False) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
 
         :param variables: variables to use
+        :param native_grid: whether to return data in the native rotated pole coordinate sytem
         :return: xarray dataset of given variables
         """
 
@@ -691,31 +692,46 @@ class WCOFSDataset:
                 times = [self.model_time + datetime.timedelta(hours=time_delta) for time_delta in self.time_deltas]
 
             grid = self.variable_grids[variable]
-            data_stack = numpy.stack([self.data(variable, time_delta) for time_delta in self.time_deltas], axis=0)
-            data_array = xarray.DataArray(data_stack,
-                                          coords={
-                                              'time': times,
-                                              'lon': ((f'{grid}_eta', f'{grid}_xi'),
-                                                      self.data_coordinates[grid]['lon']),
-                                              'lat': ((f'{grid}_eta', f'{grid}_xi'),
-                                                      self.data_coordinates[grid]['lat'])
-                                          },
-                                          dims=('time', f'{grid}_eta', f'{grid}_xi'))
+            data_stack = numpy.stack(
+                [self.data(variable, time_delta, native_grid=native_grid) for time_delta in self.time_deltas], axis=0)
+
+            if native_grid:
+                native_lon, native_lat = pyproj.transform(pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs'),
+                                                          WCOFS_ROTATED_POLE,
+                                                          self.data_coordinates[grid]['lon'],
+                                                          self.data_coordinates[grid]['lat'])
+
+                native_lon = native_lon[:, 1]
+                native_lat = native_lat[1, :]
+
+                data_array = xarray.DataArray(data_stack, coords={'time': times, 'lon': native_lon, 'lat': native_lat},
+                                              dims=('time', 'lon', 'lat'))
+            else:
+                data_array = xarray.DataArray(data_stack,
+                                              coords={
+                                                  'time': times,
+                                                  'lon': ((f'{grid}_eta', f'{grid}_xi'),
+                                                          self.data_coordinates[grid]['lon']),
+                                                  'lat': ((f'{grid}_eta', f'{grid}_xi'),
+                                                          self.data_coordinates[grid]['lat'])
+                                              },
+                                              dims=('time', f'{grid}_eta', f'{grid}_xi'))
 
             data_array.attrs['grid'] = grid
             output_dataset = output_dataset.update({variable: data_array})
 
         return output_dataset
 
-    def to_netcdf(self, output_file: str, variables: Collection[str] = None):
+    def to_netcdf(self, output_file: str, variables: Collection[str] = None, native_grid: bool = False):
         """
         Writes to NetCDF file.
 
         :param output_file: output file to write
         :param variables: variables to use
+        :param native_grid: whether to return data in the native rotated pole coordinate sytem
         """
 
-        self.to_xarray(variables).to_netcdf(output_file)
+        self.to_xarray(variables, native_grid).to_netcdf(output_file)
 
     def __repr__(self):
         used_params = [self.model_time.__repr__()]
