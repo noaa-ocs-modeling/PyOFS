@@ -30,7 +30,7 @@ from PyOFS import CRS_EPSG, DATA_DIR, utilities
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
-WCOFS_ROTATED_POLE = pyproj.Proj('+proj=ob_tran +o_proj=latlon +o_lat_p=37.4 +o_lon_p=-57.6 +ellps=WGS84')
+WCOFS_ROTATED_POLE = pyproj.Proj('+proj=ob_tran +o_proj=longlat +o_lat_p=37.4 +o_lon_p=-57.6 +ellps=WGS84')
 
 GRID_LOCATIONS = {'face': 'rho', 'edge1': 'u', 'edge2': 'v', 'node': 'psi'}
 COORDINATE_VARIABLES = ['grid', 'ocean_time', 'lon_rho', 'lat_rho', 'lon_u', 'lat_u', 'lon_v', 'lat_v', 'lon_psi',
