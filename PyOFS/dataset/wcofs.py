@@ -696,16 +696,17 @@ class WCOFSDataset:
                 [self.data(variable, time_delta, native_grid=native_grid) for time_delta in self.time_deltas], axis=0)
 
             if native_grid:
-                native_lon, native_lat = pyproj.transform(pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs'),
-                                                          WCOFS_ROTATED_POLE,
-                                                          self.data_coordinates[grid]['lon'],
+                wgs84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
+
+                native_lon, native_lat = pyproj.transform(wgs84, WCOFS_ROTATED_POLE, self.data_coordinates[grid]['lon'],
                                                           self.data_coordinates[grid]['lat'])
 
-                native_lon = native_lon[:, 1]
-                native_lat = native_lat[1, :]
+                native_lon = native_lon[:, 0]
+                native_lat = native_lat[0, :]
 
-                data_array = xarray.DataArray(data_stack, coords={'time': times, 'lon': native_lon, 'lat': native_lat},
-                                              dims=('time', 'lon', 'lat'))
+                data_array = xarray.DataArray(data_stack, coords={'time': times, f'{grid}_lon': native_lon,
+                                                                  f'{grid}_lat': native_lat},
+                                              dims=('time', f'{grid}_lon', f'{grid}_lat'))
             else:
                 data_array = xarray.DataArray(data_stack,
                                               coords={

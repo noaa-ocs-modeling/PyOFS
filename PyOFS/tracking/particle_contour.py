@@ -105,7 +105,7 @@ class VectorField:
         """
 
         point, time = position
-        if numpy.isnan(point).any() or time is None:
+        if numpy.any(numpy.isnan(point)) or time is None:
             vector = numpy.array([0.0, 0.0])
         else:
             vector = numpy.array([self.u(point, time), self.v(point, time)])
@@ -192,16 +192,17 @@ class VectorDataset(VectorField):
         :param coordinate_system: coordinate system of dataset
         """
 
-        self.dataset = dataset.rename({u_name: 'u', v_name: 'v', x_name: 'x', y_name: 'y', t_name: 'time'})
         self.coordinate_system = coordinate_system if coordinate_system is not None else WGS84
+
+        variables_to_rename = {u_name: 'u', v_name: 'v', x_name: 'x', y_name: 'y', t_name: 'time'}
+        self.dataset = dataset.rename(variables_to_rename)
+        del dataset
 
         x, y = pyproj.transform(self.coordinate_system, WebMercator,
                                 *numpy.meshgrid(self.dataset['x'].values, self.dataset['y'].values))
 
-        x = x[0, :]
-        y = y[:, 0]
-
-        self.dataset['x'], self.dataset['y'] = x, y
+        self.dataset['x'] = x[0, :]
+        self.dataset['y'] = y[:, 0]
 
         super().__init__(numpy.diff(self.dataset['time'].values))
 
@@ -220,6 +221,69 @@ class VectorDataset(VectorField):
 
         quiver_plot = axis.quiver(lon, lat, self.dataset['u'].sel(time=time, method='nearest'),
                                   self.dataset['v'].sel(time=time, method='nearest'), units='width', **kwargs)
+        axis.quiverkey(quiver_plot, 0.9, 0.9, 1, r'$1 \frac{m}{s}$', labelpos='E', coordinates='figure')
+
+        return quiver_plot
+
+
+class MultiGridVectorDataset(VectorField):
+    def __init__(self, dataset: xarray.Dataset, u_name: str = 'u', v_name: str = 'v',
+                 x_names: Tuple[str, str] = ('u_lon', 'v_lon'), y_names: Tuple[str, str] = ('u_lat', 'v_lat'),
+                 t_name: str = 'time', coordinate_system: pyproj.Proj = None):
+        """
+        Create new velocity field from given dataset.
+
+        :param dataset: xarray dataset containing velocity data (u, v)
+        :param u_name: name of u variable
+        :param v_name: name of v variable
+        :param x_names: names of x coordinates
+        :param y_names: names of y coordinates
+        :param t_name: name of time coordinate
+        :param coordinate_system: coordinate system of dataset
+        """
+
+        self.coordinate_system = coordinate_system if coordinate_system is not None else WGS84
+
+        variables_to_rename = {u_name: 'u', v_name: 'v', t_name: 'time'}
+        variables_to_rename.update(dict(zip(x_names, ('u_x', 'v_x'))))
+        variables_to_rename.update(dict(zip(y_names, ('u_y', 'v_y'))))
+        self.dataset = dataset.rename(variables_to_rename)
+        del dataset
+
+        u_x, u_y = pyproj.transform(self.coordinate_system, WebMercator,
+                                    *numpy.meshgrid(self.dataset['u_x'].values, self.dataset['u_y'].values))
+        v_x, v_y = pyproj.transform(self.coordinate_system, WebMercator,
+                                    *numpy.meshgrid(self.dataset['v_x'].values, self.dataset['v_y'].values))
+
+        self.dataset['u_x'] = u_x[0, :]
+        self.dataset['u_y'] = u_y[:, 0]
+        self.dataset['v_x'] = v_x[0, :]
+        self.dataset['v_y'] = v_y[:, 0]
+
+        super().__init__(numpy.diff(self.dataset['time'].values))
+
+    def u(self, point: numpy.array, time: datetime.datetime) -> float:
+        return self.dataset['u'].interp(time=time, u_x=point[0], u_y=point[1], method='nearest').values.item()
+
+    def v(self, point: numpy.array, time: datetime.datetime) -> float:
+        return self.dataset['v'].interp(time=time, v_x=point[0], v_y=point[1], method='nearest').values.item()
+
+    def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs) -> quiver.Quiver:
+        if axis is None:
+            axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
+
+        lon, lat = pyproj.transform(WebMercator, WGS84,
+                                    *numpy.meshgrid(self.dataset['u_x'].values, self.dataset['u_y'].values))
+
+        u_shape = self.dataset['u'].shape
+        v_shape = self.dataset['v'].shape
+
+        new_shape = (min(u_shape[-2], v_shape[-2]), min(u_shape[-1], v_shape[-1]))
+
+        quiver_plot = axis.quiver(lon, lat,
+                                  numpy.resize(self.dataset['u'].sel(time=time, method='nearest'), new_shape),
+                                  numpy.resize(self.dataset['v'].sel(time=time, method='nearest'), new_shape),
+                                  units='width', **kwargs)
         axis.quiverkey(quiver_plot, 0.9, 0.9, 1, r'$1 \frac{m}{s}$', labelpos='E', coordinates='figure')
 
         return quiver_plot
@@ -245,8 +309,8 @@ class NonCartesianVectorDataset(VectorField):
         """
 
         self.coordinate_system = coordinate_system if coordinate_system is not None else WGS84
-
         self.dataset = dataset.rename({u_name: 'u', v_name: 'v', x_name: 'x', y_name: 'y', t_name: 'time'})
+        del dataset
 
         super().__init__(numpy.diff(self.dataset['time'].values))
 
@@ -268,7 +332,8 @@ class NonCartesianVectorDataset(VectorField):
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
-        lon, lat = pyproj.transform(self.coordinate_system, WGS84, *numpy.meshgrid(self.dataset['x'].values, self.dataset['y'].values))
+        lon, lat = pyproj.transform(self.coordinate_system, WGS84,
+                                    *numpy.meshgrid(self.dataset['x'].values, self.dataset['y'].values))
 
         quiver_plot = axis.quiver(lon, lat, self.dataset['u'].sel(time=time, method='nearest'),
                                   self.dataset['v'].sel(time=time, method='nearest'), units='width', **kwargs)
@@ -569,10 +634,10 @@ if __name__ == '__main__':
 
     contour_radius = 3000
     contour_centers = [(-123.79820, 37.31710)]
-    start_time = datetime.datetime(2019, 4, 17)
+    start_time = datetime.datetime(2019, 4, 18)
 
     period = datetime.timedelta(days=5)
-    time_delta = datetime.timedelta(hours=6)
+    time_delta = datetime.timedelta(days=1)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
 
@@ -606,6 +671,8 @@ if __name__ == '__main__':
 
         data_path = os.path.join(DATA_DIR, 'output', 'test', f'{source.lower()}_{start_time.strftime("%Y%m%d")}.nc')
 
+        coordinate_system = WGS84
+
         print('Collecting data...')
         if not os.path.exists(data_path):
             if source.upper() == 'HFR':
@@ -622,18 +689,22 @@ if __name__ == '__main__':
             elif source.upper() == 'WCOFS':
                 from PyOFS.dataset import wcofs
 
-                vector_dataset = wcofs.WCOFSDataset(start_time).to_xarray(variables=('ssu', 'ssv'), native_grid=True)
+                coordinate_system = wcofs.WCOFS_ROTATED_POLE
+
+                vector_dataset = wcofs.WCOFSDataset(start_time).to_xarray(variables=('ssu', 'ssv'),
+                                                                          native_grid=True)
                 vector_dataset.to_netcdf(data_path)
+            else:
+                raise ValueError(f'Source not recognized: "{source}"')
         else:
             vector_dataset = xarray.open_dataset(data_path)
 
         if source.upper() == 'WCOFS':
-            from PyOFS.dataset.wcofs import WCOFS_ROTATED_POLE
-
-            velocity_field = NonCartesianVectorDataset(vector_dataset, u_name='ssu', v_name='ssv',
-                                                       coordinate_system=WCOFS_ROTATED_POLE)
+            velocity_field = MultiGridVectorDataset(vector_dataset, u_name='ssu', v_name='ssv',
+                                                    coordinate_system=coordinate_system)
         else:
-            velocity_field = VectorDataset(vector_dataset, u_name='ssu', v_name='ssv')
+            velocity_field = VectorDataset(vector_dataset, u_name='ssu', v_name='ssv',
+                                           coordinate_system=coordinate_system)
 
         start_time = utilities.datetime64_to_time(velocity_field.dataset['time'][0])
 
@@ -672,7 +743,7 @@ if __name__ == '__main__':
     map_axis.set_prop_cycle(color=contour_colors)
     map_axis.add_feature(cartopy.feature.LAND)
 
-    velocity_field.plot(start_time, map_axis)
+    # velocity_field.plot(start_time, map_axis)
 
     for contour_index, (contour_center, contour) in enumerate(contours.items()):
         values = {}
