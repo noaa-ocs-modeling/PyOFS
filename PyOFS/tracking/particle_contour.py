@@ -586,7 +586,7 @@ if __name__ == '__main__':
 
     register_matplotlib_converters()
 
-    source = 'rtofs'
+    source = 'wcofs'
     contour_shape = 'circle'
     order = 4
 
