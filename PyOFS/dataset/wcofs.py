@@ -711,10 +711,10 @@ class WCOFSDataset:
                 data_array = xarray.DataArray(data_stack,
                                               coords={
                                                   'time': times,
-                                                  'lon': ((f'{grid}_eta', f'{grid}_xi'),
-                                                          self.data_coordinates[grid]['lon']),
-                                                  'lat': ((f'{grid}_eta', f'{grid}_xi'),
-                                                          self.data_coordinates[grid]['lat'])
+                                                  f'{grid}_lon': ((f'{grid}_eta', f'{grid}_xi'),
+                                                                  self.data_coordinates[grid]['lon']),
+                                                  f'{grid}_lat': ((f'{grid}_eta', f'{grid}_xi'),
+                                                                  self.data_coordinates[grid]['lat'])
                                               },
                                               dims=('time', f'{grid}_eta', f'{grid}_xi'))
 

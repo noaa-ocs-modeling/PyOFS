@@ -12,6 +12,7 @@ import os
 from typing import List, Tuple, Union
 
 import cartopy.feature
+import fiona
 import haversine
 import math
 import numpy
@@ -226,7 +227,7 @@ class VectorDataset(VectorField):
         return quiver_plot
 
 
-class WCOFSVectorDataset(VectorField):
+class ROMSGridVectorDataset(VectorField):
     def __init__(self, dataset: xarray.Dataset, u_name: str = 'u', v_name: str = 'v',
                  x_names: Tuple[str, str] = ('u_lon', 'v_lon'), y_names: Tuple[str, str] = ('u_lat', 'v_lat'),
                  t_name: str = 'time', coordinate_system: pyproj.Proj = None):
@@ -250,17 +251,32 @@ class WCOFSVectorDataset(VectorField):
         self.dataset = dataset.rename(variables_to_rename)
         del dataset
 
+        self.native_u_x, self.native_u_y = pyproj.transform(WGS84, self.coordinate_system, self.dataset['u_x'].values,
+                                                            self.dataset['u_y'].values)
+        self.native_v_x, self.native_v_y = pyproj.transform(WGS84, self.coordinate_system, self.dataset['v_x'].values,
+                                                            self.dataset['v_y'].values)
+
         super().__init__(numpy.diff(self.dataset['time'].values))
 
     def u(self, point: numpy.array, time: datetime.datetime) -> float:
         transformed_point = pyproj.transform(WebMercator, self.coordinate_system, *point)
-        return self.dataset['u'].interp(time=time, u_x=transformed_point[0], u_y=transformed_point[1],
-                                        method='linear').values.item()
+
+        eta_index = self.dataset['u_eta'].max() * (
+                (transformed_point[0] - self.native_u_x.min()) / (self.native_u_x.max() - self.native_u_x.min()))
+        xi_index = self.dataset['u_xi'].max() * (
+                (transformed_point[1] - self.native_u_y.min()) / (self.native_u_y.max() - self.native_u_y.min()))
+
+        return self.dataset['u'].interp(time=time, u_eta=eta_index, u_xi=xi_index, method='linear').values.item()
 
     def v(self, point: numpy.array, time: datetime.datetime) -> float:
         transformed_point = pyproj.transform(WebMercator, self.coordinate_system, *point)
-        return self.dataset['v'].interp(time=time, v_x=transformed_point[0], v_y=transformed_point[1],
-                                        method='linear').values.item()
+
+        eta_index = self.dataset['v_eta'].max() * (
+                (transformed_point[0] - self.native_u_x.min()) / (self.native_u_x.max() - self.native_u_x.min()))
+        xi_index = self.dataset['v_xi'].max() * (
+                (transformed_point[1] - self.native_v_y.min()) / (self.native_v_y.max() - self.native_v_y.min()))
+
+        return self.dataset['v'].interp(time=time, v_eta=eta_index, v_xi=xi_index, method='linear').values.item()
 
     def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs) -> quiver.Quiver:
         if axis is None:
@@ -446,6 +462,18 @@ class ParticleContour:
     def bounds(self) -> Tuple[float, float, float, float]:
         return self.geometry().bounds
 
+    def write(self, filename: str):
+        schema = {
+            'geometry': 'Polygon',
+            'properties': {'date': 'date'}
+        }
+
+        with fiona.open(filename, 'a', 'GPKG', schema) as output_file:
+            output_file.write({
+                'geometry': shapely.geometry.mapping(self.geometry()),
+                'properties': {'date': self.time}
+            })
+
     def __str__(self) -> str:
         return f'contour at time {self.time} with bounds {self.bounds()} and area {self.area()} m^2'
 
@@ -574,12 +602,14 @@ if __name__ == '__main__':
 
     contour_radius = 3000
     contour_centers = [(-123.79820, 37.31710)]
-    start_time = datetime.datetime(2019, 4, 19)
+    start_time = datetime.datetime(2019, 4, 22)
 
-    period = datetime.timedelta(days=5)
+    period = datetime.timedelta(days=3)
     time_delta = datetime.timedelta(days=1)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
+
+    output_path = rf"C:\Data\OFS\develop\output\test\contours_{start_time.strftime('%Y%m%d')}.shp"
 
     print('Creating velocity field...')
     if source == 'rankine':
@@ -607,7 +637,7 @@ if __name__ == '__main__':
         # velocity_field.plot(start_time, map_axis)
         # pyplot.show()
     else:
-        from PyOFS import DATA_DIR, utilities
+        from PyOFS import DATA_DIR
 
         data_path = os.path.join(DATA_DIR, 'output', 'test', f'{source.lower()}_{start_time.strftime("%Y%m%d")}.nc')
 
@@ -639,12 +669,10 @@ if __name__ == '__main__':
 
             coordinate_system = wcofs.WCOFS_ROTATED_POLE
 
-            velocity_field = WCOFSVectorDataset(vector_dataset, u_name='ssu', v_name='ssv',
-                                                coordinate_system=wcofs.WCOFS_ROTATED_POLE)
+            velocity_field = ROMSGridVectorDataset(vector_dataset, u_name='ssu', v_name='ssv',
+                                                   coordinate_system=wcofs.WCOFS_ROTATED_POLE)
         else:
             velocity_field = VectorDataset(vector_dataset, u_name='ssu', v_name='ssv')
-
-        start_time = utilities.datetime64_to_time(velocity_field.dataset['time'][0])
 
     contours = {}
 
@@ -677,18 +705,22 @@ if __name__ == '__main__':
     plot_axis = main_figure.add_subplot(1, 2, 1)
     plot_axis.set_xlabel('time')
 
+    if contour_shape == 'point':
+        plot_axis.set_ylabel('% of starting radial distance')
+    else:
+        plot_axis.set_ylabel('% of starting area')
+        plot_axis.set_ylim([80, 180])
+
     map_axis = main_figure.add_subplot(1, 2, 2, projection=cartopy.crs.PlateCarree())
     map_axis.set_prop_cycle(color=contour_colors)
     map_axis.add_feature(cartopy.feature.LAND)
 
     # velocity_field.plot(start_time, map_axis)
 
-    for contour_index, (contour_center, contour) in enumerate(contours.items()):
+    for contour_center, contour in contours.items():
         values = {}
 
         if contour_shape == 'point':
-            plot_axis.set_ylabel('% of starting radial distance')
-
             initial_value = haversine.haversine(pyproj.transform(WebMercator, WGS84, *contour.coordinates()),
                                                 contour_center, unit='m')
             values[contour.time] = 100
@@ -721,11 +753,9 @@ if __name__ == '__main__':
             for particle in contour.particles:
                 particle.plot(slice(0, -1), map_axis)
         else:
-            plot_axis.set_ylabel('% of starting area')
-            # plot_axis.set_ylim([80, 180])
-
             initial_value = contour.area()
             values[contour.time] = 100
+            contour.write(output_path)
 
             for time_delta in time_deltas:
                 if type(time_delta) is numpy.timedelta64:
@@ -738,6 +768,7 @@ if __name__ == '__main__':
                 previous_area = contour.area()
 
                 contour.step(time_delta, order)
+                contour.write(output_path)
 
                 current_area = contour.area()
                 values[contour.time] = (1 + (current_area - initial_value) / initial_value) * 100
