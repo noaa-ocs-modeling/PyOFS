@@ -55,7 +55,7 @@ VALID_SOURCE_STRINGS = ['stations', 'fields', 'avg', '2ds']
 
 GLOBAL_LOCK = threading.Lock()
 
-SOURCE_URLS = ['https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS',
+SOURCE_URLS = ['http://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS',
                os.path.join(DATA_DIR, 'input/wcofs/avg')]
 
 
@@ -146,8 +146,8 @@ class WCOFSDataset:
                     try:
                         self.netcdf_datasets[-1 if day < 0 else 1] = xarray.open_dataset(url, decode_times=False)
                         self.source_url = source
-                    except OSError:
-                        logging.warning(f'No WCOFS dataset found at {url}')
+                    except OSError as error:
+                        logging.warning(error)
             else:
                 for hour in self.time_deltas:
                     model_type = 'n' if hour <= 0 else 'f'
@@ -157,8 +157,8 @@ class WCOFSDataset:
                     try:
                         self.netcdf_datasets[hour] = xarray.open_dataset(url, decode_times=False)
                         self.source_url = source
-                    except OSError:
-                        logging.warning(f'No WCOFS dataset found at {url}')
+                    except OSError as error:
+                        logging.warning(error)
 
         if len(self.netcdf_datasets) > 0:
             self.dataset_locks = {time_delta: threading.Lock() for time_delta in self.netcdf_datasets.keys()}
