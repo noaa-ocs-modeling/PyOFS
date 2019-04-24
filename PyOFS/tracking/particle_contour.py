@@ -12,7 +12,6 @@ import os
 from typing import List, Tuple, Union
 
 import cartopy.feature
-import fiona
 import fiona.crs
 import haversine
 import math
@@ -464,26 +463,6 @@ class ParticleContour:
     def bounds(self) -> Tuple[float, float, float, float]:
         return self.geometry().bounds
 
-    def write(self, file_name: str, driver='GPKG'):
-        schema = {
-            'geometry': 'Polygon',
-            'properties': {'date': 'date'}
-        }
-
-        kwargs = {}
-
-        if driver.upper() == 'GPKG' and ':' in file_name:
-            file_name, layer_name = file_name.rsplit(':', 1)
-            kwargs.update({'layer': layer_name})
-
-        mode = 'a' if os.path.exists(file_name) else 'w'
-
-        with fiona.open(file_name, mode, driver.upper(), schema, crs=fiona_WebMercator, **kwargs) as output_file:
-            output_file.write({
-                'geometry': shapely.geometry.mapping(self.geometry()),
-                'properties': {'date': self.time}
-            })
-
     def __str__(self) -> str:
         return f'contour at time {self.time} with bounds {self.bounds()} and area {self.area()} m^2'
 
@@ -615,20 +594,21 @@ if __name__ == '__main__':
     contour_centers = [(-123.79820, 37.31710)]
     start_time = datetime.datetime(2019, 4, 23)
 
-    period = datetime.timedelta(days=3)
+    period = datetime.timedelta(hours=3)
     time_delta = datetime.timedelta(hours=1)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
 
     schema = {
         'geometry': 'Polygon',
-        'properties': {'date': 'date'}
+        'properties': {'datetime': 'datetime'}
     }
 
     output_file = fiona.open(os.path.join(DATA_DIR, 'output', 'test', 'contours.gpkg'), 'w', 'GPKG', schema,
                              crs=fiona_WebMercator,
-                             layer=f'{start_time.strftime("%Y%m%d")}_{(start_time + period).strftime("%Y%m%d")}_' +
-                                   f'{time_delta.total_seconds() / 3600:.0}h')
+                             layer=f'{start_time.strftime("%Y%m%dT%H%M%S")}_' +
+                                   f'{(start_time + period).strftime("%Y%m%dT%H%M%S")}_' +
+                                   f'{int(time_delta.total_seconds() / 3600)}h')
 
     print('Creating velocity field...')
     if source == 'rankine':
@@ -776,7 +756,7 @@ if __name__ == '__main__':
             values[contour.time] = 100
             output_file.write({
                 'geometry': shapely.geometry.mapping(contour.geometry()),
-                'properties': {'date': contour.time}
+                'properties': {'datetime': contour.time}
             })
 
             for time_delta in time_deltas:
@@ -792,7 +772,7 @@ if __name__ == '__main__':
                 contour.step(time_delta, order)
                 output_file.write({
                     'geometry': shapely.geometry.mapping(contour.geometry()),
-                    'properties': {'date': contour.time}
+                    'properties': {'datetime': contour.time}
                 })
 
                 current_area = contour.area()
