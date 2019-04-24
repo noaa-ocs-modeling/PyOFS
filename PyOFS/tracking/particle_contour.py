@@ -13,6 +13,7 @@ from typing import List, Tuple, Union
 
 import cartopy.feature
 import fiona
+import fiona.crs
 import haversine
 import math
 import numpy
@@ -23,7 +24,8 @@ from matplotlib import pyplot, quiver
 
 WGS84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
 WebMercator = pyproj.Proj(
-    '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs')
+    '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs')
+fiona_WebMercator = fiona.crs.from_epsg(3857)
 
 
 class VectorField:
@@ -462,13 +464,21 @@ class ParticleContour:
     def bounds(self) -> Tuple[float, float, float, float]:
         return self.geometry().bounds
 
-    def write(self, filename: str):
+    def write(self, file_name: str, driver='GPKG'):
         schema = {
             'geometry': 'Polygon',
             'properties': {'date': 'date'}
         }
 
-        with fiona.open(filename, 'a', 'GPKG', schema) as output_file:
+        kwargs = {}
+
+        if driver.upper() == 'GPKG' and ':' in file_name:
+            file_name, layer_name = file_name.rsplit(':', 1)
+            kwargs.update({'layer': layer_name})
+
+        mode = 'a' if os.path.exists(file_name) else 'w'
+
+        with fiona.open(file_name, mode, driver.upper(), schema, crs=fiona_WebMercator, **kwargs) as output_file:
             output_file.write({
                 'geometry': shapely.geometry.mapping(self.geometry()),
                 'properties': {'date': self.time}
@@ -593,23 +603,32 @@ def translate_geographic_coordinates(point: numpy.array, offset: numpy.array) ->
 
 if __name__ == '__main__':
     from pandas.plotting import register_matplotlib_converters
+    from PyOFS import DATA_DIR
 
     register_matplotlib_converters()
 
-    source = 'wcofs'
+    source = 'rtofs'
     contour_shape = 'circle'
     order = 4
 
     contour_radius = 3000
     contour_centers = [(-123.79820, 37.31710)]
-    start_time = datetime.datetime(2019, 4, 22)
+    start_time = datetime.datetime(2019, 4, 23)
 
     period = datetime.timedelta(days=3)
-    time_delta = datetime.timedelta(days=1)
+    time_delta = datetime.timedelta(hours=1)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
 
-    output_path = rf"C:\Data\OFS\develop\output\test\contours_{start_time.strftime('%Y%m%d')}.shp"
+    schema = {
+        'geometry': 'Polygon',
+        'properties': {'date': 'date'}
+    }
+
+    output_file = fiona.open(os.path.join(DATA_DIR, 'output', 'test', 'contours.gpkg'), 'w', 'GPKG', schema,
+                             crs=fiona_WebMercator,
+                             layer=f'{start_time.strftime("%Y%m%d")}_{(start_time + period).strftime("%Y%m%d")}_' +
+                                   f'{time_delta.total_seconds() / 3600:.0}h')
 
     print('Creating velocity field...')
     if source == 'rankine':
@@ -637,8 +656,6 @@ if __name__ == '__main__':
         # velocity_field.plot(start_time, map_axis)
         # pyplot.show()
     else:
-        from PyOFS import DATA_DIR
-
         data_path = os.path.join(DATA_DIR, 'output', 'test', f'{source.lower()}_{start_time.strftime("%Y%m%d")}.nc')
 
         print('Collecting data...')
@@ -657,7 +674,9 @@ if __name__ == '__main__':
             elif source.upper() == 'WCOFS':
                 from PyOFS.dataset import wcofs
 
-                vector_dataset = wcofs.WCOFSDataset(start_time).to_xarray(variables=('ssu', 'ssv'))
+                source = 'avg' if time_delta.total_seconds() / 3600 / 24 >= 1 else '2ds'
+
+                vector_dataset = wcofs.WCOFSDataset(start_time, source).to_xarray(variables=('ssu', 'ssv'))
                 vector_dataset.to_netcdf(data_path)
             else:
                 raise ValueError(f'Source not recognized: "{source}"')
@@ -709,7 +728,7 @@ if __name__ == '__main__':
         plot_axis.set_ylabel('% of starting radial distance')
     else:
         plot_axis.set_ylabel('% of starting area')
-        plot_axis.set_ylim([80, 180])
+        # plot_axis.set_ylim([80, 180])
 
     map_axis = main_figure.add_subplot(1, 2, 2, projection=cartopy.crs.PlateCarree())
     map_axis.set_prop_cycle(color=contour_colors)
@@ -755,7 +774,10 @@ if __name__ == '__main__':
         else:
             initial_value = contour.area()
             values[contour.time] = 100
-            contour.write(output_path)
+            output_file.write({
+                'geometry': shapely.geometry.mapping(contour.geometry()),
+                'properties': {'date': contour.time}
+            })
 
             for time_delta in time_deltas:
                 if type(time_delta) is numpy.timedelta64:
@@ -768,7 +790,10 @@ if __name__ == '__main__':
                 previous_area = contour.area()
 
                 contour.step(time_delta, order)
-                contour.write(output_path)
+                output_file.write({
+                    'geometry': shapely.geometry.mapping(contour.geometry()),
+                    'properties': {'date': contour.time}
+                })
 
                 current_area = contour.area()
                 values[contour.time] = (1 + (current_area - initial_value) / initial_value) * 100
@@ -778,6 +803,7 @@ if __name__ == '__main__':
 
         plot_axis.plot(values.keys(), values.values(), '-o')
 
+    output_file.close()
     pyplot.show()
 
     print('done')
