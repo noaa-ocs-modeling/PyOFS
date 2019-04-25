@@ -97,9 +97,9 @@ class WCOFSDataset:
         if type(model_date) is datetime.date:
             self.model_time = datetime.datetime.combine(model_date,
                                                         datetime.datetime.min.time()) + datetime.timedelta(
-                hours=3)
+                hours=WCOFS_MODEL_RUN_HOUR)
         else:
-            self.model_time = model_date.replace(hour=3, minute=0, second=0, microsecond=0)
+            self.model_time = model_date.replace(hour=WCOFS_MODEL_RUN_HOUR, minute=0, second=0, microsecond=0)
 
         if source is None:
             source = 'avg'
