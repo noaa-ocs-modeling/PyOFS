@@ -12,7 +12,7 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
-from main import write_json
+from main.leaflet import write_json
 
 observations = {'hfr': ['dir', 'mag'], 'viirs': ['sst']}
 models = {'wcofs': ['dir', 'mag', 'sst', 'ssh', 'sss'], 'rtofs': ['dir', 'mag', 'sst', 'ssh', 'sss']}

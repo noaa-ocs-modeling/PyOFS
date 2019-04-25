@@ -19,7 +19,7 @@ import rasterio
 import scipy.interpolate
 import xarray
 
-from PyOFS import CRS_EPSG, DATA_DIR, utilities
+from PyOFS import CRS_EPSG, utilities
 
 DATA_VARIABLES = {'ssu': 'u', 'ssv': 'v', 'dopx': 'DOPx', 'dopy': 'DOPy'}
 
@@ -34,9 +34,9 @@ SOURCE_URLS = {
 }
 
 
-class HFRRange:
+class HFRadarRange:
     """
-    High Frequency Radar (HFR) NetCDF dataset of surface current velocities.
+    High Frequency (HF) Radar NetCDF observation of surface current velocities.
     """
 
     grid_transform = None
@@ -45,13 +45,13 @@ class HFRRange:
                  resolution: int = 6,
                  source: str = None):
         """
-        Creates new dataset object from source.
+        Creates new observation object from source.
 
         :param start_time: beginning of time interval
         :param end_time: end of time interval
-        :param resolution: desired dataset resolution in kilometers
+        :param resolution: desired observation resolution in kilometers
         :param source: either UCSD (University of California San Diego) or NDBC (National Data Buoy Center); NDBC has larger extent but only for the past 4 days
-        :raises NoDataError: if dataset does not exist.
+        :raises NoDataError: if observation does not exist.
         """
 
         if start_time is None:
@@ -70,7 +70,7 @@ class HFRRange:
 
         self.resolution = resolution
 
-        # get NDBC dataset if input time is within 4 days, otherwise get UCSD dataset
+        # get NDBC observation if input time is within 4 days, otherwise get UCSD observation
         if source is not None:
             self.source = source
         elif (datetime.datetime.now() - self.start_time) < datetime.timedelta(days=4):
@@ -90,7 +90,7 @@ class HFRRange:
         try:
             self.netcdf_dataset = xarray.open_dataset(self.url)
         except OSError:
-            raise utilities.NoDataError(f'No HFR dataset found at {self.url}')
+            raise utilities.NoDataError(f'No HFR observation found at {self.url}')
 
         raw_times = self.netcdf_dataset['time']
 
@@ -104,7 +104,7 @@ class HFRRange:
                      f'{str(self.netcdf_dataset["time"].min().values)[:19]}' +
                      f' and {str(self.netcdf_dataset["time"].max().values)[:19]}...')
 
-        if HFRRange.grid_transform is None:
+        if HFRadarRange.grid_transform is None:
             lon = self.netcdf_dataset['lon'].values
             lat = self.netcdf_dataset['lat'].values
 
@@ -115,7 +115,7 @@ class HFRRange:
             self.mean_x_size = numpy.mean(numpy.diff(lon))
             self.mean_y_size = numpy.mean(numpy.diff(lat))
 
-            # get rasterio geotransform of HFR dataset (flipped latitude)
+            # get rasterio geotransform of HFR observation (flipped latitude)
             self.grid_transform = rasterio.transform.from_origin(west, north, self.mean_x_size, self.mean_y_size)
 
     def data(self, variable: str, time: datetime.datetime, dop_threshold: float = None) -> numpy.ndarray:
@@ -166,7 +166,7 @@ class HFRRange:
 
     def bounds(self) -> tuple:
         """
-        Get coordinate bounds of dataset.
+        Get coordinate bounds of observation.
 
         :return: tuple of bounds (west, north, east, south)
         """
@@ -176,7 +176,7 @@ class HFRRange:
 
     def cell_size(self) -> tuple:
         """
-        Get cell sizes of dataset.
+        Get cell sizes of observation.
 
         :return: tuple of cell sizes (x, y)
         """
@@ -471,7 +471,7 @@ class HFRRange:
         :param end_time: end of time interval
         :param mean: whether to average all time indices
         :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
-        :return: xarray dataset of given variables
+        :return: xarray observation of given variables
         """
 
         output_dataset = xarray.Dataset()
@@ -539,6 +539,8 @@ if __name__ == '__main__':
     from matplotlib import pyplot
     from pandas.plotting import register_matplotlib_converters
 
+    from PyOFS import DATA_DIR
+
     register_matplotlib_converters()
 
     output_dir = os.path.join(DATA_DIR, r'output\test')
@@ -546,7 +548,7 @@ if __name__ == '__main__':
     start_time = datetime.datetime(2019, 2, 6)
     end_time = start_time + datetime.timedelta(days=1)
 
-    hfr_range = HFRRange(start_time, end_time, source='UCSD')
+    hfr_range = HFRadarRange(start_time, end_time, source='UCSD')
 
     cell = hfr_range.netcdf_dataset.isel(lon=67, lat=270)
 

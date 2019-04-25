@@ -9,7 +9,8 @@ import xarray
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
 from PyOFS import DATA_DIR
-from PyOFS.dataset import hfr, viirs, wcofs
+from PyOFS.observation import hf_radar, viirs
+from PyOFS.model import wcofs
 
 WORKSPACE_DIR = os.path.join(DATA_DIR, 'validation')
 
@@ -40,7 +41,7 @@ def to_netcdf(start_time: datetime.datetime, end_time: datetime.datetime, output
 
     # write HFR NetCDF file if it does not exist
     if not os.path.exists(nc_filenames['hfr']):
-        hfr_range = hfr.HFRRange(start_time, end_time)
+        hfr_range = hf_radar.HFRadarRange(start_time, end_time)
         hfr_range.to_netcdf(nc_filenames['hfr'])
 
     # write VIIRS NetCDF file if it does not exist
@@ -66,8 +67,6 @@ def to_netcdf(start_time: datetime.datetime, end_time: datetime.datetime, output
 
     if not os.path.exists(nc_filenames['wcofs_sst_DA']) or not os.path.exists(
             nc_filenames['wcofs_u_DA']) or not os.path.exists(nc_filenames['wcofs_v_DA']):
-        from PyOFS.dataset import wcofs
-
         wcofs_range = wcofs.WCOFSRange(start_time, end_time, source='avg')
 
         # TODO find a way to combine WCOFS variables without raising MemoryError
@@ -113,7 +112,7 @@ def interpolate_grids(datasets: dict) -> dict:
         'DA_model': {'sst': {}, 'u': {}, 'v': {}}
     }
 
-    # get dimensions of WCOFS dataset (time delta, eta, rho)
+    # get dimensions of WCOFS observation (time delta, eta, rho)
     wcofs_dimensions = {
         'sst': list(datasets['wcofs_sst_noDA']['temp'].coords),
         'u': list(datasets['wcofs_u_noDA']['u'].coords),

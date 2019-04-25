@@ -12,6 +12,7 @@ import os
 from typing import List, Tuple, Union
 
 import cartopy.feature
+import fiona.crs
 import haversine
 import math
 import numpy
@@ -22,7 +23,8 @@ from matplotlib import pyplot, quiver
 
 WGS84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
 WebMercator = pyproj.Proj(
-    '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs')
+    '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs')
+fiona_WebMercator = fiona.crs.from_epsg(3857)
 
 
 class VectorField:
@@ -105,7 +107,7 @@ class VectorField:
         """
 
         point, time = position
-        if numpy.isnan(point).any() or time is None:
+        if numpy.any(numpy.isnan(point)) or time is None:
             vector = numpy.array([0.0, 0.0])
         else:
             vector = numpy.array([self.u(point, time), self.v(point, time)])
@@ -175,41 +177,42 @@ class RankineVortex(VectorField):
 
 class VectorDataset(VectorField):
     """
-    Vector field with time component using xarray dataset.
+    Vector field with time component using xarray observation.
     """
 
     def __init__(self, dataset: xarray.Dataset, u_name: str = 'u', v_name: str = 'v', x_name: str = 'lon',
                  y_name: str = 'lat', t_name: str = 'time', coordinate_system: pyproj.Proj = None):
         """
-        Create new velocity field from given dataset.
+        Create new velocity field from given observation.
 
-        :param dataset: xarray dataset containing velocity data (u, v)
+        :param dataset: xarray observation containing velocity data (u, v)
         :param u_name: name of u variable
         :param v_name: name of v variable
         :param x_name: name of x coordinate
         :param y_name: name of y coordinate
         :param t_name: name of time coordinate
-        :param coordinate_system: coordinate system of dataset
+        :param coordinate_system: coordinate system of observation
         """
 
-        self.dataset = dataset.rename({u_name: 'u', v_name: 'v', x_name: 'x', y_name: 'y', t_name: 'time'})
         self.coordinate_system = coordinate_system if coordinate_system is not None else WGS84
+
+        variables_to_rename = {u_name: 'u', v_name: 'v', x_name: 'x', y_name: 'y', t_name: 'time'}
+        self.dataset = dataset.rename(variables_to_rename)
+        del dataset
 
         x, y = pyproj.transform(self.coordinate_system, WebMercator,
                                 *numpy.meshgrid(self.dataset['x'].values, self.dataset['y'].values))
 
-        x = x[0, :]
-        y = y[:, 0]
-
-        self.dataset['x'], self.dataset['y'] = x, y
+        self.dataset['x'] = x[0, :]
+        self.dataset['y'] = y[:, 0]
 
         super().__init__(numpy.diff(self.dataset['time'].values))
 
     def u(self, point: numpy.array, time: datetime.datetime) -> float:
-        return self.dataset['u'].interp(time=time, x=point[0], y=point[1], method='nearest').values.item()
+        return self.dataset['u'].interp(time=time, x=point[0], y=point[1], method='linear').values.item()
 
     def v(self, point: numpy.array, time: datetime.datetime) -> float:
-        return self.dataset['v'].interp(time=time, x=point[0], y=point[1], method='nearest').values.item()
+        return self.dataset['v'].interp(time=time, x=point[0], y=point[1], method='linear').values.item()
 
     def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs) -> quiver.Quiver:
         if axis is None:
@@ -225,59 +228,72 @@ class VectorDataset(VectorField):
         return quiver_plot
 
 
-class NonCartesianVectorDataset(VectorField):
-    """
-    Vector field with time component using xarray dataset with multidimensional coordinates for u and v.
-    """
-
-    def __init__(self, dataset: xarray.Dataset, u_name: str = 'u', u_dims: Tuple[str, str] = ('u_eta', 'u_xi'),
-                 v_name: str = 'v', v_dims: Tuple[str, str] = ('v_eta', 'v_xi'), x_name: str = 'lon',
-                 y_name: str = 'lat', t_name: str = 'time', coordinate_system: pyproj.Proj = None):
+class ROMSGridVectorDataset(VectorField):
+    def __init__(self, dataset: xarray.Dataset, u_name: str = 'u', v_name: str = 'v',
+                 x_names: Tuple[str, str] = ('u_lon', 'v_lon'), y_names: Tuple[str, str] = ('u_lat', 'v_lat'),
+                 t_name: str = 'time', coordinate_system: pyproj.Proj = None):
         """
-        Create new velocity field from given dataset.
+        Create new velocity field from given observation.
 
-        :param dataset: xarray dataset containing velocity data (u, v)
+        :param dataset: xarray observation containing velocity data (u, v)
         :param u_name: name of u variable
         :param v_name: name of v variable
-        :param x_name: name of x coordinate
-        :param y_name: name of y coordinate
+        :param x_names: names of x coordinates
+        :param y_names: names of y coordinates
         :param t_name: name of time coordinate
-        :param coordinate_system: coordinate system of dataset
+        :param coordinate_system: coordinate system of observation
         """
 
         self.coordinate_system = coordinate_system if coordinate_system is not None else WGS84
 
-        variables_to_rename = {u_name: 'u', v_name: 'v', x_name: 'x', y_name: 'y', t_name: 'time'}
-        variables_to_rename.update(zip(u_dims, ['u_x', 'u_y']))
-        variables_to_rename.update(zip(v_dims, ['v_x', 'v_y']))
+        variables_to_rename = {u_name: 'u', v_name: 'v', t_name: 'time'}
+        variables_to_rename.update(dict(zip(x_names, ('u_x', 'v_x'))))
+        variables_to_rename.update(dict(zip(y_names, ('u_y', 'v_y'))))
         self.dataset = dataset.rename(variables_to_rename)
+        del dataset
 
-        lon = self.dataset['x'].values
-        lat = self.dataset['y'].values
-
-        x, y = pyproj.transform(self.coordinate_system, WebMercator, lon, lat)
-
-        x = (self.dataset['x'].dims, x)
-        y = (self.dataset['y'].dims, y)
-
-        self.dataset['x'], self.dataset['y'] = x, y
+        self.native_u_x, self.native_u_y = pyproj.transform(WGS84, self.coordinate_system, self.dataset['u_x'].values,
+                                                            self.dataset['u_y'].values)
+        self.native_v_x, self.native_v_y = pyproj.transform(WGS84, self.coordinate_system, self.dataset['v_x'].values,
+                                                            self.dataset['v_y'].values)
 
         super().__init__(numpy.diff(self.dataset['time'].values))
 
     def u(self, point: numpy.array, time: datetime.datetime) -> float:
-        return self.dataset['u'].interp(time=time, u_x=point, u_y=point, method='nearest').values.item()
+        transformed_point = pyproj.transform(WebMercator, self.coordinate_system, *point)
+
+        eta_index = self.dataset['u_eta'].max() * (
+                (transformed_point[0] - self.native_u_x.min()) / (self.native_u_x.max() - self.native_u_x.min()))
+        xi_index = self.dataset['u_xi'].max() * (
+                (transformed_point[1] - self.native_u_y.min()) / (self.native_u_y.max() - self.native_u_y.min()))
+
+        return self.dataset['u'].interp(time=time, u_eta=eta_index, u_xi=xi_index, method='linear').values.item()
 
     def v(self, point: numpy.array, time: datetime.datetime) -> float:
-        return self.dataset['v'].interp(time=time, v_x=point, v_y=point, method='nearest').values.item()
+        transformed_point = pyproj.transform(WebMercator, self.coordinate_system, *point)
+
+        eta_index = self.dataset['v_eta'].max() * (
+                (transformed_point[0] - self.native_u_x.min()) / (self.native_u_x.max() - self.native_u_x.min()))
+        xi_index = self.dataset['v_xi'].max() * (
+                (transformed_point[1] - self.native_v_y.min()) / (self.native_v_y.max() - self.native_v_y.min()))
+
+        return self.dataset['v'].interp(time=time, v_eta=eta_index, v_xi=xi_index, method='linear').values.item()
 
     def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs) -> quiver.Quiver:
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
-        lon, lat = pyproj.transform(WebMercator, WGS84, self.dataset['x'].values, self.dataset['y'].values)
+        lon, lat = pyproj.transform(self.coordinate_system, WGS84, *numpy.meshgrid(self.dataset['u_x'].values,
+                                                                                   self.dataset['u_y'].values))
 
-        quiver_plot = axis.quiver(lon, lat, self.dataset['u'].sel(time=time, method='nearest'),
-                                  self.dataset['v'].sel(time=time, method='nearest'), units='width', **kwargs)
+        u_shape = self.dataset['u'].shape
+        v_shape = self.dataset['v'].shape
+        new_shape = (min(u_shape[-2], v_shape[-2]), min(u_shape[-1], v_shape[-1]))
+
+        u = numpy.resize(self.dataset['u'].sel(time=time, method='nearest'), new_shape)
+        v = numpy.resize(self.dataset['v'].sel(time=time, method='nearest'), new_shape)
+
+        quiver_plot = axis.quiver(lon, lat, u, v, units='width', **kwargs)
         axis.quiverkey(quiver_plot, 0.9, 0.9, 1, r'$1 \frac{m}{s}$', labelpos='E', coordinates='figure')
 
         return quiver_plot
@@ -566,154 +582,202 @@ def translate_geographic_coordinates(point: numpy.array, offset: numpy.array) ->
 
 if __name__ == '__main__':
     from pandas.plotting import register_matplotlib_converters
+    from PyOFS import DATA_DIR
+    from PyOFS.model import rtofs, wcofs
+    from PyOFS.observation import hf_radar
 
     register_matplotlib_converters()
 
-    source = 'rankine'
+    source = 'wcofs'
     contour_shape = 'circle'
     order = 4
 
-    contour_center = (-123.79820, 37.31710)
     contour_radius = 3000
-    start_time = datetime.datetime(2019, 3, 30)
+    contour_centers = [(-123.79820, 37.31710)]
+    start_time = datetime.datetime(2019, 4, 23)
 
-    period = datetime.timedelta(days=5)
-    time_delta = datetime.timedelta(hours=3)
+    period = datetime.timedelta(hours=24)
+    time_delta = datetime.timedelta(hours=72)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
+
+    schema = {
+        'geometry': 'Polygon',
+        'properties': {'datetime': 'datetime'}
+    }
+
+    output_file = fiona.open(os.path.join(DATA_DIR, 'output', 'test', 'contours.gpkg'), 'w', 'GPKG', schema,
+                             crs=fiona_WebMercator,
+                             layer=f'{start_time.strftime("%Y%m%dT%H%M%S")}_' +
+                                   f'{(start_time + period).strftime("%Y%m%dT%H%M%S")}_' +
+                                   f'{int(time_delta.total_seconds() / 3600)}h')
 
     print('Creating velocity field...')
     if source == 'rankine':
         vortex_radius = contour_radius * 5
-        vortex_center = translate_geographic_coordinates(contour_center, numpy.array(
-            [-(contour_radius * 2.5), -(contour_radius * 2.5)]))
+        vortex_center = translate_geographic_coordinates(contour_centers[0],
+                                                         numpy.array([contour_radius * -2, contour_radius * -2]))
         vortex_period = datetime.timedelta(days=5)
         velocity_field = RankineVortex(vortex_center, vortex_radius, vortex_period, time_deltas)
 
-        # radii = range(1, vortex_radius * 2, 50)
-        # points = [numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center)) + numpy.array([radius, 0]) for
-        #           radius in radii]
-        # velocities = [velocity_field.velocity(point, start_time) for point in points]
-        # pyplot.plot(radii, velocities)
+        radii = range(1, vortex_radius * 2, 50)
+        points = [numpy.array(pyproj.transform(WGS84, WebMercator, *vortex_center)) + numpy.array([radius, 0]) for
+                  radius in radii]
+        velocities = [velocity_field.velocity(point, start_time) for point in points]
+
+        # main_figure = pyplot.figure()
+        # main_figure.suptitle(
+        #     f'Rankine vortex with {vortex_period.total_seconds() / 3600} hour period ({velocity_field.angular_velocity:.6f} rad/s) and radius of {vortex_radius} m')
+        # plot_axis = main_figure.add_subplot(1, 2, 1)
+        # plot_axis.set_xlabel('distance from center (m)')
+        # plot_axis.set_ylabel('tangential velocity (m/s)')
+        #
+        # map_axis = main_figure.add_subplot(1, 2, 2, projection=cartopy.crs.PlateCarree())
+        #
+        # plot_axis.plot(radii, velocities)
+        # velocity_field.plot(start_time, map_axis)
         # pyplot.show()
     else:
-        from PyOFS import DATA_DIR, utilities
-
         data_path = os.path.join(DATA_DIR, 'output', 'test', f'{source.lower()}_{start_time.strftime("%Y%m%d")}.nc')
 
         print('Collecting data...')
         if not os.path.exists(data_path):
             if source.upper() == 'HFR':
-                from PyOFS.dataset import hfr
-
-                vector_dataset = hfr.HFRRange(start_time, start_time + datetime.timedelta(days=1)).to_xarray(
+                vector_dataset = hf_radar.HFRadarRange(start_time, start_time + datetime.timedelta(days=1)).to_xarray(
                     variables=('ssu', 'ssv'), mean=False)
                 vector_dataset.to_netcdf(data_path)
             elif source.upper() == 'RTOFS':
-                from PyOFS.dataset import rtofs
-
                 vector_dataset = rtofs.RTOFSDataset(start_time).to_xarray(variables=('ssu', 'ssv'), mean=False)
                 vector_dataset.to_netcdf(data_path)
             elif source.upper() == 'WCOFS':
-                from PyOFS.dataset import wcofs
+                source = 'avg' if time_delta.total_seconds() / 3600 / 24 >= 1 else '2ds'
 
-                vector_dataset = wcofs.WCOFSDataset(start_time)
-                vector_dataset.to_xarray(variables=('ssu', 'ssv')).to_netcdf(data_path)
+                vector_dataset = wcofs.WCOFSDataset(start_time, source).to_xarray(variables=('ssu', 'ssv'))
+                vector_dataset.to_netcdf(data_path)
+            else:
+                raise ValueError(f'Source not recognized: "{source}"')
         else:
             vector_dataset = xarray.open_dataset(data_path)
 
         if source.upper() == 'WCOFS':
-            velocity_field = NonCartesianVectorDataset(vector_dataset, u_name='ssu', u_dims=('u_eta', 'u_xi'),
-                                                       v_name='ssv', v_dims=('v_eta', 'v_xi'))
+            coordinate_system = wcofs.WCOFS_ROTATED_POLE
+
+            velocity_field = ROMSGridVectorDataset(vector_dataset, u_name='ssu', v_name='ssv',
+                                                   coordinate_system=wcofs.WCOFS_ROTATED_POLE)
         else:
             velocity_field = VectorDataset(vector_dataset, u_name='ssu', v_name='ssv')
 
-        start_time = utilities.datetime64_to_time(velocity_field.dataset['time'][0])
+    contours = {}
 
-    print('Creating starting contour...')
-    if contour_shape == 'circle':
-        contour = CircleContour(contour_center, contour_radius, start_time, velocity_field)
-    elif contour_shape == 'square':
-        southwest_corner = translate_geographic_coordinates(contour_center, -contour_radius)
-        northeast_corner = translate_geographic_coordinates(contour_center, contour_radius)
-        contour = RectangleContour(southwest_corner[0], northeast_corner[0], southwest_corner[1], northeast_corner[1],
-                                   start_time, velocity_field)
-    else:
-        contour = PointContour(contour_center, start_time, velocity_field)
+    for contour_center in contour_centers:
+        print('Creating starting contour...')
+        if contour_shape == 'circle':
+            contour = CircleContour(contour_center, contour_radius, start_time, velocity_field)
+        elif contour_shape == 'square':
+            southwest_corner = translate_geographic_coordinates(contour_center, -contour_radius)
+            northeast_corner = translate_geographic_coordinates(contour_center, contour_radius)
+            contour = RectangleContour(southwest_corner[0], northeast_corner[0], southwest_corner[1],
+                                       northeast_corner[1], start_time, velocity_field)
+        else:
+            contour = PointContour(contour_center, start_time, velocity_field)
 
-    print(f'Contour created: {contour}')
+        print(f'Contour created: {contour}')
+
+        contours[tuple(contour_center)] = contour
+
+    plot_colors = pyplot.get_cmap("tab10").colors
+    contour_colors = [pyplot.cm.cool(color_index) for color_index in
+                      numpy.linspace(0, 1, len(velocity_field.time_deltas) + 1)]
 
     main_figure = pyplot.figure()
     ordinal_string = lambda n: f'{n}{"tsnrhtdd"[(math.floor(n / 10) % 10 != 1) * (n % 10 < 4) * n % 10::4]}'
     main_figure.suptitle(
-        f'{ordinal_string(order)} order {source.upper()} {contour_shape} contour with {contour_radius / 1000} km' +
-        f' radius from {contour_center}')
-
-    map_axis = main_figure.add_subplot(1, 2, 2, projection=cartopy.crs.PlateCarree())
-    map_axis.set_prop_cycle(
-        color=[pyplot.cm.cool(color_index) for color_index in
-               numpy.linspace(0, 1, len(velocity_field.time_deltas) + 1)])
-    map_axis.add_feature(cartopy.feature.LAND)
+        f'{ordinal_string(order)} order {source.upper()} {contour_shape} contours with {contour_radius / 1000} km' +
+        f' radius, tracked every {time_delta.total_seconds() / 3600} hours over {period.total_seconds() / 3600} hours total')
 
     plot_axis = main_figure.add_subplot(1, 2, 1)
     plot_axis.set_xlabel('time')
 
-    velocity_field.plot(start_time, map_axis)
-
     if contour_shape == 'point':
-        plot_axis.set_ylabel('radial distance (m)')
-
-        radial_distances = {}
-
-        for time_delta in time_deltas:
-            if type(time_delta) is numpy.timedelta64:
-                time_delta = time_delta.item()
-
-            if type(time_delta) is int:
-                time_delta = datetime.timedelta(seconds=time_delta * 1e-9)
-
-            # previous_radial_distance = numpy.sqrt(numpy.sum(
-            #     (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
-            previous_radial_distance = haversine.haversine(pyproj.transform(WebMercator, WGS84, *contour.coordinates()),
-                                                           contour_center, unit='m')
-
-            radial_distances[contour.time] = previous_radial_distance
-            contour.step(time_delta, order)
-
-            # current_radial_distance = numpy.sqrt(numpy.sum(
-            #     (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
-            current_radial_distance = haversine.haversine(pyproj.transform(WebMercator, WGS84, *contour.coordinates()),
-                                                          contour_center, unit='m')
-
-            print(
-                f'step {time_delta} to {contour.time}: change in radius was {current_radial_distance - previous_radial_distance:.2f} m')
-
-        plot_axis.plot(radial_distances.keys(), radial_distances.values())
-
-        for particle in contour.particles:
-            particle.plot(slice(0, -1), map_axis)
+        plot_axis.set_ylabel('% of starting radial distance')
     else:
-        plot_axis.set_ylabel('area (m^2)')
+        plot_axis.set_ylabel('% of starting area')
+        # plot_axis.set_ylim([80, 180])
 
-        areas = {}
+    map_axis = main_figure.add_subplot(1, 2, 2, projection=cartopy.crs.PlateCarree())
+    map_axis.set_prop_cycle(color=contour_colors)
+    map_axis.add_feature(cartopy.feature.LAND)
 
-        for time_delta in time_deltas:
-            if type(time_delta) is numpy.timedelta64:
-                time_delta = time_delta.item()
+    # velocity_field.plot(start_time, map_axis)
 
-            if type(time_delta) is int:
-                time_delta = datetime.timedelta(seconds=time_delta * 1e-9)
+    for contour_center, contour in contours.items():
+        values = {}
 
-            contour.plot(map_axis)
-            previous_area = contour.area()
-            areas[contour.time] = previous_area
-            contour.step(time_delta, order)
-            current_area = contour.area()
-            print(f'step {time_delta} to {contour.time}: change in area was ' +
-                  f'{(current_area - previous_area) / previous_area * 100:.2f}%')
+        if contour_shape == 'point':
+            initial_value = haversine.haversine(pyproj.transform(WebMercator, WGS84, *contour.coordinates()),
+                                                contour_center, unit='m')
+            values[contour.time] = 100
 
-        plot_axis.plot(areas.keys(), areas.values())
+            for time_delta in time_deltas:
+                if type(time_delta) is numpy.timedelta64:
+                    time_delta = time_delta.item()
 
+                if type(time_delta) is int:
+                    time_delta = datetime.timedelta(seconds=time_delta * 1e-9)
+
+                previous_radial_distance = numpy.sqrt(numpy.sum(
+                    (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
+                # previous_radial_distance = haversine.haversine(
+                #     pyproj.transform(WebMercator, WGS84, *contour.coordinates()),
+                #     contour_center, unit='m')
+
+                contour.step(time_delta, order)
+
+                current_radial_distance = numpy.sqrt(numpy.sum(
+                    (contour.coordinates() - numpy.array(pyproj.transform(WGS84, WebMercator, *contour_center))) ** 2))
+                # current_radial_distance = haversine.haversine(
+                #     pyproj.transform(WebMercator, WGS84, *contour.coordinates()),
+                #     contour_center, unit='m')
+                values[contour.time] = (1 + (current_radial_distance - initial_value) / initial_value) * 100
+
+                print(f'step {time_delta} to {contour.time}: change in radius was ' +
+                      f'{(current_radial_distance - previous_radial_distance) / previous_radial_distance * 100:.2f}%')
+
+            for particle in contour.particles:
+                particle.plot(slice(0, -1), map_axis)
+        else:
+            initial_value = contour.area()
+            values[contour.time] = 100
+            output_file.write({
+                'geometry': shapely.geometry.mapping(contour.geometry()),
+                'properties': {'datetime': contour.time}
+            })
+
+            for time_delta in time_deltas:
+                if type(time_delta) is numpy.timedelta64:
+                    time_delta = time_delta.item()
+
+                if type(time_delta) is int:
+                    time_delta = datetime.timedelta(seconds=time_delta * 1e-9)
+
+                contour.plot(map_axis)
+                previous_area = contour.area()
+
+                contour.step(time_delta, order)
+                output_file.write({
+                    'geometry': shapely.geometry.mapping(contour.geometry()),
+                    'properties': {'datetime': contour.time}
+                })
+
+                current_area = contour.area()
+                values[contour.time] = (1 + (current_area - initial_value) / initial_value) * 100
+
+                print(f'step {time_delta} to {contour.time}: change in area was ' +
+                      f'{(current_area - previous_area) / previous_area * 100:.2f}%')
+
+        plot_axis.plot(values.keys(), values.values(), '-o')
+
+    output_file.close()
     pyplot.show()
 
     print('done')

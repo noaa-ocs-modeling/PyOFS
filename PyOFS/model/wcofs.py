@@ -30,7 +30,7 @@ from PyOFS import CRS_EPSG, DATA_DIR, utilities
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
-WCOFS_ROTATED_POLE = pyproj.Proj('+proj=ob_tran +o_proj=latlon +o_lat_p=37.4 +o_lon_p=-57.6 +ellps=WGS84')
+WCOFS_ROTATED_POLE = pyproj.Proj('+proj=ob_tran +o_proj=longlat +o_lat_p=37.4 +o_lon_p=-57.6 +ellps=WGS84')
 
 GRID_LOCATIONS = {'face': 'rho', 'edge1': 'u', 'edge2': 'v', 'node': 'psi'}
 COORDINATE_VARIABLES = ['grid', 'ocean_time', 'lon_rho', 'lat_rho', 'lon_u', 'lat_u', 'lon_v', 'lat_v', 'lon_psi',
@@ -55,13 +55,13 @@ VALID_SOURCE_STRINGS = ['stations', 'fields', 'avg', '2ds']
 
 GLOBAL_LOCK = threading.Lock()
 
-SOURCE_URLS = ['https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS',
+SOURCE_URLS = ['http://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS',
                os.path.join(DATA_DIR, 'input/wcofs/avg')]
 
 
 class WCOFSDataset:
     """
-    West Coast Ocean Forecasting System (WCOFS) NetCDF dataset.
+    West Coast Ocean Forecasting System (WCOFS) NetCDF observation.
     """
 
     grid_transforms = None
@@ -76,7 +76,7 @@ class WCOFSDataset:
                  time_deltas: list = None, x_size: float = None, y_size: float = None, grid_filename: str = None,
                  source_url: str = None, wcofs_string: str = 'wcofs'):
         """
-        Creates new dataset object from datetime and given model parameters.
+        Creates new observation object from datetime and given model parameters.
 
         :param model_date: model run date
         :param source: one of 'stations', 'fields', 'avg', or '2ds'
@@ -97,9 +97,9 @@ class WCOFSDataset:
         if type(model_date) is datetime.date:
             self.model_time = datetime.datetime.combine(model_date,
                                                         datetime.datetime.min.time()) + datetime.timedelta(
-                hours=3)
+                hours=WCOFS_MODEL_RUN_HOUR)
         else:
-            self.model_time = model_date.replace(hour=3, minute=0, second=0, microsecond=0)
+            self.model_time = model_date.replace(hour=WCOFS_MODEL_RUN_HOUR, minute=0, second=0, microsecond=0)
 
         if source is None:
             source = 'avg'
@@ -146,8 +146,8 @@ class WCOFSDataset:
                     try:
                         self.netcdf_datasets[-1 if day < 0 else 1] = xarray.open_dataset(url, decode_times=False)
                         self.source_url = source
-                    except OSError:
-                        logging.warning(f'No WCOFS dataset found at {url}')
+                    except OSError as error:
+                        logging.warning(error)
             else:
                 for hour in self.time_deltas:
                     model_type = 'n' if hour <= 0 else 'f'
@@ -157,8 +157,8 @@ class WCOFSDataset:
                     try:
                         self.netcdf_datasets[hour] = xarray.open_dataset(url, decode_times=False)
                         self.source_url = source
-                    except OSError:
-                        logging.warning(f'No WCOFS dataset found at {url}')
+                    except OSError as error:
+                        logging.warning(error)
 
         if len(self.netcdf_datasets) > 0:
             self.dataset_locks = {time_delta: threading.Lock() for time_delta in self.netcdf_datasets.keys()}
@@ -257,7 +257,8 @@ class WCOFSDataset:
             raise utilities.NoDataError(
                 f'No WCOFS datasets found for {self.model_time} at the given time deltas ({self.time_deltas}).')
 
-    def bounds(self, variable: str = 'psi') -> tuple:
+    @staticmethod
+    def bounds(variable: str = 'psi') -> tuple:
         """
         Returns bounds of grid of given variable.
 
@@ -358,8 +359,7 @@ class WCOFSDataset:
 
     def write_rasters(self, output_dir: str, variables: Collection[str] = None, filename_suffix: str = None,
                       time_deltas: list = None, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
-                      x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999,
-                      driver: str = 'GTiff'):
+                      x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999, driver: str = 'GTiff'):
         """
         Write averaged raster data of given variables to given output directory.
 
@@ -379,13 +379,7 @@ class WCOFSDataset:
         if variables is None:
             variables = list(DATA_VARIABLES.keys())
 
-        study_area_polygon_geopackage, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
-
-        if study_area_polygon_layer_name == '':
-            study_area_polygon_layer_name = None
-
-        with fiona.open(study_area_polygon_geopackage, layer=study_area_polygon_layer_name) as vector_layer:
-            study_area_geojson = next(iter(vector_layer))['geometry']
+        study_area_geojson = utilities.get_first_record(study_area_polygon_filename)['geometry']
 
         if x_size is None or y_size is None:
             sample_dataset = next(iter(self.netcdf_datasets.values()))
@@ -653,7 +647,8 @@ class WCOFSDataset:
         logging.debug(
             f'writing records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
-    def _create_fiona_record(self, variable_means, row, col, feature_index):
+    @staticmethod
+    def _create_fiona_record(variable_means, row, col, feature_index):
         # get coordinates of cell center
         rho_lon = WCOFSDataset.data_coordinates['rho']['lon'][row, col]
         rho_lat = WCOFSDataset.data_coordinates['rho']['lat'][row, col]
@@ -671,12 +666,13 @@ class WCOFSDataset:
 
         return record
 
-    def to_xarray(self, variables: Collection[str] = None) -> xarray.Dataset:
+    def to_xarray(self, variables: Collection[str] = None, native_grid: bool = False) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
 
         :param variables: variables to use
-        :return: xarray dataset of given variables
+        :param native_grid: whether to return data in the native rotated pole coordinate sytem
+        :return: xarray observation of given variables
         """
 
         output_dataset = xarray.Dataset()
@@ -691,31 +687,47 @@ class WCOFSDataset:
                 times = [self.model_time + datetime.timedelta(hours=time_delta) for time_delta in self.time_deltas]
 
             grid = self.variable_grids[variable]
-            data_stack = numpy.stack([self.data(variable, time_delta) for time_delta in self.time_deltas], axis=0)
-            data_array = xarray.DataArray(data_stack,
-                                          coords={
-                                              'time': times,
-                                              'lon': ((f'{grid}_eta', f'{grid}_xi'),
-                                                      self.data_coordinates[grid]['lon']),
-                                              'lat': ((f'{grid}_eta', f'{grid}_xi'),
-                                                      self.data_coordinates[grid]['lat'])
-                                          },
-                                          dims=('time', f'{grid}_eta', f'{grid}_xi'))
+            data_stack = numpy.stack(
+                [self.data(variable, time_delta, native_grid=native_grid) for time_delta in self.time_deltas], axis=0)
+
+            if native_grid:
+                wgs84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
+
+                native_lon, native_lat = pyproj.transform(wgs84, WCOFS_ROTATED_POLE, self.data_coordinates[grid]['lon'],
+                                                          self.data_coordinates[grid]['lat'])
+
+                native_lon = native_lon[:, 0]
+                native_lat = native_lat[0, :]
+
+                data_array = xarray.DataArray(data_stack, coords={'time': times, f'{grid}_lon': native_lon,
+                                                                  f'{grid}_lat': native_lat},
+                                              dims=('time', f'{grid}_lon', f'{grid}_lat'))
+            else:
+                data_array = xarray.DataArray(data_stack,
+                                              coords={
+                                                  'time': times,
+                                                  f'{grid}_lon': ((f'{grid}_eta', f'{grid}_xi'),
+                                                                  self.data_coordinates[grid]['lon']),
+                                                  f'{grid}_lat': ((f'{grid}_eta', f'{grid}_xi'),
+                                                                  self.data_coordinates[grid]['lat'])
+                                              },
+                                              dims=('time', f'{grid}_eta', f'{grid}_xi'))
 
             data_array.attrs['grid'] = grid
             output_dataset = output_dataset.update({variable: data_array})
 
         return output_dataset
 
-    def to_netcdf(self, output_file: str, variables: Collection[str] = None):
+    def to_netcdf(self, output_file: str, variables: Collection[str] = None, native_grid: bool = False):
         """
         Writes to NetCDF file.
 
         :param output_file: output file to write
         :param variables: variables to use
+        :param native_grid: whether to return data in the native rotated pole coordinate sytem
         """
 
-        self.to_xarray(variables).to_netcdf(output_file)
+        self.to_xarray(variables, native_grid).to_netcdf(output_file)
 
     def __repr__(self):
         used_params = [self.model_time.__repr__()]
@@ -787,7 +799,7 @@ class WCOFSRange:
 
         self.datasets = {}
 
-        # concurrently populate dictionary with WCOFS dataset objects for every time in the given time interval
+        # concurrently populate dictionary with WCOFS observation objects for every time in the given time interval
         with futures.ThreadPoolExecutor() as concurrency_pool:
             running_futures = {}
 
@@ -849,7 +861,7 @@ class WCOFSRange:
                     else:
                         time_deltas = overlapping_hours
 
-                # get dataset for the current hours (usually all hours)
+                # get observation for the current hours (usually all hours)
                 if time_deltas is None or len(time_deltas) > 0:
                     running_future = concurrency_pool.submit(WCOFSDataset, model_date=model_date, source=self.source,
                                                              time_deltas=self.time_deltas, x_size=self.x_size,
@@ -1019,18 +1031,18 @@ class WCOFSRange:
         return output_data
 
     def write_rasters(self, output_dir: str, variables: Collection[str] = None, filename_suffix: str = None,
-                      study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
                       start_time: datetime.datetime = None, end_time: datetime.datetime = None,
-                      x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999, driver: str = 'GTiff'):
+                      study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, x_size: float = 0.04,
+                      y_size: float = 0.04, fill_value=-9999, driver: str = 'GTiff'):
         """
         Write raster data of given variables to given output directory, averaged over given time interval.
 
         :param output_dir: path to output directory
         :param variables: variable names to use
         :param filename_suffix: suffix for filenames
-        :param study_area_polygon_filename: path to vector file containing study area boundary
         :param start_time: beginning of time interval
         :param end_time: end of time interval
+        :param study_area_polygon_filename: path to vector file containing study area boundary
         :param x_size: cell size of output grid in X direction
         :param y_size: cell size of output grid in Y direction
         :param fill_value: desired fill value of output
@@ -1040,13 +1052,7 @@ class WCOFSRange:
         if variables is None:
             variables = list(DATA_VARIABLES.keys())
 
-        study_area_polygon_geopackage, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
-
-        if study_area_polygon_layer_name == '':
-            study_area_polygon_layer_name = None
-
-        with fiona.open(study_area_polygon_geopackage, layer=study_area_polygon_layer_name) as vector_layer:
-            study_area_geojson = next(iter(vector_layer))['geometry']
+        study_area_geojson = utilities.get_first_record(study_area_polygon_filename)['geometry']
 
         if x_size is None or y_size is None:
             sample_dataset = next(iter(next(iter(self.datasets.values())).datasets.values()))
@@ -1322,7 +1328,7 @@ class WCOFSRange:
 
         :param variables: variables to use
         :param mean: whether to average all time indices
-        :return: xarray dataset of given variables
+        :return: xarray observation of given variables
         """
 
         data_arrays = {}
@@ -1349,6 +1355,8 @@ class WCOFSRange:
                                                       self.data_coordinates[grid]['lat'])
                                               },
                                               dims=('time_delta', f'{grid}_eta', f'{grid}_xi'))
+
+                del data_stack
 
                 data_array.attrs['grid'] = grid
                 data_arrays[variable] = data_array
@@ -1393,8 +1401,6 @@ class WCOFSRange:
 
                 data_array.attrs['grid'] = grid
                 data_arrays[variable] = data_array
-
-        del data_stack
 
         output_dataset = xarray.Dataset(data_vars=data_arrays)
 
@@ -1477,9 +1483,9 @@ def reset_dataset_grid():
 
 def write_convex_hull(netcdf_dataset: xarray.Dataset, output_filename: str, grid_name: str = 'psi'):
     """
-    Extract the convex hull from the coordinate values of the given WCOFS NetCDF dataset, and write it to a file.
+    Extract the convex hull from the coordinate values of the given WCOFS NetCDF observation, and write it to a file.
 
-    :param netcdf_dataset: WCOFS format NetCDF dataset object
+    :param netcdf_dataset: WCOFS format NetCDF observation object
     :param output_filename: path to output file
     :param grid_name: name of grid. One of ('psi', 'rho', 'u', 'v')
     """

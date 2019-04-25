@@ -10,6 +10,7 @@ Created on Jun 13, 2018
 import datetime
 import os
 
+import fiona
 import numpy
 import rasterio
 import xarray
@@ -17,25 +18,25 @@ import xarray
 
 def copy_xarray(input_path: str, output_path: str) -> xarray.Dataset:
     """
-    Copy given xarray dataset to a local file at the given path.
+    Copy given xarray observation to a local file at the given path.
 
-    :param input_path: path to dataset to copy
+    :param input_path: path to observation to copy
     :param output_path: path to output file
-    :return: copied dataset at given path
+    :return: copied observation at given path
     """
 
-    print(f'Reading dataset from {input_path}')
+    print(f'Reading observation from {input_path}')
 
     input_dataset = xarray.open_dataset(input_path, decode_times=False)
 
-    print(f'Copying dataset to local memory...')
+    print(f'Copying observation to local memory...')
 
-    # deep copy of xarray dataset
+    # deep copy of xarray observation
     output_dataset = input_dataset.copy(deep=True)
 
     print(f'Writing to {output_path}')
 
-    # save dataset to file
+    # save observation to file
     output_dataset.to_netcdf(output_path)
 
     return output_dataset
@@ -170,8 +171,8 @@ def write_gpkg_subdataset(input_data: numpy.ndarray, output_filename: str, layer
     :param input_data: array of data to write to raster
     :param output_filename: geopackage filename
     :param layer_name: name of output layer
-    :param height: numbers of rows of the raster dataset
-    :param width: number of columns of the raster dataset
+    :param height: numbers of rows of the raster observation
+    :param width: number of columns of the raster observation
     :param dtype: data type for bands
     :param crs: coordinate reference system
     :param transform: affine transformation mapping the pixel space to geographic space
@@ -185,7 +186,7 @@ def write_gpkg_subdataset(input_data: numpy.ndarray, output_filename: str, layer
             with rasterio.open(output_filename, 'w', driver='GPKG', height=height, width=width, count=1, dtype=dtype,
                                crs=crs, transform=transform, nodata=nodata, raster_table=layer_name,
                                raster_identifier=layer_name, raster_description=layer_name,
-                               append_subdataset='YES') as output_raster:
+                               append_subdataset='YES', **kwargs) as output_raster:
                 output_raster.write(input_data.astype(dtype), 1)
 
             print(f'Writing {output_filename}:{layer_name}')
@@ -196,10 +197,10 @@ def write_gpkg_subdataset(input_data: numpy.ndarray, output_filename: str, layer
     if overwrite:
         print(f'Erasing {output_filename}')
 
-    # if error with appending, erase entire dataset and append as new
+    # if error with appending, erase entire observation and append as new
     with rasterio.open(output_filename, 'w', driver='GPKG', height=height, width=width, count=1, dtype=dtype, crs=crs,
                        transform=transform, nodata=nodata, raster_table=layer_name, raster_identifier=layer_name,
-                       raster_description=layer_name) as output_raster:
+                       raster_description=layer_name, **kwargs) as output_raster:
         output_raster.write(input_data.astype(dtype), 1)
 
 
@@ -212,6 +213,17 @@ def datetime64_to_time(datetime64: numpy.datetime64) -> datetime.datetime:
     """
 
     return datetime.datetime.fromtimestamp(datetime64.values.astype(datetime.datetime) * 1e-9)
+
+
+def get_first_record(vector_dataset_filename: str):
+    fiona_kwargs = {}
+
+    if ':' in vector_dataset_filename:
+        vector_dataset_filename, layer_name = vector_dataset_filename.rsplit(':', 1)
+        fiona_kwargs['layer'] = layer_name
+
+    with fiona.open(vector_dataset_filename, **fiona_kwargs) as vector_layer:
+        return next(iter(vector_layer))
 
 
 class NoDataError(Exception):

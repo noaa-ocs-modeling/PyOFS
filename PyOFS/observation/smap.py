@@ -13,7 +13,6 @@ import os
 from collections import OrderedDict
 from typing import Collection
 
-import fiona
 import numpy
 import rasterio
 import rasterio.features
@@ -47,23 +46,20 @@ class SMAPDataset:
 
     def __init__(self, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME):
         """
-        Retrieve VIIRS NetCDF dataset from NOAA with given datetime.
+        Retrieve VIIRS NetCDF observation from NOAA with given datetime.
 
         :param study_area_polygon_filename: filename of vector file containing study area boundary
-        :raises NoDataError: if dataset does not exist
+        :raises NoDataError: if observation does not exist
         """
 
-        self.study_area_polygon_filename, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
-
-        if study_area_polygon_layer_name == '':
-            study_area_polygon_layer_name = None
+        self.study_area_polygon_filename = study_area_polygon_filename
 
         for source, source_url in SOURCE_URLS['OpenDAP'].items():
             try:
                 self.netcdf_dataset = xarray.open_dataset(source_url)
                 break
             except Exception as error:
-                logging.error(f'Error collecting dataset from {source}: {error}')
+                logging.error(f'Error collecting observation from {source}: {error}')
 
         # construct rectangular polygon of granule extent
         lon_min = float(self.netcdf_dataset.geospatial_lon_min)
@@ -87,10 +83,9 @@ class SMAPDataset:
 
         if SMAPDataset.study_area_extent is None:
             # get first record in layer
-            with fiona.open(self.study_area_polygon_filename, layer=study_area_polygon_layer_name) as vector_layer:
-                SMAPDataset.study_area_extent = shapely.geometry.MultiPolygon(
-                    [shapely.geometry.Polygon(polygon[0]) for polygon in
-                     next(iter(vector_layer))['geometry']['coordinates']])
+            SMAPDataset.study_area_extent = shapely.geometry.MultiPolygon(
+                [shapely.geometry.Polygon(polygon[0]) for polygon in
+                 utilities.get_first_record(self.study_area_polygon_filename)['geometry']['coordinates']])
 
             SMAPDataset.study_area_bounds = SMAPDataset.study_area_extent.bounds
             SMAPDataset.study_area_transform = rasterio.transform.from_origin(SMAPDataset.study_area_bounds[0],
@@ -110,7 +105,7 @@ class SMAPDataset:
 
     def bounds(self) -> tuple:
         """
-        Get coordinate bounds of dataset.
+        Get coordinate bounds of observation.
 
         :return: tuple of bounds (west, south, east, north)
         """
@@ -119,7 +114,7 @@ class SMAPDataset:
 
     def cell_size(self) -> tuple:
         """
-        Get cell sizes of dataset.
+        Get cell sizes of observation.
 
         :return: tuple of cell sizes (x_size, y_size)
         """
