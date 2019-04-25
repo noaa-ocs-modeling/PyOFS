@@ -17,11 +17,9 @@ sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.par
 
 import pytz
 
-from main import write_json
 from PyOFS import DATA_DIR
 from PyOFS.dataset import rtofs, hfr, viirs, smap, wcofs
 
-JSON_PATH = os.path.join(DATA_DIR, r'reference\model_dates.json')
 LOG_DIR = os.path.join(DATA_DIR, 'log')
 OUTPUT_DIR = os.path.join(DATA_DIR, 'output')
 
@@ -372,8 +370,5 @@ if __name__ == '__main__':
 
     model_run_date = datetime.date.today()
     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas, log_path=log_path)
-
-    # write new directory structure to JSON file
-    write_json.dir_structure_to_json(OUTPUT_DIR, JSON_PATH)
 
     print('done')
