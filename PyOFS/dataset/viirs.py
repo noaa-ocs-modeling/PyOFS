@@ -90,7 +90,9 @@ class VIIRSDataset:
         self.algorithm = algorithm
 
         if version is None:
-            if data_time >= datetime.datetime(2018, 11, 7, 15, 10):
+            if data_time >= datetime.datetime(2019, 4, 23, 12, 50):
+                self.version = '2.61'
+            elif data_time >= datetime.datetime(2018, 11, 7, 15, 10):
                 self.version = '2.60'
             elif data_time >= datetime.datetime(2017, 9, 14, 12, 50):
                 self.version = '2.41'
@@ -128,7 +130,7 @@ class VIIRSDataset:
                 self.url = url
                 break
             except Exception as error:
-                logging.error(f'Error collecting dataset from {source}: {error}')
+                logging.error(error)
 
             if self.url is not None:
                 break
@@ -174,7 +176,7 @@ class VIIRSDataset:
                     self.url = url
                     break
                 except Exception as error:
-                    logging.error(f'Error collecting dataset from {source}: {error}')
+                    logging.error(error)
 
                 if self.url is not None:
                     break
