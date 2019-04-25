@@ -61,7 +61,7 @@ SOURCE_URLS = ['http://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODE
 
 class WCOFSDataset:
     """
-    West Coast Ocean Forecasting System (WCOFS) NetCDF dataset.
+    West Coast Ocean Forecasting System (WCOFS) NetCDF observation.
     """
 
     grid_transforms = None
@@ -76,7 +76,7 @@ class WCOFSDataset:
                  time_deltas: list = None, x_size: float = None, y_size: float = None, grid_filename: str = None,
                  source_url: str = None, wcofs_string: str = 'wcofs'):
         """
-        Creates new dataset object from datetime and given model parameters.
+        Creates new observation object from datetime and given model parameters.
 
         :param model_date: model run date
         :param source: one of 'stations', 'fields', 'avg', or '2ds'
@@ -257,7 +257,8 @@ class WCOFSDataset:
             raise utilities.NoDataError(
                 f'No WCOFS datasets found for {self.model_time} at the given time deltas ({self.time_deltas}).')
 
-    def bounds(self, variable: str = 'psi') -> tuple:
+    @staticmethod
+    def bounds(variable: str = 'psi') -> tuple:
         """
         Returns bounds of grid of given variable.
 
@@ -358,8 +359,7 @@ class WCOFSDataset:
 
     def write_rasters(self, output_dir: str, variables: Collection[str] = None, filename_suffix: str = None,
                       time_deltas: list = None, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
-                      x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999,
-                      driver: str = 'GTiff'):
+                      x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999, driver: str = 'GTiff'):
         """
         Write averaged raster data of given variables to given output directory.
 
@@ -379,13 +379,7 @@ class WCOFSDataset:
         if variables is None:
             variables = list(DATA_VARIABLES.keys())
 
-        study_area_polygon_geopackage, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
-
-        if study_area_polygon_layer_name == '':
-            study_area_polygon_layer_name = None
-
-        with fiona.open(study_area_polygon_geopackage, layer=study_area_polygon_layer_name) as vector_layer:
-            study_area_geojson = next(iter(vector_layer))['geometry']
+        study_area_geojson = utilities.get_first_record(study_area_polygon_filename)['geometry']
 
         if x_size is None or y_size is None:
             sample_dataset = next(iter(self.netcdf_datasets.values()))
@@ -653,7 +647,8 @@ class WCOFSDataset:
         logging.debug(
             f'writing records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
-    def _create_fiona_record(self, variable_means, row, col, feature_index):
+    @staticmethod
+    def _create_fiona_record(variable_means, row, col, feature_index):
         # get coordinates of cell center
         rho_lon = WCOFSDataset.data_coordinates['rho']['lon'][row, col]
         rho_lat = WCOFSDataset.data_coordinates['rho']['lat'][row, col]
@@ -677,7 +672,7 @@ class WCOFSDataset:
 
         :param variables: variables to use
         :param native_grid: whether to return data in the native rotated pole coordinate sytem
-        :return: xarray dataset of given variables
+        :return: xarray observation of given variables
         """
 
         output_dataset = xarray.Dataset()
@@ -804,7 +799,7 @@ class WCOFSRange:
 
         self.datasets = {}
 
-        # concurrently populate dictionary with WCOFS dataset objects for every time in the given time interval
+        # concurrently populate dictionary with WCOFS observation objects for every time in the given time interval
         with futures.ThreadPoolExecutor() as concurrency_pool:
             running_futures = {}
 
@@ -866,7 +861,7 @@ class WCOFSRange:
                     else:
                         time_deltas = overlapping_hours
 
-                # get dataset for the current hours (usually all hours)
+                # get observation for the current hours (usually all hours)
                 if time_deltas is None or len(time_deltas) > 0:
                     running_future = concurrency_pool.submit(WCOFSDataset, model_date=model_date, source=self.source,
                                                              time_deltas=self.time_deltas, x_size=self.x_size,
@@ -1036,18 +1031,18 @@ class WCOFSRange:
         return output_data
 
     def write_rasters(self, output_dir: str, variables: Collection[str] = None, filename_suffix: str = None,
-                      study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
                       start_time: datetime.datetime = None, end_time: datetime.datetime = None,
-                      x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999, driver: str = 'GTiff'):
+                      study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, x_size: float = 0.04,
+                      y_size: float = 0.04, fill_value=-9999, driver: str = 'GTiff'):
         """
         Write raster data of given variables to given output directory, averaged over given time interval.
 
         :param output_dir: path to output directory
         :param variables: variable names to use
         :param filename_suffix: suffix for filenames
-        :param study_area_polygon_filename: path to vector file containing study area boundary
         :param start_time: beginning of time interval
         :param end_time: end of time interval
+        :param study_area_polygon_filename: path to vector file containing study area boundary
         :param x_size: cell size of output grid in X direction
         :param y_size: cell size of output grid in Y direction
         :param fill_value: desired fill value of output
@@ -1057,13 +1052,7 @@ class WCOFSRange:
         if variables is None:
             variables = list(DATA_VARIABLES.keys())
 
-        study_area_polygon_geopackage, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
-
-        if study_area_polygon_layer_name == '':
-            study_area_polygon_layer_name = None
-
-        with fiona.open(study_area_polygon_geopackage, layer=study_area_polygon_layer_name) as vector_layer:
-            study_area_geojson = next(iter(vector_layer))['geometry']
+        study_area_geojson = utilities.get_first_record(study_area_polygon_filename)['geometry']
 
         if x_size is None or y_size is None:
             sample_dataset = next(iter(next(iter(self.datasets.values())).datasets.values()))
@@ -1339,7 +1328,7 @@ class WCOFSRange:
 
         :param variables: variables to use
         :param mean: whether to average all time indices
-        :return: xarray dataset of given variables
+        :return: xarray observation of given variables
         """
 
         data_arrays = {}
@@ -1366,6 +1355,8 @@ class WCOFSRange:
                                                       self.data_coordinates[grid]['lat'])
                                               },
                                               dims=('time_delta', f'{grid}_eta', f'{grid}_xi'))
+
+                del data_stack
 
                 data_array.attrs['grid'] = grid
                 data_arrays[variable] = data_array
@@ -1410,8 +1401,6 @@ class WCOFSRange:
 
                 data_array.attrs['grid'] = grid
                 data_arrays[variable] = data_array
-
-        del data_stack
 
         output_dataset = xarray.Dataset(data_vars=data_arrays)
 
@@ -1494,9 +1483,9 @@ def reset_dataset_grid():
 
 def write_convex_hull(netcdf_dataset: xarray.Dataset, output_filename: str, grid_name: str = 'psi'):
     """
-    Extract the convex hull from the coordinate values of the given WCOFS NetCDF dataset, and write it to a file.
+    Extract the convex hull from the coordinate values of the given WCOFS NetCDF observation, and write it to a file.
 
-    :param netcdf_dataset: WCOFS format NetCDF dataset object
+    :param netcdf_dataset: WCOFS format NetCDF observation object
     :param output_filename: path to output file
     :param grid_name: name of grid. One of ('psi', 'rho', 'u', 'v')
     """

@@ -15,7 +15,6 @@ from collections import OrderedDict
 from concurrent import futures
 from typing import Collection
 
-import fiona
 import math
 import numpy
 import rasterio
@@ -62,14 +61,14 @@ class VIIRSDataset:
                  study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, algorithm: str = 'OSPO',
                  version: str = None):
         """
-        Retrieve VIIRS NetCDF dataset from NOAA with given datetime.
+        Retrieve VIIRS NetCDF observation from NOAA with given datetime.
 
-        :param data_time: dataset datetime
+        :param data_time: observation datetime
         :param satellite: VIIRS platform
         :param study_area_polygon_filename: filename of vector file containing study area boundary
         :param algorithm: either 'STAR' or 'OSPO'
         :param version: ACSPO algorithm version
-        :raises NoDataError: if dataset does not exist
+        :raises NoDataError: if observation does not exist
         """
 
         if data_time is None:
@@ -80,10 +79,7 @@ class VIIRSDataset:
 
         self.satellite = satellite
 
-        self.study_area_polygon_filename, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
-
-        if study_area_polygon_layer_name == '':
-            study_area_polygon_layer_name = None
+        self.study_area_polygon_filename = study_area_polygon_filename
 
         # use NRT flag if granule is less than 13 days old
         self.near_real_time = datetime.datetime.now() - data_time <= datetime.timedelta(days=13)
@@ -112,6 +108,8 @@ class VIIRSDataset:
             raise utilities.NoDataError(f'{self.satellite.upper()} does not yet have a reanalysis archive')
 
         for source, source_url in SOURCE_URLS['OpenDAP'].items():
+            url = source_url
+
             if self.near_real_time:
                 if source == 'NESDIS':
                     url = f'{source_url}/grid{self.satellite.upper()}VIIRSNRTL3UWW00/{month_dir}/{filename}'
@@ -140,6 +138,8 @@ class VIIRSDataset:
 
             for source, source_url in SOURCE_URLS['FTP'].items():
                 host_url, ftp_input_dir = source_url.split('/', 1)
+                ftp_path = ftp_input_dir
+                url = host_url
 
                 if source == 'NESDIS':
                     if self.near_real_time:
@@ -182,7 +182,7 @@ class VIIRSDataset:
                     break
 
         if self.url is None:
-            raise utilities.NoDataError(f'No VIIRS dataset found at {self.data_time} UTC.')
+            raise utilities.NoDataError(f'No VIIRS observation found at {self.data_time} UTC.')
 
         # construct rectangular polygon of granule extent
         if 'geospatial_bounds' in self.netcdf_dataset.attrs:
@@ -213,10 +213,9 @@ class VIIRSDataset:
             logging.debug(f'Calculating indices and transform from granule at {self.data_time} UTC...')
 
             # get first record in layer
-            with fiona.open(self.study_area_polygon_filename, layer=study_area_polygon_layer_name) as vector_layer:
-                VIIRSDataset.study_area_extent = shapely.geometry.MultiPolygon(
-                    [shapely.geometry.Polygon(polygon[0]) for polygon in
-                     next(iter(vector_layer))['geometry']['coordinates']])
+            VIIRSDataset.study_area_extent = shapely.geometry.MultiPolygon(
+                [shapely.geometry.Polygon(polygon[0]) for polygon in
+                 utilities.get_first_record(self.study_area_polygon_filename)['geometry']['coordinates']])
 
             VIIRSDataset.study_area_bounds = VIIRSDataset.study_area_extent.bounds
             VIIRSDataset.study_area_transform = rasterio.transform.from_origin(VIIRSDataset.study_area_bounds[0],
@@ -236,7 +235,7 @@ class VIIRSDataset:
 
     def bounds(self) -> tuple:
         """
-        Get coordinate bounds of dataset.
+        Get coordinate bounds of observation.
 
         :return: tuple of bounds (west, south, east, north)
         """
@@ -245,7 +244,7 @@ class VIIRSDataset:
 
     def cell_size(self) -> tuple:
         """
-        Get cell sizes of dataset.
+        Get cell sizes of observation.
 
         :return: tuple of cell sizes (x_size, y_size)
         """
@@ -274,7 +273,7 @@ class VIIRSDataset:
         :return: matrix of SST in Celsius
         """
 
-        # dataset SST data (masked array) using vertically reflected VIIRS grid
+        # observation SST data (masked array) using vertically reflected VIIRS grid
         output_sst_data = self.netcdf_dataset['sea_surface_temperature'].values
 
         # check for unmasked data
@@ -310,7 +309,7 @@ class VIIRSDataset:
         :return: array of SSES bias in Celsius
         """
 
-        # dataset bias values using vertically reflected VIIRS grid
+        # observation bias values using vertically reflected VIIRS grid
         sses_data = self.netcdf_dataset['sses_bias'].values
 
         # replace masked values with 0
@@ -388,7 +387,7 @@ class VIIRSDataset:
 
 class VIIRSRange:
     """
-    Range of VIIRS dataset.
+    Range of VIIRS observation.
     """
 
     study_area_transform = None
@@ -471,7 +470,7 @@ class VIIRSRange:
 
     def cell_size(self) -> tuple:
         """
-        Get cell sizes of dataset.
+        Get cell sizes of observation.
 
         :return: tuple of cell sizes (x_size, y_size)
         """
@@ -666,7 +665,7 @@ class VIIRSRange:
         :param mean: whether to average all time indices
         :param correct_sses: whether to subtract SSES bias from L3 sea surface temperature data
         :param satellites: VIIRS platforms to retrieve; if not specified, will average from both satellites
-        :return: xarray dataset of given variables
+        :return: xarray observation of given variables
         """
 
         output_dataset = xarray.Dataset()
@@ -753,14 +752,9 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
 
     datetime_range = utilities.ten_minute_range(start_time, end_time)
 
-    study_area_polygon_geopackage, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
-
-    if study_area_polygon_layer_name == '':
-        study_area_polygon_layer_name = None
-
     # construct polygon from the first record in layer
-    with fiona.open(study_area_polygon_geopackage, layer=study_area_polygon_layer_name) as vector_layer:
-        study_area_polygon = shapely.geometry.Polygon(next(iter(vector_layer))['geometry']['coordinates'][0])
+    study_area_polygon = shapely.geometry.Polygon(
+        utilities.get_first_record(study_area_polygon_filename)['geometry']['coordinates'][0])
 
     lines = []
 
@@ -777,10 +771,10 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
             cycle_time = current_time + cycle_offset
 
             try:
-                # get dataset of new datetime
+                # get observation of new datetime
                 dataset = VIIRSDataset(cycle_time, satellite, study_area_polygon_filename, algorithm, version)
 
-                # check if dataset falls within polygon extent
+                # check if observation falls within polygon extent
                 if dataset.data_extent.is_valid:
                     if study_area_polygon.intersects(dataset.data_extent):
                         # get duration from current cycle start
@@ -796,7 +790,7 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
             except utilities.NoDataError as error:
                 print(error)
         else:
-            print(f'{current_time.strftime("%Y%m%dT%H%M%S")}: missing dataset across all cycles')
+            print(f'{current_time.strftime("%Y%m%dT%H%M%S")}: missing observation across all cycles')
 
         # write lines to file
         with open(output_filename, 'w') as output_file:

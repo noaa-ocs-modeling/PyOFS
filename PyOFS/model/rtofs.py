@@ -14,7 +14,6 @@ import threading
 from collections import OrderedDict
 from typing import Collection
 
-import fiona
 import fiona.crs
 import numpy
 import rasterio.control
@@ -67,13 +66,13 @@ GLOBAL_LOCK = threading.Lock()
 
 class RTOFSDataset:
     """
-    Real-Time Ocean Forecasting System (RTOFS) NetCDF dataset.
+    Real-Time Ocean Forecasting System (RTOFS) NetCDF observation.
     """
 
     def __init__(self, model_date: datetime.datetime = None, source: str = '2ds', time_interval: str = 'daily',
                  study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME):
         """
-        Creates new dataset object from datetime and given model parameters.
+        Creates new observation object from datetime and given model parameters.
 
         :param model_date: model run date
         :param source: rither '2ds' or '3dz'
@@ -92,15 +91,8 @@ class RTOFSDataset:
         self.source = source
         self.time_interval = time_interval
 
-        self.study_area_polygon_filename, study_area_polygon_layer_name = study_area_polygon_filename.rsplit(':', 1)
-
-        if study_area_polygon_layer_name == '':
-            study_area_polygon_layer_name = None
-
-        # get first record in layer
-        with fiona.open(self.study_area_polygon_filename,
-                        layer=study_area_polygon_layer_name) as vector_layer:
-            self.study_area_geojson = next(iter(vector_layer))['geometry']
+        self.study_area_polygon_filename = study_area_polygon_filename
+        self.study_area_geojson = utilities.get_first_record(self.study_area_polygon_filename)['geometry']
 
         self.netcdf_datasets = {}
         self.dataset_locks = {}
@@ -202,7 +194,7 @@ class RTOFSDataset:
                     raise ValueError(f'Variable must be not one of {list(DATA_VARIABLES.keys())}.')
             else:
                 logging.warning(f'{direction} does not exist in ' +
-                                f'RTOFS dataset for {self.model_time.strftime("%Y%m%d")}.')
+                                f'RTOFS observation for {self.model_time.strftime("%Y%m%d")}.')
         else:
             raise ValueError(f'Direction must be one of {list(DATASET_STRUCTURE[self.source].keys())}.')
 
@@ -342,7 +334,7 @@ class RTOFSDataset:
 
         :param variables: variables to use
         :param mean: whether to average all time indices
-        :return: xarray dataset of given variables
+        :return: xarray observation of given variables
         """
 
         if variables is None:

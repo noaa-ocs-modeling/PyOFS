@@ -43,10 +43,10 @@ class NDBCStation:
 
     def __init__(self, station):
         """
-        Creates new dataset object.
+        Creates new observation object.
 
         :param str station: station name
-        :raises NoDataError: if dataset does not exist
+        :raises NoDataError: if observation does not exist
         """
 
         self.valid = False
@@ -59,7 +59,7 @@ class NDBCStation:
             self.latitude = self.netcdf_dataset['latitude'].values.item()
             self.valid = True
         except:
-            raise utilities.NoDataError(f'No NDBC dataset found at {self.url}')
+            raise utilities.NoDataError(f'No NDBC observation found at {self.url}')
 
     def geometry(self) -> shapely.geometry.Point:
         """
@@ -107,7 +107,7 @@ class NDBCRange:
 
     def __init__(self, start_time: datetime.datetime, end_time: datetime.datetime, stations: list = None):
         """
-        Creates new dataset object.
+        Creates new observation object.
 
         :param start_time: beginning of time interval
         :param end_time: end of time interval
@@ -240,14 +240,9 @@ def check_station(dataset: xarray.Dataset, study_area_polygon_filename: str) -> 
     :return: whether station is within study area
     """
 
-    study_area_polygon_filename, layer_name = study_area_polygon_filename.split(':')
-
-    if layer_name == '':
-        layer_name = None
-
     # construct polygon from the first record in the layer
-    with fiona.open(study_area_polygon_filename, layer=layer_name) as vector_layer:
-        study_area_polygon = shapely.geometry.Polygon(next(iter(vector_layer))['geometry']['coordinates'][0])
+    study_area_polygon = shapely.geometry.Polygon(
+        utilities.get_first_record(study_area_polygon_filename)['geometry']['coordinates'][0])
 
     lon = dataset['longitude'][:]
     lat = dataset['latitude'][:]

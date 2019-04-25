@@ -18,7 +18,8 @@ sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.par
 import pytz
 
 from PyOFS import DATA_DIR
-from PyOFS.dataset import rtofs, hfr, viirs, smap, wcofs
+from PyOFS.observation import hf_radar, viirs, smap
+from PyOFS.model import wcofs, rtofs
 
 LOG_DIR = os.path.join(DATA_DIR, 'log')
 OUTPUT_DIR = os.path.join(DATA_DIR, 'output')
@@ -78,7 +79,7 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
             start_of_day_hfr_time = start_of_day + datetime.timedelta(hours=2)
             end_of_day_hfr_time = end_of_day + datetime.timedelta(hours=2)
 
-            hfr_range = hfr.HFRRange(start_of_day_hfr_time, end_of_day_hfr_time)
+            hfr_range = hf_radar.HFRadarRange(start_of_day_hfr_time, end_of_day_hfr_time)
             hfr_range.write_rasters(observation_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}',
                                     variables=['dir', 'mag'], driver='AAIGrid',
                                     fill_value=LEAFLET_NODATA_VALUE, dop_threshold=0.5)

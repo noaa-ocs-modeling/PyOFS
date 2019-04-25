@@ -177,21 +177,21 @@ class RankineVortex(VectorField):
 
 class VectorDataset(VectorField):
     """
-    Vector field with time component using xarray dataset.
+    Vector field with time component using xarray observation.
     """
 
     def __init__(self, dataset: xarray.Dataset, u_name: str = 'u', v_name: str = 'v', x_name: str = 'lon',
                  y_name: str = 'lat', t_name: str = 'time', coordinate_system: pyproj.Proj = None):
         """
-        Create new velocity field from given dataset.
+        Create new velocity field from given observation.
 
-        :param dataset: xarray dataset containing velocity data (u, v)
+        :param dataset: xarray observation containing velocity data (u, v)
         :param u_name: name of u variable
         :param v_name: name of v variable
         :param x_name: name of x coordinate
         :param y_name: name of y coordinate
         :param t_name: name of time coordinate
-        :param coordinate_system: coordinate system of dataset
+        :param coordinate_system: coordinate system of observation
         """
 
         self.coordinate_system = coordinate_system if coordinate_system is not None else WGS84
@@ -233,15 +233,15 @@ class ROMSGridVectorDataset(VectorField):
                  x_names: Tuple[str, str] = ('u_lon', 'v_lon'), y_names: Tuple[str, str] = ('u_lat', 'v_lat'),
                  t_name: str = 'time', coordinate_system: pyproj.Proj = None):
         """
-        Create new velocity field from given dataset.
+        Create new velocity field from given observation.
 
-        :param dataset: xarray dataset containing velocity data (u, v)
+        :param dataset: xarray observation containing velocity data (u, v)
         :param u_name: name of u variable
         :param v_name: name of v variable
         :param x_names: names of x coordinates
         :param y_names: names of y coordinates
         :param t_name: name of time coordinate
-        :param coordinate_system: coordinate system of dataset
+        :param coordinate_system: coordinate system of observation
         """
 
         self.coordinate_system = coordinate_system if coordinate_system is not None else WGS84
@@ -583,6 +583,8 @@ def translate_geographic_coordinates(point: numpy.array, offset: numpy.array) ->
 if __name__ == '__main__':
     from pandas.plotting import register_matplotlib_converters
     from PyOFS import DATA_DIR
+    from PyOFS.model import rtofs, wcofs
+    from PyOFS.observation import hf_radar
 
     register_matplotlib_converters()
 
@@ -594,8 +596,8 @@ if __name__ == '__main__':
     contour_centers = [(-123.79820, 37.31710)]
     start_time = datetime.datetime(2019, 4, 23)
 
-    period = datetime.timedelta(hours=3)
-    time_delta = datetime.timedelta(hours=1)
+    period = datetime.timedelta(hours=24)
+    time_delta = datetime.timedelta(hours=72)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
 
@@ -641,19 +643,13 @@ if __name__ == '__main__':
         print('Collecting data...')
         if not os.path.exists(data_path):
             if source.upper() == 'HFR':
-                from PyOFS.dataset import hfr
-
-                vector_dataset = hfr.HFRRange(start_time, start_time + datetime.timedelta(days=1)).to_xarray(
+                vector_dataset = hf_radar.HFRadarRange(start_time, start_time + datetime.timedelta(days=1)).to_xarray(
                     variables=('ssu', 'ssv'), mean=False)
                 vector_dataset.to_netcdf(data_path)
             elif source.upper() == 'RTOFS':
-                from PyOFS.dataset import rtofs
-
                 vector_dataset = rtofs.RTOFSDataset(start_time).to_xarray(variables=('ssu', 'ssv'), mean=False)
                 vector_dataset.to_netcdf(data_path)
             elif source.upper() == 'WCOFS':
-                from PyOFS.dataset import wcofs
-
                 source = 'avg' if time_delta.total_seconds() / 3600 / 24 >= 1 else '2ds'
 
                 vector_dataset = wcofs.WCOFSDataset(start_time, source).to_xarray(variables=('ssu', 'ssv'))
@@ -664,8 +660,6 @@ if __name__ == '__main__':
             vector_dataset = xarray.open_dataset(data_path)
 
         if source.upper() == 'WCOFS':
-            from PyOFS.dataset import wcofs
-
             coordinate_system = wcofs.WCOFS_ROTATED_POLE
 
             velocity_field = ROMSGridVectorDataset(vector_dataset, u_name='ssu', v_name='ssv',
