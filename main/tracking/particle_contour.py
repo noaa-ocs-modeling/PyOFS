@@ -611,7 +611,7 @@ if __name__ == '__main__':
     contour_centers = []
     start_time = datetime.datetime(2016, 9, 25, 1)
 
-    period = datetime.timedelta(days=8)
+    period = datetime.timedelta(days=4)
     time_delta = datetime.timedelta(hours=1)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
@@ -623,8 +623,7 @@ if __name__ == '__main__':
                  f'{int(time_delta.total_seconds() / 3600)}h'
     schema = {'geometry': 'Polygon', 'properties': {'datetime': 'datetime'}}
 
-    with fiona.open(output_path, 'w', 'GPKG', schema, crs=fiona_WebMercator, layer=layer_name) as output_file:
-        pass
+    output_file = fiona.open(output_path, 'w', 'GPKG', schema, crs=fiona_WebMercator, layer=layer_name)
 
     with fiona.open(r"C:\Workspaces\GIS\capstone\study_points.gpkg") as contour_centers_file:
         for point in contour_centers_file:
@@ -798,9 +797,8 @@ if __name__ == '__main__':
         if contour_shape == 'point':
             # values[contour.time] = 0
 
-            with fiona.open(output_path, 'a', 'GPKG', schema, crs=fiona_WebMercator, layer=layer_name) as output_file:
-                output_file.write({'geometry': shapely.geometry.mapping(contour.geometry()),
-                                   'properties': {'datetime': contour.time}})
+            output_file.write({'geometry': shapely.geometry.mapping(contour.geometry()),
+                               'properties': {'datetime': contour.time}})
 
             for time_delta in time_deltas:
                 if type(time_delta) is numpy.timedelta64:
@@ -813,10 +811,8 @@ if __name__ == '__main__':
                 contour.step(time_delta, order)
                 # distance = numpy.sqrt(numpy.sum((contour.coordinates() - previous_location) ** 2))
 
-                with fiona.open(output_path, 'a', 'GPKG', schema, crs=fiona_WebMercator,
-                                layer=layer_name) as output_file:
-                    output_file.write({'geometry': shapely.geometry.mapping(contour.geometry()),
-                                       'properties': {'datetime': contour.time}})
+                output_file.write({'geometry': shapely.geometry.mapping(contour.geometry()),
+                                   'properties': {'datetime': contour.time}})
 
                 # print(f'step {time_delta} to {contour.time}: distance traveled was {distance:.2f} m')
 
@@ -828,9 +824,8 @@ if __name__ == '__main__':
             initial_value = contour.area()
             # values[contour.time] = 100
 
-            with fiona.open(output_path, 'a', 'GPKG', schema, crs=fiona_WebMercator, layer=layer_name) as output_file:
-                output_file.write({'geometry': shapely.geometry.mapping(contour.geometry()),
-                                   'properties': {'datetime': contour.time}})
+            output_file.write({'geometry': shapely.geometry.mapping(contour.geometry()),
+                               'properties': {'datetime': contour.time}})
 
             for time_delta in time_deltas:
                 if type(time_delta) is numpy.timedelta64:
@@ -845,10 +840,8 @@ if __name__ == '__main__':
                 contour.step(time_delta, order)
                 # current_area = contour.area()
 
-                with fiona.open(output_path, 'a', 'GPKG', schema, crs=fiona_WebMercator,
-                                layer=layer_name) as output_file:
-                    output_file.write({'geometry': shapely.geometry.mapping(contour.geometry()),
-                                       'properties': {'datetime': contour.time}})
+                output_file.write({'geometry': shapely.geometry.mapping(contour.geometry()),
+                                   'properties': {'datetime': contour.time}})
 
                 # values[contour.time] = (1 + (current_area - initial_value) / initial_value) * 100
 
@@ -859,5 +852,6 @@ if __name__ == '__main__':
         # plot_axis.plot(values.keys(), values.values(), '-o')
 
     # pyplot.show()
+    output_file.close()
 
     print('done')
