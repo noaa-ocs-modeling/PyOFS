@@ -714,7 +714,7 @@ class WCOFSDataset:
                                               dims=('time', f'{grid}_eta', f'{grid}_xi'))
 
             data_array.attrs['grid'] = grid
-            output_dataset = output_dataset.update({variable: data_array})
+            output_dataset = output_dataset.update({variable: data_array}, inplace=True)
 
         return output_dataset
 
