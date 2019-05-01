@@ -13,7 +13,7 @@ import os
 import sys
 from typing import Collection, Union
 
-sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
 import pytz
 

@@ -630,6 +630,9 @@ def track_contour(contour: ParticleContour, time_deltas: List[datetime.timedelta
 
 
 if __name__ == '__main__':
+    import sys
+    sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
+
     from PyOFS import DATA_DIR
     from PyOFS.model import rtofs, wcofs
     from PyOFS.observation import hf_radar
@@ -654,7 +657,7 @@ if __name__ == '__main__':
 
     print(f'[{datetime.datetime.now()}]: Started processing...')
 
-    with fiona.open(r"C:\Workspaces\GIS\capstone\study_points.gpkg") as contour_centers_file:
+    with fiona.open(r"C:\Data\develop\reference\study_points.gpkg") as contour_centers_file:
         for point in contour_centers_file:
             if int(point['id']) >= 9:
                 contour_centers.append(point['geometry']['coordinates'])
