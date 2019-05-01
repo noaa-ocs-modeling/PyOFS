@@ -208,10 +208,24 @@ class VectorDataset(VectorField):
         super().__init__(numpy.diff(self.dataset['time'].values))
 
     def u(self, point: numpy.array, time: datetime.datetime) -> float:
-        return self.dataset['u'].interp(x=point[0], y=point[1]).interp(time=time).values.item()
+        time_bounds = [self.dataset['time'].sel(time=time, method='bfill').values,
+                       self.dataset['time'].sel(time=time, method='ffill').values]
+
+        if time_bounds[0] == time_bounds[1]:
+            time = time_bounds[0]
+            return self.dataset['u'].sel(time=time).interp(x=point[0], y=point[1]).values.item()
+        else:
+            return self.dataset['u'].sel(time=time_bounds).interp(time=time, x=point[0], y=point[1]).values.item()
 
     def v(self, point: numpy.array, time: datetime.datetime) -> float:
-        return self.dataset['v'].interp(x=point[0], y=point[1]).interp(time=time).values.item()
+        time_bounds = [self.dataset['time'].sel(time=time, method='bfill').values,
+                       self.dataset['time'].sel(time=time, method='ffill').values]
+
+        if time_bounds[0] == time_bounds[1]:
+            time = time_bounds[0]
+            return self.dataset['v'].sel(time=time).interp(x=point[0], y=point[1]).values.item()
+        else:
+            return self.dataset['v'].sel(time=time_bounds).interp(time=time, x=point[0], y=point[1]).values.item()
 
     def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs) -> quiver.Quiver:
         if axis is None:
@@ -265,10 +279,18 @@ class ROMSGridVectorDataset(VectorField):
         xi_index = numpy.nanmax(self.dataset['u_xi']) * ((transformed_point[1] - numpy.nanmin(self.native_u_y)) / (
                 numpy.nanmax(self.native_u_y) - numpy.nanmin(self.native_u_y)))
 
-        cell = self.dataset['u'].sel(u_eta=[math.floor(eta_index), math.ceil(eta_index)],
-                                     u_xi=[math.floor(xi_index), math.floor(xi_index)]).interp(time=time)
+        eta_index_bounds = [math.floor(eta_index), math.ceil(eta_index)]
+        xi_index_bounds = [math.floor(xi_index), math.ceil(xi_index)]
+        time_bounds = [self.dataset['time'].sel(time=time, method='bfill').values,
+                       self.dataset['time'].sel(time=time, method='ffill').values]
 
-        return cell.interp(u_eta=eta_index - math.floor(eta_index), u_xi=xi_index - math.floor(xi_index)).values.item()
+        if time_bounds[0] == time_bounds[1]:
+            time = time_bounds[0]
+            return self.dataset['u'].sel(u_eta=eta_index_bounds, u_xi=xi_index_bounds, time=time).interp(
+                u_eta=eta_index - eta_index_bounds[0], u_xi=xi_index - xi_index_bounds[0]).values.item()
+        else:
+            return self.dataset['u'].sel(u_eta=eta_index_bounds, u_xi=xi_index_bounds, time=time_bounds).interp(
+                time=time, u_eta=eta_index - eta_index_bounds[0], u_xi=xi_index - xi_index_bounds[0]).values.item()
 
     def v(self, point: numpy.array, time: datetime.datetime) -> float:
         transformed_point = pyproj.transform(WebMercator, self.coordinate_system, *point)
@@ -278,10 +300,18 @@ class ROMSGridVectorDataset(VectorField):
         xi_index = numpy.nanmax(self.dataset['v_xi']) * ((transformed_point[1] - numpy.nanmin(self.native_v_y)) / (
                 numpy.nanmax(self.native_v_y) - numpy.nanmin(self.native_v_y)))
 
-        cell = self.dataset['v'].sel(v_eta=[math.floor(eta_index), math.ceil(eta_index)],
-                                     v_xi=[math.floor(xi_index), math.floor(xi_index)]).interp(time=time)
+        eta_index_bounds = [math.floor(eta_index), math.ceil(eta_index)]
+        xi_index_bounds = [math.floor(xi_index), math.ceil(xi_index)]
+        time_bounds = [self.dataset['time'].sel(time=time, method='bfill').values,
+                       self.dataset['time'].sel(time=time, method='ffill').values]
 
-        return cell.interp(v_eta=eta_index - math.floor(eta_index), v_xi=xi_index - math.floor(xi_index)).values.item()
+        if time_bounds[0] == time_bounds[1]:
+            time = time_bounds[0]
+            return self.dataset['v'].sel(v_eta=eta_index_bounds, v_xi=xi_index_bounds, time=time).interp(
+                v_eta=eta_index - eta_index_bounds[0], v_xi=xi_index - xi_index_bounds[0]).values.item()
+        else:
+            return self.dataset['v'].sel(v_eta=eta_index_bounds, v_xi=xi_index_bounds, time=time_bounds).interp(
+                time=time, v_eta=eta_index - eta_index_bounds[0], v_xi=xi_index - xi_index_bounds[0]).values.item()
 
     def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs) -> quiver.Quiver:
         if axis is None:
@@ -442,10 +472,10 @@ class ParticleContour:
         if delta_t is None:
             delta_t = self.field.delta_t
 
-        self.time += delta_t
-
         for particle in self.particles:
             particle.step(delta_t, order)
+
+        self.time += delta_t
 
     def plot(self, axis: pyplot.Axes = None, **kwargs) -> pyplot.Line2D:
         """
@@ -610,6 +640,8 @@ def create_contour(contour_center: tuple, contour_radius: float, start_time: dat
 
 
 def track_contour(contour: ParticleContour, time_deltas: List[datetime.timedelta]) -> List[dict]:
+    print(f'Advecting contour with {len(contour.particles)} particles...')
+
     records = [{'geometry': shapely.geometry.mapping(contour.geometry()), 'properties': {'datetime': contour.time}}]
 
     for time_delta in time_deltas:
@@ -631,6 +663,7 @@ def track_contour(contour: ParticleContour, time_deltas: List[datetime.timedelta
 
 if __name__ == '__main__':
     import sys
+
     sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
     from PyOFS import DATA_DIR
@@ -759,10 +792,8 @@ if __name__ == '__main__':
             vector_dataset = xarray.open_dataset(data_path)
 
         if 'WCOFS' in source.upper():
-            coordinate_system = wcofs.WCOFS_ROTATED_POLE
-
             velocity_field = ROMSGridVectorDataset(vector_dataset, u_name='ssu', v_name='ssv',
-                                                   coordinate_system=wcofs.WCOFS_ROTATED_POLE)
+                                                   coordinate_system=wcofs.WCOFS_GCS)
         else:
             velocity_field = VectorDataset(vector_dataset, u_name='ssu', v_name='ssv')
 
@@ -784,20 +815,20 @@ if __name__ == '__main__':
 
     records = []
 
-    # for contour in contours:
-    #     records.extend(track_contour(contour, time_deltas))
+    for contour in contours:
+        records.extend(track_contour(contour, time_deltas))
 
-    with futures.ThreadPoolExecutor() as concurrency_pool:
-        running_futures = [concurrency_pool.submit(track_contour, contour, time_deltas) for contour in contours]
-
-        for completed_future in futures.as_completed(running_futures):
-            result = completed_future.result()
-
-            if result is not None:
-                records.extend(result)
-                print(f'[{datetime.datetime.now()}]: Finished tracking contour.')
-
-        del running_futures
+    # with futures.ThreadPoolExecutor() as concurrency_pool:
+    #     running_futures = [concurrency_pool.submit(track_contour, contour, time_deltas) for contour in contours]
+    #
+    #     for completed_future in futures.as_completed(running_futures):
+    #         result = completed_future.result()
+    #
+    #         if result is not None:
+    #             records.extend(result)
+    #             print(f'[{datetime.datetime.now()}]: Finished tracking contour.')
+    #
+    #     del running_futures
 
     with fiona.open(output_path, 'w', 'GPKG', {'geometry': 'Polygon', 'properties': {'datetime': 'datetime'}},
                     crs=fiona_WebMercator, layer=layer_name) as output_file:
