@@ -582,6 +582,9 @@ def translate_geographic_coordinates(point: numpy.array, offset: numpy.array) ->
 
 if __name__ == '__main__':
     from pandas.plotting import register_matplotlib_converters
+
+    sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
+
     from PyOFS import DATA_DIR
     from PyOFS.model import rtofs, wcofs
     from PyOFS.observation import hf_radar
