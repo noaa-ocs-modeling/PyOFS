@@ -233,15 +233,6 @@ class NoDataError(Exception):
     pass
 
 
-if __name__ == '__main__':
-    import PyOFS
-
-    copy_xarray('https://dods.ndbc.noaa.gov/thredds/dodsC/hfradar_uswc_6km',
-                os.path.join(PyOFS.DATA_DIR, 'output', 'test', 'hfradar_uswc_6km.nc'))
-
-    print('done')
-
-
 def rotate_coordinates(longitude: float, latitude: float, pole: numpy.array) -> tuple:
     """
     Convert longitude and latitude to rotated pole coordinates.
@@ -316,3 +307,12 @@ def unrotate_coordinates(phi: float, theta: float, pole: numpy.array) -> tuple:
     latitude = latitude * 180 / numpy.pi
 
     return longitude, latitude
+
+
+if __name__ == '__main__':
+    import PyOFS
+
+    copy_xarray('https://dods.ndbc.noaa.gov/thredds/dodsC/hfradar_uswc_6km',
+                os.path.join(PyOFS.DATA_DIR, 'output', 'test', 'hfradar_uswc_6km.nc'))
+
+    print('done')
