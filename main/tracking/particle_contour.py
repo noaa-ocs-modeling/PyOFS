@@ -696,7 +696,8 @@ if __name__ == '__main__':
 
     print(f'[{datetime.datetime.now()}]: Started processing...')
 
-    with fiona.open(os.path.join(DATA_DIR, 'reference', 'study_points.gpkg')) as contour_centers_file:
+    with fiona.open(os.path.join(DATA_DIR, 'reference', 'study_points.gpkg'),
+                    layer='study_points') as contour_centers_file:
         for point in contour_centers_file:
             contour_id = int(point['id'])
             contour_centers[contour_id] = point['geometry']['coordinates']
