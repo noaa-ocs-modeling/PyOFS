@@ -303,28 +303,14 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
 
 
 def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, datetime.date, int, float],
-                        day_deltas: range = MODEL_DAY_DELTAS['WCOFS'], log_path: str = None):
+                        day_deltas: range = MODEL_DAY_DELTAS['WCOFS']):
     """
     Writes daily average of observational data and model output on given date.
 
     :param output_dir: output directory to write files
     :param output_date: date of data run
     :param day_deltas: time deltas for which to write model output
-    :param log_path: path to log file
     """
-
-    if log_path is None:
-        logging.basicConfig(level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S',
-                            format='[%(asctime)s] %(levelname)s: %(message)s')
-    else:
-        logging.basicConfig(filename=log_path, level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S',
-                            format='[%(asctime)s] %(levelname)s: %(message)s')
-        console = logging.StreamHandler()
-        console.setLevel(logging.DEBUG)
-        logging.getLogger('').addHandler(console)
-
-    # disable complaints from Fiona environment within conda
-    logging.root.manager.loggerDict['fiona._env'].setLevel(logging.CRITICAL)
 
     # write initial message
     logging.info(f'Starting file conversion for {output_date}')
@@ -358,6 +344,18 @@ if __name__ == '__main__':
     start_time = datetime.datetime.now()
 
     log_path = os.path.join(LOG_DIR, f'{start_time.strftime("%Y%m%d")}_conversion.log')
+    if log_path is None:
+        logging.basicConfig(level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S',
+                            format='[%(asctime)s] %(levelname)s: %(message)s')
+    else:
+        logging.basicConfig(filename=log_path, level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S',
+                            format='[%(asctime)s] %(levelname)s: %(message)s')
+        console = logging.StreamHandler()
+        console.setLevel(logging.DEBUG)
+        logging.getLogger('').addHandler(console)
+
+    # disable complaints from Fiona environment within conda
+    logging.root.manager.loggerDict['fiona._env'].setLevel(logging.CRITICAL)
 
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = MODEL_DAY_DELTAS['WCOFS']
@@ -369,7 +367,7 @@ if __name__ == '__main__':
     # for model_run_date in model_run_dates:
     #     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas, log_path=log_path)
 
-    model_run_date = datetime.date.today()
-    write_daily_average(OUTPUT_DIR, model_run_date, day_deltas, log_path=log_path)
+    model_run_date = datetime.date.today() - datetime.timedelta(days=1)
+    write_daily_average(OUTPUT_DIR, model_run_date, day_deltas)
 
     print('done')

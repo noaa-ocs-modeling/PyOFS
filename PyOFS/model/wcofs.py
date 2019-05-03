@@ -30,7 +30,10 @@ from PyOFS import CRS_EPSG, DATA_DIR, utilities
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
-WCOFS_ROTATED_POLE = pyproj.Proj('+proj=ob_tran +o_proj=longlat +o_lat_p=37.4 +o_lon_p=-57.6 +ellps=WGS84')
+
+ROTATED_POLE = (-57.6, 37.4)
+WCOFS_GCS = pyproj.Proj(
+    f'+proj=ob_tran +o_proj=longlat +o_lon_p={ROTATED_POLE[0]} +o_lat_p={ROTATED_POLE[1]} +ellps=WGS84')
 
 GRID_LOCATIONS = {'face': 'rho', 'edge1': 'u', 'edge2': 'v', 'node': 'psi'}
 COORDINATE_VARIABLES = ['grid', 'ocean_time', 'lon_rho', 'lat_rho', 'lon_u', 'lat_u', 'lon_v', 'lat_v', 'lon_psi',
@@ -693,7 +696,8 @@ class WCOFSDataset:
             if native_grid:
                 wgs84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
 
-                native_lon, native_lat = pyproj.transform(wgs84, WCOFS_ROTATED_POLE, self.data_coordinates[grid]['lon'],
+                native_lon, native_lat = pyproj.transform(wgs84, WCOFS_GCS,
+                                                          self.data_coordinates[grid]['lon'],
                                                           self.data_coordinates[grid]['lat'])
 
                 native_lon = native_lon[:, 0]
@@ -714,7 +718,7 @@ class WCOFSDataset:
                                               dims=('time', f'{grid}_eta', f'{grid}_xi'))
 
             data_array.attrs['grid'] = grid
-            output_dataset = output_dataset.update({variable: data_array})
+            output_dataset = output_dataset.update({variable: data_array}, inplace=True)
 
         return output_dataset
 
@@ -1524,6 +1528,46 @@ def write_convex_hull(netcdf_dataset: xarray.Dataset, output_filename: str, grid
 
     with fiona.open(output_filename, 'w', 'GPKG', schema=schema, crs=FIONA_CRS, layer=layer_name) as vector_file:
         vector_file.write({'properties': {'name': layer_name}, 'geometry': shapely.geometry.mapping(polygon)})
+
+
+def rotate_coordinates_to_wcofs(longitude: float, latitude: float, pole: numpy.array, regrid: bool = False) -> tuple:
+    """
+    Regular 2D arrays of "local" coordinates x and y of WCOFS, which is a spherical grid in rotated coordinates with the pole at phi0, theta0
+    x increases along the local latitude
+    y increases in the direction opposite to local longitude
+
+    :param longitude: longitude
+    :param latitude: latitude
+    :param pole: rotated pole location
+    :param regrid: regularize x and y using meshgrid to eliminate roundup errors and make x and y suitable to interp2
+    :return: index in WCOFS grid
+    """
+
+    phi, theta = utilities.rotate_coordinates(longitude, latitude, pole)
+
+    if regrid:
+        eta, xi = numpy.meshgrid(-phi[1, :], theta[:, 1])
+    else:
+        eta = -phi
+        xi = theta
+
+    return xi, eta
+
+
+def rotate_coordinates_from_wcofs(xi: float, eta: float, pole: numpy.array) -> tuple:
+    """
+    Get coordinates from WCOFS indices
+
+    :param xi: longitude
+    :param eta: latitude
+    :param pole: rotated pole location
+    :return: longitude / latitude coordinates
+    """
+
+    phi = -eta
+    theta = xi
+
+    return utilities.unrotate_coordinates(phi, theta, pole)
 
 
 if __name__ == '__main__':

@@ -233,6 +233,82 @@ class NoDataError(Exception):
     pass
 
 
+def rotate_coordinates(longitude: float, latitude: float, pole: numpy.array) -> tuple:
+    """
+    Convert longitude and latitude to rotated pole coordinates.
+
+    :param longitude: longitude
+    :param latitude: latitude
+    :param pole: rotated pole
+    :return: coordinates in rotated pole system
+    """
+
+    if type(pole) is not numpy.array:
+        pole = numpy.array(pole)
+
+    # convert degrees to radians
+    longitude = longitude * numpy.pi / 180
+    latitude = latitude * numpy.pi / 180
+    pole = pole * numpy.pi / 180
+
+    # precalculate sin / cos
+    latitude_sine = numpy.sin(latitude)
+    latitude_cosine = numpy.cos(latitude)
+    pole_latitude_sine = numpy.sin(pole[1])
+    pole_latitude_cosine = numpy.cos(pole[1])
+
+    # calculate rotation transformation
+    phi_1 = longitude - pole[0]
+
+    phi_1_sine = numpy.sin(phi_1)
+    phi_1_cosine = numpy.cos(phi_1)
+
+    phi_2 = numpy.arctan2(phi_1_sine * latitude_cosine,
+                          phi_1_cosine * latitude_cosine * pole_latitude_sine - latitude_sine * pole_latitude_cosine)
+    theta_2 = numpy.arcsin(phi_1_cosine * latitude_cosine * pole_latitude_cosine + latitude_sine * pole_latitude_sine)
+
+    # convert radians to degrees
+    phi_2 = phi_2 * 180 / numpy.pi
+    theta_2 = theta_2 * 180 / numpy.pi
+
+    return phi_2, theta_2
+
+
+def unrotate_coordinates(phi: float, theta: float, pole: numpy.array) -> tuple:
+    """
+    Convert rotated pole coordinates to longitude and latitude.
+
+    :param phi: rotated pole longitude
+    :param theta: rotated pole latitude
+    :param pole: rotated pole
+    :return: coordinates in rotated pole system
+    """
+
+    # convert degrees to radians
+    phi = phi * numpy.pi / 180
+    theta = theta * numpy.pi / 180
+    pole = pole * numpy.pi / 180
+
+    # precalculate sin / cos
+    phi_sine = numpy.sin(phi)
+    phi_cosine = numpy.cos(phi)
+    theta_sine = numpy.sin(theta)
+    theta_cosine = numpy.cos(theta)
+    pole_latitude_sine = numpy.sin(pole[1])
+    pole_latitude_cosine = numpy.cos(pole[1])
+
+    # calculate rotation transformation
+    longitude = pole[0] + numpy.arctan2(phi_sine * theta_cosine,
+                                        phi_cosine * theta_cosine * pole_latitude_sine + theta_sine * pole_latitude_cosine)
+    latitude = numpy.arcsin(-phi_cosine * theta_cosine * pole_latitude_cosine + theta_sine * pole_latitude_sine)
+
+    # convert radians to degrees
+    longitude = longitude * 180 / numpy.pi
+    latitude = latitude * 180 / numpy.pi
+
+    return longitude, latitude
+
+
 if __name__ == '__main__':
     import PyOFS
 

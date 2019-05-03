@@ -375,7 +375,8 @@ class RTOFSDataset:
 
         for variable, variable_data in variables_data.items():
             output_dataset.update(
-                {variable: xarray.DataArray(variable_data, coords=coordinates, dims=tuple(coordinates.keys()))})
+                {variable: xarray.DataArray(variable_data, coords=coordinates, dims=tuple(coordinates.keys()))},
+                inplace=True)
 
         return output_dataset
 

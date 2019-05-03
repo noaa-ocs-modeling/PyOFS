@@ -10,7 +10,7 @@ import datetime
 import os
 import sys
 
-sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
 from main.leaflet import write_json
 
