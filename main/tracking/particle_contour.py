@@ -370,10 +370,10 @@ class Particle:
             k_1 = delta_seconds * self.field[self.coordinates(), self.time]
 
             if order > 1:
-                k_2 = delta_seconds * self.field[self.coordinates() + k_1 / 2, self.time + (delta_t / 2)]
+                k_2 = delta_seconds * self.field[self.coordinates() + 0.5 * k_1, self.time + 0.5 * delta_t]
 
                 if order > 2:
-                    k_3 = delta_seconds * self.field[self.coordinates() + k_2 / 2, self.time + (delta_t / 2)]
+                    k_3 = delta_seconds * self.field[self.coordinates() + 0.5 * k_2, self.time + 0.5 * delta_t]
 
                     if order > 3:
                         k_4 = delta_seconds * self.field[self.coordinates() + k_3, self.time + delta_t]
@@ -381,9 +381,9 @@ class Particle:
                         if order > 4:
                             raise ValueError('Methods above 4th order are not implemented.')
                         else:
-                            delta_vector = 1 / 6 * k_1 + 1 / 3 * k_2 + 1 / 3 * k_3 + 1 / 6 * k_4
+                            delta_vector = 1 / 6 * (k_1 + 2 * (k_2 + k_3) + k_4)
                     else:
-                        delta_vector = 1 / 6 * k_1 + 2 / 3 * k_2 + 1 / 6 * k_3
+                        delta_vector = 1 / 6 * (k_1 + 4 * k_2 + k_3)
                 else:
                     delta_vector = k_2
             else:
@@ -472,8 +472,12 @@ class ParticleContour:
         if delta_t is None:
             delta_t = self.field.delta_t
 
-        for particle in self.particles:
-            particle.step(delta_t, order)
+        with futures.ThreadPoolExecutor() as concurrency_pool:
+            for particle in self.particles:
+                concurrency_pool.submit(particle.step, delta_t, order)
+
+        # for particle in self.particles:
+        #     particle.step(delta_t, order)
 
         self.time += delta_t
 
@@ -639,10 +643,12 @@ def create_contour(contour_center: tuple, contour_radius: float, start_time: dat
         return PointContour(contour_center, start_time, velocity_field)
 
 
-def track_contour(contour: ParticleContour, time_deltas: List[datetime.timedelta]) -> List[dict]:
-    print(f'Advecting contour with {len(contour.particles)} particles...')
+def track_contour(contour: ParticleContour, contour_id: int, time_deltas: List[datetime.timedelta]) -> List[dict]:
+    print(f'[{datetime.datetime.now()}]: Advecting contour with {len(contour.particles)} particles...')
 
-    records = [{'geometry': shapely.geometry.mapping(contour.geometry()), 'properties': {'datetime': contour.time}}]
+    records = []
+    records.append({'geometry': shapely.geometry.mapping(contour.geometry()),
+                    'properties': {'contour': contour_id, 'datetime': contour.time}})
 
     for time_delta in time_deltas:
         if type(time_delta) is numpy.timedelta64:
@@ -654,7 +660,7 @@ def track_contour(contour: ParticleContour, time_deltas: List[datetime.timedelta
         contour.step(time_delta, order)
 
         records.append({'geometry': shapely.geometry.mapping(contour.geometry()),
-                        'properties': {'datetime': contour.time}})
+                        'properties': {'contour': contour_id, 'datetime': contour.time}})
 
         print(f'[{datetime.datetime.now()}]: Tracked {contour}')
 
@@ -674,9 +680,9 @@ if __name__ == '__main__':
     contour_shape = 'circle'
     order = 4
 
-    contour_radius = 5000
+    contour_radius = 10000
 
-    contour_centers = []
+    contour_centers = {}
     start_time = datetime.datetime(2016, 9, 25, 1)
 
     period = datetime.timedelta(days=4)
@@ -690,15 +696,15 @@ if __name__ == '__main__':
 
     print(f'[{datetime.datetime.now()}]: Started processing...')
 
-    with fiona.open(r"C:\Data\develop\reference\study_points.gpkg") as contour_centers_file:
+    with fiona.open(os.path.join(DATA_DIR, 'reference', 'study_points.gpkg')) as contour_centers_file:
         for point in contour_centers_file:
-            if int(point['id']) >= 9:
-                contour_centers.append(point['geometry']['coordinates'])
+            contour_id = int(point['id'])
+            contour_centers[contour_id] = point['geometry']['coordinates']
 
     print(f'[{datetime.datetime.now()}]: Creating velocity field...')
     if source == 'rankine':
         vortex_radius = contour_radius * 5
-        vortex_center = translate_geographic_coordinates(contour_centers[0],
+        vortex_center = translate_geographic_coordinates(contour_centers.values()[0],
                                                          numpy.array([contour_radius * -2, contour_radius * -2]))
         vortex_period = datetime.timedelta(days=5)
         velocity_field = RankineVortex(vortex_center, vortex_radius, vortex_period, time_deltas)
@@ -797,41 +803,41 @@ if __name__ == '__main__':
         else:
             velocity_field = VectorDataset(vector_dataset, u_name='ssu', v_name='ssv')
 
-    contours = []
+    contours = {}
 
     print(f'[{datetime.datetime.now()}]: Creating {len(contour_centers)} initial contours...')
 
     with futures.ThreadPoolExecutor() as concurrency_pool:
-        running_futures = [
+        running_futures = {
             concurrency_pool.submit(create_contour, contour_center, contour_radius, start_time, velocity_field,
-                                    contour_shape) for contour_center in contour_centers]
+                                    contour_shape): contour_id for contour_id, contour_center in
+            contour_centers.items()}
 
         for completed_future in futures.as_completed(running_futures):
-            result = completed_future.result()
-            contours.append(result)
-            print(f'[{datetime.datetime.now()}]: Contour created: {result}')
+            contour_id = running_futures[completed_future]
+            contour = completed_future.result()
+            contours[contour_id] = contour
+            print(f'[{datetime.datetime.now()}]: Contour {contour_id} created: {contour}')
 
     print(f'[{datetime.datetime.now()}]: Contours created.')
 
-    records = []
+    schema = {'geometry': 'Polygon', 'properties': {'contour': 'int', 'datetime': 'datetime'}}
 
-    for contour in contours:
-        records.extend(track_contour(contour, time_deltas))
+    with fiona.open(output_path, 'w', 'GPKG', schema, crs=fiona_WebMercator, layer=layer_name) as output_file:
+        for contour_id, contour in contours.items():
+            records = track_contour(contour, contour_id, time_deltas)
+            output_file.writerecords(records)
 
-    # with futures.ThreadPoolExecutor() as concurrency_pool:
-    #     running_futures = [concurrency_pool.submit(track_contour, contour, time_deltas) for contour in contours]
-    #
-    #     for completed_future in futures.as_completed(running_futures):
-    #         result = completed_future.result()
-    #
-    #         if result is not None:
-    #             records.extend(result)
-    #             print(f'[{datetime.datetime.now()}]: Finished tracking contour.')
-    #
-    #     del running_futures
-
-    with fiona.open(output_path, 'w', 'GPKG', {'geometry': 'Polygon', 'properties': {'datetime': 'datetime'}},
-                    crs=fiona_WebMercator, layer=layer_name) as output_file:
-        output_file.writerecords(records)
+        # with futures.ThreadPoolExecutor() as concurrency_pool:
+        #     running_futures = [concurrency_pool.submit(track_contour, contour, time_deltas) for contour in contours]
+        #
+        #     for completed_future in futures.as_completed(running_futures):
+        #         records = completed_future.result()
+        #
+        #         if records is not None:
+        #             output_file.writerecords(records)
+        #             print(f'[{datetime.datetime.now()}]: Finished tracking contour.')
+        #
+        #     del running_futures
 
     print('done')
