@@ -218,7 +218,7 @@ def datetime64_to_time(datetime64: numpy.datetime64) -> datetime.datetime:
 def get_first_record(vector_dataset_filename: str):
     fiona_kwargs = {}
 
-    if ':' in vector_dataset_filename:
+    if ':' in os.path.split(vector_dataset_filename)[-1]:
         vector_dataset_filename, layer_name = vector_dataset_filename.rsplit(':', 1)
         fiona_kwargs['layer'] = layer_name
 

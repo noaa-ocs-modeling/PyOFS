@@ -1530,7 +1530,7 @@ def write_convex_hull(netcdf_dataset: xarray.Dataset, output_filename: str, grid
         vector_file.write({'properties': {'name': layer_name}, 'geometry': shapely.geometry.mapping(polygon)})
 
 
-def rotate_coordinates_to_wcofs(longitude: float, latitude: float, pole: numpy.array, regrid: bool = False) -> tuple:
+def rotate_coordinates_to_wcofs(longitude: float, latitude: float, pole: numpy.array, regrid: bool=False) -> tuple:
     """
     Regular 2D arrays of "local" coordinates x and y of WCOFS, which is a spherical grid in rotated coordinates with the pole at phi0, theta0
     x increases along the local latitude

@@ -18,7 +18,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.par
 import pytz
 
 from PyOFS import DATA_DIR
-from PyOFS.observation import hf_radar, viirs, smap
+from PyOFS.observation import hf_radar, viirs, smap, data_buoy
 from PyOFS.model import wcofs, rtofs
 
 LOG_DIR = os.path.join(DATA_DIR, 'log')
@@ -48,15 +48,15 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
     """
 
     if type(observation_date) is datetime.date:
-        start_of_day = datetime.datetime.combine(observation_date, datetime.time.min)
+        day_start = datetime.datetime.combine(observation_date, datetime.time.min)
     elif type(observation_date) is datetime.datetime:
-        start_of_day = observation_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        day_start = observation_date.replace(hour=0, minute=0, second=0, microsecond=0)
     else:
-        start_of_day = observation_date
+        day_start = observation_date
 
-    end_of_day = start_of_day + datetime.timedelta(days=1)
+    day_end = day_start + datetime.timedelta(days=1)
 
-    if observation is 'sss':
+    if observation is 'smap':
         monthly_dir = os.path.join(output_dir, 'monthly_averages')
 
         if not os.path.isdir(monthly_dir):
@@ -74,36 +74,41 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
     if not os.path.isdir(observation_dir):
         os.mkdir(observation_dir)
 
+    day_start_ndbc = day_start + datetime.timedelta(hours=2)
+    day_end_ndbc = day_end + datetime.timedelta(hours=2)
+
+    day_start_utc = day_start + STUDY_AREA_TO_UTC
+    day_noon_utc = day_start + datetime.timedelta(hours=12) + STUDY_AREA_TO_UTC
+    day_end_utc = day_start + datetime.timedelta(hours=24) + STUDY_AREA_TO_UTC
+
     try:
-        if observation == 'ssuv':
-            start_of_day_hfr_time = start_of_day + datetime.timedelta(hours=2)
-            end_of_day_hfr_time = end_of_day + datetime.timedelta(hours=2)
-
-            hfr_range = hf_radar.HFRadarRange(start_of_day_hfr_time, end_of_day_hfr_time)
+        if observation == 'hf_radar':
+            hfr_range = hf_radar.HFRadarRange(day_start_ndbc, day_end_ndbc)
             hfr_range.write_rasters(observation_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}',
-                                    variables=['dir', 'mag'], driver='AAIGrid',
-                                    fill_value=LEAFLET_NODATA_VALUE, dop_threshold=0.5)
+                                    variables=['dir', 'mag'], driver='AAIGrid', fill_value=LEAFLET_NODATA_VALUE,
+                                    dop_threshold=0.5)
             del hfr_range
-        elif observation == 'sst':
-            start_of_day_in_utc = start_of_day + STUDY_AREA_TO_UTC
-            noon_in_utc = start_of_day + datetime.timedelta(hours=12) + STUDY_AREA_TO_UTC
-            end_of_day_in_utc = start_of_day + datetime.timedelta(hours=24) + STUDY_AREA_TO_UTC
-
-            viirs_range = viirs.VIIRSRange(start_of_day_in_utc, end_of_day_in_utc)
-            viirs_range.write_raster(observation_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_morning',
-                                     start_time=start_of_day_in_utc, end_time=noon_in_utc,
+        elif observation == 'viirs':
+            viirs_range = viirs.VIIRSRange(day_start_utc, day_end_utc)
+            viirs_range.write_raster(observation_dir, filename_suffix=f'{day_start.strftime("%Y%m%d")}_morning',
+                                     start_time=day_start_utc, end_time=day_noon_utc,
                                      fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', correct_sses=False,
                                      variables=['sst'])
-            viirs_range.write_raster(observation_dir, filename_suffix=f'{start_of_day.strftime("%Y%m%d")}_night',
-                                     start_time=noon_in_utc, end_time=end_of_day_in_utc,
+            viirs_range.write_raster(observation_dir, filename_suffix=f'{day_start.strftime("%Y%m%d")}_night',
+                                     start_time=day_noon_utc, end_time=day_end_utc,
                                      fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', correct_sses=False,
                                      variables=['sst'])
             del viirs_range
-        elif observation == 'sss':
+        elif observation == 'smap':
             smap_dataset = smap.SMAPDataset()
-            smap_dataset.write_rasters(observation_dir, data_time=start_of_day, fill_value=LEAFLET_NODATA_VALUE,
+            smap_dataset.write_rasters(observation_dir, data_time=day_start_utc, fill_value=LEAFLET_NODATA_VALUE,
                                        driver='GTiff', variables=['sss'])
             del smap_dataset
+        elif observation == 'data_buoy':
+            data_buoy_range = data_buoy.DataBuoyRange(data_buoy.WCOFS_NDBC_STATIONS_FILENAME)
+            output_filename = os.path.join(observation_dir, f'ndbc_data_buoys_{observation_date.strftime("%Y%m%d")}.gpkg')
+            data_buoy_range.write_vector(output_filename, day_start_ndbc, day_end_ndbc)
+            del data_buoy_range
     except Exception as error:
         error_type, exc_obj, error_traceback = sys.exc_info()
         filename = os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]
@@ -316,11 +321,13 @@ def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, d
     logging.info(f'Starting file conversion for {output_date}')
 
     logging.info('Processing HFR SSUV...')
-    write_observation(output_dir, output_date, 'ssuv')
+    write_observation(output_dir, output_date, 'hf_radar')
     logging.info('Processing VIIRS SST...')
-    write_observation(output_dir, output_date, 'sst')
+    write_observation(output_dir, output_date, 'viirs')
     logging.info('Processing SMAP SSS...')
-    write_observation(output_dir, output_date, 'sss')
+    write_observation(output_dir, output_date, 'smap')
+    logging.info('Processing NDBC data...')
+    write_observation(output_dir, output_date, 'data_buoy')
     logging.info(f'Wrote observations to {output_dir}')
 
     logging.info('Processing RTOFS...')  # RTOFS forecast is uploaded at 1700 UTC
@@ -367,7 +374,7 @@ if __name__ == '__main__':
     # for model_run_date in model_run_dates:
     #     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas, log_path=log_path)
 
-    model_run_date = datetime.date.today() - datetime.timedelta(days=1)
+    model_run_date = datetime.date.today()
     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas)
 
     print('done')
