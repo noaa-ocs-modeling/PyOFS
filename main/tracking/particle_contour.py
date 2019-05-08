@@ -10,7 +10,7 @@ Created on Feb 27, 2019
 import datetime
 import os
 from concurrent import futures
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Dict
 
 import cartopy.feature
 import fiona.crs
@@ -522,12 +522,15 @@ class CircleContour(ParticleContour):
         """
 
         center_x, center_y = pyproj.transform(WGS84, WebMercator, center[0], center[1])
-        circumference = 2 * math.pi * radius
-        num_points = round(circumference / interval)
 
-        points = [pyproj.transform(WebMercator, WGS84, math.cos(2 * math.pi / num_points * x) * radius + center_x,
-                                   math.sin(2 * math.pi / num_points * x) * radius + center_y) for x in
-                  range(0, num_points + 1)]
+        # circumference = 2 * math.pi * radius
+        # num_points = round(circumference / interval)
+        # points = [pyproj.transform(WebMercator, WGS84, math.cos(2 * math.pi / num_points * x) * radius + center_x,
+        #                            math.sin(2 * math.pi / num_points * x) * radius + center_y) for x in
+        #           range(0, num_points + 1)]
+
+        points = list(zip(*pyproj.transform(WebMercator, WGS84, *shapely.geometry.Point(center_x, center_y).buffer(
+            radius).exterior.coords.xy)))
 
         super().__init__(points, time, field)
 
@@ -643,12 +646,11 @@ def create_contour(contour_center: tuple, contour_radius: float, start_time: dat
         return PointContour(contour_center, start_time, velocity_field)
 
 
-def track_contour(contour: ParticleContour, contour_id: int, time_deltas: List[datetime.timedelta]) -> List[dict]:
+def track_contour(contour: ParticleContour, time_deltas: List[datetime.timedelta]) -> Dict[datetime.datetime, dict]:
     print(f'[{datetime.datetime.now()}]: Advecting contour with {len(contour.particles)} particles...')
 
-    records = []
-    records.append({'geometry': shapely.geometry.mapping(contour.geometry()),
-                    'properties': {'contour': contour_id, 'datetime': contour.time}})
+    polygons = {}
+    polygons[contour.time] = contour.geometry()
 
     for time_delta in time_deltas:
         if type(time_delta) is numpy.timedelta64:
@@ -659,12 +661,25 @@ def track_contour(contour: ParticleContour, contour_id: int, time_deltas: List[d
 
         contour.step(time_delta, order)
 
-        records.append({'geometry': shapely.geometry.mapping(contour.geometry()),
-                        'properties': {'contour': contour_id, 'datetime': contour.time}})
+        polygons[contour.time] = contour.geometry()
 
         print(f'[{datetime.datetime.now()}]: Tracked {contour}')
 
-    return records
+    return polygons
+
+
+def diffusion(polygons: List[shapely.geometry.Polygon]):
+    for polygon in polygons:
+        centroid = polygon.centroid
+
+        max_radius = max(centroid.distance(vertex) for vertex in
+                         (shapely.geometry.Point(point) for point in zip(*polygon.exterior.xy)))
+
+        radius_interval = 500
+
+        for radius in range(radius_interval, max_radius, step=radius_interval):
+            analysis_area = shapely.geometry.Polygon(centroid.buffer(radius + radius_interval), centroid.buffer(radius))
+            polygon.intersection(analysis_area)
 
 
 if __name__ == '__main__':
@@ -676,7 +691,7 @@ if __name__ == '__main__':
     from PyOFS.model import rtofs, wcofs
     from PyOFS.observation import hf_radar
 
-    source = 'wcofs_qck'
+    source = 'wcofs_qck_geostrophic'
     contour_shape = 'circle'
     order = 4
 
@@ -685,13 +700,13 @@ if __name__ == '__main__':
     contour_centers = {}
     start_time = datetime.datetime(2016, 9, 25, 1)
 
-    period = datetime.timedelta(days=4)
+    period = datetime.timedelta(hours=2)
     time_delta = datetime.timedelta(hours=1)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
 
     output_path = os.path.join(DATA_DIR, 'output', 'test', 'contours.gpkg')
-    layer_name = f'{start_time.strftime("%Y%m%dT%H%M%S")}_{(start_time + period).strftime("%Y%m%dT%H%M%S")}_' + \
+    layer_name = f'{source}_{start_time.strftime("%Y%m%dT%H%M%S")}_{(start_time + period).strftime("%Y%m%dT%H%M%S")}_' + \
                  f'{int(time_delta.total_seconds() / 3600)}h'
 
     print(f'[{datetime.datetime.now()}]: Started processing...')
@@ -699,7 +714,9 @@ if __name__ == '__main__':
     with fiona.open(os.path.join(DATA_DIR, 'reference', 'study_points.gpkg')) as contour_centers_file:
         for point in contour_centers_file:
             contour_id = int(point['id'])
-            contour_centers[contour_id] = point['geometry']['coordinates']
+
+            if contour_id == 1:
+                contour_centers[contour_id] = point['geometry']['coordinates']
 
     print(f'[{datetime.datetime.now()}]: Creating velocity field...')
     if source == 'rankine':
@@ -731,7 +748,7 @@ if __name__ == '__main__':
 
                 vector_dataset = wcofs.WCOFSDataset(start_time, source).to_xarray(variables=('ssu', 'ssv'))
                 vector_dataset.to_netcdf(data_path)
-            if source.upper() == 'WCOFS_QCK':
+            if 'WCOFS_QCK' in source.upper():
                 qck_path = os.path.join(DATA_DIR, 'input', 'wcofs', 'qck')
                 input_filenames = os.listdir(qck_path)
 
@@ -747,38 +764,60 @@ if __name__ == '__main__':
                 for input_filename in sorted(input_filenames):
                     input_dataset = xarray.open_dataset(os.path.join(qck_path, input_filename))
 
-                    if u_lon is None or u_lat is None or v_lon is None or v_lat is None:
-                        u_lon = input_dataset['lon_u'].values
-                        u_lat = input_dataset['lat_u'].values
-                        v_lon = input_dataset['lon_v'].values
-                        v_lat = input_dataset['lat_v'].values
+                    current_times = input_dataset['ocean_time'].values
+                    times.extend(current_times)
 
-                        u_lon = numpy.column_stack((u_lon, numpy.array(list(v_lon[:, -1]) + [numpy.nan])))
-                        u_lat = numpy.column_stack((u_lat, numpy.array(list(v_lat[:, -1]) + [numpy.nan])))
-                        v_lon = numpy.row_stack((v_lon, u_lon[-1, :]))
-                        v_lat = numpy.row_stack((v_lat, u_lat[-1, :]))
+                    if 'GEOSTROPHIC' in source.upper():
+                        gravitational_acceleration = 9.80665
+                        sidereal_rotation_period = datetime.timedelta(hours=23, minutes=53, seconds=4.1)
+                        coriolis_frequencies = 4 * math.pi / sidereal_rotation_period.total_seconds() * numpy.sin(
+                            input_dataset['lat_rho'].values * math.pi / 180)
 
-                    time = input_dataset['ocean_time'].values
+                        sea_level = input_dataset['zeta']
+                        geostrophic_ssu = -(gravitational_acceleration / coriolis_frequencies * sea_level.differentiate(
+                            'eta_rho')).values
+                        geostrophic_ssv = (gravitational_acceleration / coriolis_frequencies * sea_level.differentiate(
+                            'xi_rho')).values
 
-                    extra_column = numpy.empty((time.shape[0], u_lon.shape[0], 1), dtype=u_lon.dtype)
-                    extra_column[:] = 0
+                        geostrophic_ssu[numpy.isnan(geostrophic_ssu)] = 0
+                        geostrophic_ssv[numpy.isnan(geostrophic_ssv)] = 0
 
-                    extra_row = numpy.empty((time.shape[0], 1, v_lon.shape[1]), dtype=v_lon.dtype)
-                    extra_row[:] = 0
+                        ssu.append(geostrophic_ssu)
+                        ssv.append(geostrophic_ssv)
 
-                    # correct for angles
-                    theta = numpy.stack([input_dataset['angle'].values] * time.shape[0], axis=0)
+                        u_lon = input_dataset['lon_rho'].values
+                        u_lat = input_dataset['lat_rho'].values
+                        v_lon = input_dataset['lon_rho'].values
+                        v_lat = input_dataset['lat_rho'].values
+                    else:
+                        if u_lon is None or u_lat is None or v_lon is None or v_lat is None:
+                            u_lon = input_dataset['lon_u'].values
+                            u_lat = input_dataset['lat_u'].values
+                            v_lon = input_dataset['lon_v'].values
+                            v_lat = input_dataset['lat_v'].values
 
-                    raw_u = numpy.concatenate((input_dataset['u_sur'].values, extra_column), axis=2)
-                    raw_v = numpy.concatenate((input_dataset['v_sur'].values, extra_row), axis=1)
+                            u_lon = numpy.column_stack((u_lon, numpy.array(list(v_lon[:, -1]) + [numpy.nan])))
+                            u_lat = numpy.column_stack((u_lat, numpy.array(list(v_lat[:, -1]) + [numpy.nan])))
+                            v_lon = numpy.row_stack((v_lon, u_lon[-1, :]))
+                            v_lat = numpy.row_stack((v_lat, u_lat[-1, :]))
 
-                    current_ssu = raw_u * numpy.cos(theta) - raw_v * numpy.sin(theta)
-                    current_ssv = raw_u * numpy.sin(theta) + raw_v * numpy.cos(theta)
+                        extra_column = numpy.empty((current_times.shape[0], u_lon.shape[0], 1), dtype=u_lon.dtype)
+                        extra_column[:] = 0
 
-                    ssu.append(current_ssu)
-                    ssv.append(current_ssv)
+                        extra_row = numpy.empty((current_times.shape[0], 1, v_lon.shape[1]), dtype=v_lon.dtype)
+                        extra_row[:] = 0
 
-                    times.extend(time)
+                        # correct for angles
+                        theta = numpy.stack([input_dataset['angle'].values] * current_times.shape[0], axis=0)
+
+                        raw_u = numpy.concatenate((input_dataset['u_sur'].values, extra_column), axis=2)
+                        raw_v = numpy.concatenate((input_dataset['v_sur'].values, extra_row), axis=1)
+
+                        geostrophic_ssu = raw_u * numpy.cos(theta) - raw_v * numpy.sin(theta)
+                        geostrophic_ssv = raw_u * numpy.sin(theta) + raw_v * numpy.cos(theta)
+
+                        ssu.append(geostrophic_ssu)
+                        ssv.append(geostrophic_ssv)
 
                 ssu = numpy.concatenate(ssu, axis=0)
                 ssv = numpy.concatenate(ssv, axis=0)
@@ -825,7 +864,13 @@ if __name__ == '__main__':
 
     with fiona.open(output_path, 'w', 'GPKG', schema, crs=fiona_WebMercator, layer=layer_name) as output_file:
         for contour_id, contour in contours.items():
-            records = track_contour(contour, contour_id, time_deltas)
+            polygons = track_contour(contour, time_deltas)
+            # diffusion_coefficient = diffusion(polygons.values())
+
+            records = [{'geometry': shapely.geometry.mapping(polygon),
+                        'properties': {'contour': contour_id, 'datetime': contour_time}} for contour_time, polygon in
+                       polygons.items()]
+
             output_file.writerecords(records)
 
         # with futures.ThreadPoolExecutor() as concurrency_pool:
