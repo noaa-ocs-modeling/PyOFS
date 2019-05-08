@@ -326,8 +326,8 @@ def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, d
     write_observation(output_dir, output_date, 'viirs')
     logging.info('Processing SMAP SSS...')
     write_observation(output_dir, output_date, 'smap')
-    logging.info('Processing NDBC data...')
-    write_observation(output_dir, output_date, 'data_buoy')
+    # logging.info('Processing NDBC data...')
+    # write_observation(output_dir, output_date, 'data_buoy')
     logging.info(f'Wrote observations to {output_dir}')
 
     logging.info('Processing RTOFS...')  # RTOFS forecast is uploaded at 1700 UTC
