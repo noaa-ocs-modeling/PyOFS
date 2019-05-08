@@ -770,15 +770,50 @@ if __name__ == '__main__':
 
                     if 'GEOSTROPHIC' in source.upper():
                         gravitational_acceleration = 9.80665
-                        sidereal_rotation_period = datetime.timedelta(hours=23, minutes=53, seconds=4.1)
-                        coriolis_frequencies = 4 * math.pi / sidereal_rotation_period.total_seconds() * numpy.sin(
-                            input_dataset['lat_rho'].values * math.pi / 180)
+                        # sidereal_rotation_period = datetime.timedelta(hours=23, minutes=53, seconds=4.1)
+                        # coriolis_frequencies = 4 * math.pi / sidereal_rotation_period.total_seconds() * numpy.sin(
+                        #     input_dataset['lat_rho'].values * math.pi / 180)
 
+                        coriolis = input_dataset['f']
+                        # delta_x = 1 / input_dataset['pn']
+                        # delta_y = 1 / input_dataset['pm']
+                        # mask_rho = input_dataset['mask_rho']
                         sea_level = input_dataset['zeta']
-                        geostrophic_ssu = -(gravitational_acceleration / coriolis_frequencies * sea_level.differentiate(
-                            'eta_rho')).values
-                        geostrophic_ssv = (gravitational_acceleration / coriolis_frequencies * sea_level.differentiate(
-                            'xi_rho')).values
+
+                        # sea_level.where(numpy.repeat(numpy.expand_dims(mask_rho, axis=0), sea_level.shape[0], axis=0) == 0) = numpy.nan
+
+                        # def rho2uv(data: numpy.array) -> Tuple[numpy.array, numpy.array]:
+                        #     data_u = (data[:-1, :] + data[1:, :]) / 2
+                        #     data_v = (data[:, :-1] + data[:, 1:]) / 2
+                        #     return data_u, data_v
+                        #
+                        #
+                        # dx_u, dx_v = rho2uv(delta_x)
+                        # dy_u, dy_v = rho2uv(delta_y)
+                        # coriolis_u, coriolis_v = rho2uv(coriolis)
+                        #
+                        # # rho indices
+                        # jj, ii = numpy.meshgrid(range(coriolis.shape[0]), range(coriolis.shape[1]))
+                        #
+                        # # fractional indices of u and v points
+                        # [ii_u, ii_v] = rho2uv(ii)
+                        # [jj_u, jj_v] = rho2uv(jj)
+                        #
+                        # dzdy_v = sea_level.diff('xi_rho') / dy_v
+                        # dzdx_u = sea_level.diff('eta_rho') / dx_u
+                        #
+                        # dzdy_u = scipy.interpolate.griddata((jj_u, ii_u), dzdy_v.isel(ocean_time=0).values,
+                        #                                     tuple((numpy.ravel(ii_v), numpy.ravel(jj_v))))
+                        # dzdx_v = scipy.interpolate.griddata((jj_v, ii_v), dzdx_u.isel(ocean_time=0).values,
+                        #                                     tuple((numpy.ravel(ii_u), numpy.ravel(jj_u))))
+                        #
+                        # ug = -gravitational_acceleration / coriolis_u * dzdy_u
+                        # vg = gravitational_acceleration / coriolis_v * dzdx_v
+
+                        first_term = gravitational_acceleration / coriolis
+
+                        geostrophic_ssu = numpy.repeat(numpy.expand_dims(-first_term * input_dataset['pm'], axis=0), sea_level.shape[0], 0) * numpy.concatenate((sea_level.diff('eta_rho'), numpy.expand_dims(numpy.empty(sea_level[:, 0, :].shape), axis=1)), axis=1)
+                        geostrophic_ssv = numpy.repeat(numpy.expand_dims(-first_term * input_dataset['pn'], axis=0), sea_level.shape[0], 0) * numpy.concatenate((sea_level.diff('xi_rho'), numpy.expand_dims(numpy.empty(sea_level[:, 0, :].shape), axis=1)), axis=1)
 
                         geostrophic_ssu[numpy.isnan(geostrophic_ssu)] = 0
                         geostrophic_ssv[numpy.isnan(geostrophic_ssv)] = 0
