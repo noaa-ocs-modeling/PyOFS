@@ -106,7 +106,7 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
             del smap_dataset
         elif observation == 'data_buoy':
             data_buoy_range = data_buoy.DataBuoyRange(data_buoy.WCOFS_NDBC_STATIONS_FILENAME)
-            output_filename = os.path.join(observation_dir, f'ndbc_{observation_date.strftime("%Y%m%d")}.gpkg')
+            output_filename = os.path.join(observation_dir, f'ndbc_data_buoys_{observation_date.strftime("%Y%m%d")}.gpkg')
             data_buoy_range.write_vector(output_filename, day_start_ndbc, day_end_ndbc)
             del data_buoy_range
     except Exception as error:
