@@ -522,15 +522,14 @@ class CircleContour(ParticleContour):
         """
 
         center_x, center_y = pyproj.transform(WGS84, WebMercator, center[0], center[1])
+        circumference = 2 * math.pi * radius
+        num_points = round(circumference / interval)
+        points = [pyproj.transform(WebMercator, WGS84, math.cos(2 * math.pi / num_points * x) * radius + center_x,
+                                   math.sin(2 * math.pi / num_points * x) * radius + center_y) for x in
+                  range(0, num_points + 1)]
 
-        # circumference = 2 * math.pi * radius
-        # num_points = round(circumference / interval)
-        # points = [pyproj.transform(WebMercator, WGS84, math.cos(2 * math.pi / num_points * x) * radius + center_x,
-        #                            math.sin(2 * math.pi / num_points * x) * radius + center_y) for x in
-        #           range(0, num_points + 1)]
-
-        points = list(zip(*pyproj.transform(WebMercator, WGS84, *shapely.geometry.Point(center_x, center_y).buffer(
-            radius).exterior.coords.xy)))
+        # points = list(zip(*pyproj.transform(WebMercator, WGS84, *shapely.geometry.Point(center_x, center_y).buffer(
+        #     radius).exterior.coords.xy)))
 
         super().__init__(points, time, field)
 
@@ -700,7 +699,7 @@ if __name__ == '__main__':
     contour_centers = {}
     start_time = datetime.datetime(2016, 9, 25, 1)
 
-    period = datetime.timedelta(hours=2)
+    period = datetime.timedelta(days=4)
     time_delta = datetime.timedelta(hours=1)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
@@ -715,9 +714,7 @@ if __name__ == '__main__':
                     layer='study_points') as contour_centers_file:
         for point in contour_centers_file:
             contour_id = int(point['id'])
-
-            if contour_id == 1:
-                contour_centers[contour_id] = point['geometry']['coordinates']
+            contour_centers[contour_id] = point['geometry']['coordinates']
 
     print(f'[{datetime.datetime.now()}]: Creating velocity field...')
     if source == 'rankine':
@@ -812,8 +809,12 @@ if __name__ == '__main__':
 
                         first_term = gravitational_acceleration / coriolis
 
-                        geostrophic_ssu = numpy.repeat(numpy.expand_dims(-first_term * input_dataset['pm'], axis=0), sea_level.shape[0], 0) * numpy.concatenate((sea_level.diff('eta_rho'), numpy.expand_dims(numpy.empty(sea_level[:, 0, :].shape), axis=1)), axis=1)
-                        geostrophic_ssv = numpy.repeat(numpy.expand_dims(-first_term * input_dataset['pn'], axis=0), sea_level.shape[0], 0) * numpy.concatenate((sea_level.diff('xi_rho'), numpy.expand_dims(numpy.empty(sea_level[:, 0, :].shape), axis=1)), axis=1)
+                        geostrophic_ssu = numpy.repeat(numpy.expand_dims(-first_term * input_dataset['pm'], axis=0),
+                                                       sea_level.shape[0], 0) * numpy.concatenate((sea_level.diff(
+                            'eta_rho'), numpy.expand_dims(numpy.empty(sea_level[:, 0, :].shape), axis=1)), axis=1)
+                        geostrophic_ssv = numpy.repeat(numpy.expand_dims(first_term * input_dataset['pn'], axis=0),
+                                                       sea_level.shape[0], 0) * numpy.concatenate((sea_level.diff(
+                            'xi_rho'), numpy.expand_dims(numpy.empty(sea_level[:, :, 0].shape), axis=2)), axis=2)
 
                         geostrophic_ssu[numpy.isnan(geostrophic_ssu)] = 0
                         geostrophic_ssv[numpy.isnan(geostrophic_ssv)] = 0
@@ -821,10 +822,8 @@ if __name__ == '__main__':
                         ssu.append(geostrophic_ssu)
                         ssv.append(geostrophic_ssv)
 
-                        u_lon = input_dataset['lon_rho'].values
-                        u_lat = input_dataset['lat_rho'].values
-                        v_lon = input_dataset['lon_rho'].values
-                        v_lat = input_dataset['lat_rho'].values
+                        u_lon = v_lon = input_dataset['lon_rho'].values
+                        u_lat = u_lat = input_dataset['lat_rho'].values
                     else:
                         if u_lon is None or u_lat is None or v_lon is None or v_lat is None:
                             u_lon = input_dataset['lon_u'].values
