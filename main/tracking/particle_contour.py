@@ -522,8 +522,8 @@ class CircleContour(ParticleContour):
         """
 
         center_x, center_y = pyproj.transform(WGS84, WebMercator, center[0], center[1])
-        num_points = round(2 * math.pi * radius / interval)
 
+        num_points = round(2 * math.pi * radius / interval)
         points = []
 
         for point_angle in [point_index * 2 * math.pi / num_points for point_index in range(num_points + 1)]:
@@ -671,20 +671,6 @@ def track_contour(contour: ParticleContour, time_deltas: List[datetime.timedelta
     return polygons
 
 
-def diffusion(polygons: List[shapely.geometry.Polygon]):
-    for polygon in polygons:
-        centroid = polygon.centroid
-
-        max_radius = max(centroid.distance(vertex) for vertex in
-                         (shapely.geometry.Point(point) for point in zip(*polygon.exterior.xy)))
-
-        radius_interval = 500
-
-        for radius in range(radius_interval, max_radius, step=radius_interval):
-            analysis_area = shapely.geometry.Polygon(centroid.buffer(radius + radius_interval), centroid.buffer(radius))
-            polygon.intersection(analysis_area)
-
-
 if __name__ == '__main__':
     import sys
 
@@ -694,7 +680,7 @@ if __name__ == '__main__':
     from PyOFS.model import rtofs, wcofs
     from PyOFS.observation import hf_radar
 
-    source = 'wcofs_qck'
+    source = 'wcofs_qck_geostrophic'
     contour_shape = 'circle'
     order = 4
 
@@ -704,7 +690,7 @@ if __name__ == '__main__':
     start_time = datetime.datetime(2016, 9, 25, 1)
 
     period = datetime.timedelta(days=4)
-    time_delta = datetime.timedelta(days=1)
+    time_delta = datetime.timedelta(hours=1)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
 
@@ -717,7 +703,7 @@ if __name__ == '__main__':
     with fiona.open(os.path.join(DATA_DIR, 'reference', 'study_points.gpkg'),
                     layer='study_points') as contour_centers_file:
         for point in contour_centers_file:
-            contour_id = int(point['id'])
+            contour_id = point['properties']['name']
             contour_centers[contour_id] = point['geometry']['coordinates']
 
     print(f'[{datetime.datetime.now()}]: Creating velocity field...')
@@ -754,7 +740,7 @@ if __name__ == '__main__':
                 qck_path = os.path.join(DATA_DIR, 'input', 'wcofs', 'qck')
                 input_filenames = os.listdir(qck_path)
 
-                combined_times = []
+                combined_time = []
                 combined_ssu = []
                 combined_ssv = []
 
@@ -766,8 +752,8 @@ if __name__ == '__main__':
                 for input_filename in sorted(input_filenames):
                     input_dataset = xarray.open_dataset(os.path.join(qck_path, input_filename))
 
-                    times = input_dataset['ocean_time'].values
-                    combined_times.extend(times)
+                    time = input_dataset['ocean_time'].values
+                    combined_time.extend(time)
 
                     if 'GEOSTROPHIC' in source.upper():
                         if u_lon is None or u_lat is None or v_lon is None or v_lat is None:
@@ -780,9 +766,8 @@ if __name__ == '__main__':
                         #     input_dataset['lat_rho'].values * math.pi / 180)
 
                         coriolis = input_dataset['f']
-                        # delta_x = 1 / input_dataset['pn']
-                        # delta_y = 1 / input_dataset['pm']
-                        # mask_rho = input_dataset['mask_rho']
+                        delta_x_reciprocal = input_dataset['pn']
+                        delta_y_reciprocal = input_dataset['pm']
                         sea_level = input_dataset['zeta']
 
                         # sea_level.where(numpy.repeat(numpy.expand_dims(mask_rho, axis=0), sea_level.shape[0], axis=0) == 0) = numpy.nan
@@ -817,20 +802,14 @@ if __name__ == '__main__':
 
                         first_term = gravitational_acceleration / coriolis
 
-                        raw_ssu = numpy.repeat(numpy.expand_dims(-first_term * input_dataset['pm'], axis=0),
-                                               sea_level.shape[0], 0) * numpy.concatenate((sea_level.diff('eta_rho'),
-                                                                                           numpy.expand_dims(
-                                                                                               numpy.empty(
-                                                                                                   sea_level[:, 0,
-                                                                                                   :].shape), axis=1)),
-                                                                                          axis=1)
-                        raw_ssv = numpy.repeat(numpy.expand_dims(first_term * input_dataset['pn'], axis=0),
-                                               sea_level.shape[0], 0) * numpy.concatenate((sea_level.diff('xi_rho'),
-                                                                                           numpy.expand_dims(
-                                                                                               numpy.empty(
-                                                                                                   sea_level[:, :,
-                                                                                                   0].shape), axis=2)),
-                                                                                          axis=2)
+                        raw_ssu = numpy.repeat(numpy.expand_dims(-first_term * input_dataset['pm'], axis=0), len(time),
+                                               axis=0) * numpy.concatenate(
+                            (numpy.empty((len(time), 1, len(sea_level['xi_rho']))), sea_level.diff('eta_rho')), axis=1)
+                        raw_ssv = numpy.repeat(numpy.expand_dims(first_term * input_dataset['pn'], axis=0), len(time),
+                                               axis=0) * numpy.concatenate(
+                            (numpy.empty((len(time), len(sea_level['eta_rho']), 1)), sea_level.diff('xi_rho')), axis=2)
+
+                        numpy.empty((len(time), sea_level.shape[1], 1))
 
                         raw_ssu[numpy.isnan(raw_ssu)] = 0
                         raw_ssv[numpy.isnan(raw_ssv)] = 0
@@ -846,19 +825,22 @@ if __name__ == '__main__':
                             v_lon = numpy.row_stack((v_lon, u_lon[-1, :]))
                             v_lat = numpy.row_stack((v_lat, u_lat[-1, :]))
 
-                        extra_column = numpy.empty((times.shape[0], u_lon.shape[0], 1), dtype=u_lon.dtype)
+                        extra_column = numpy.empty((time.shape[0], u_lon.shape[0], 1), dtype=u_lon.dtype)
                         extra_column[:] = 0
 
-                        extra_row = numpy.empty((times.shape[0], 1, v_lon.shape[1]), dtype=v_lon.dtype)
+                        extra_row = numpy.empty((time.shape[0], 1, v_lon.shape[1]), dtype=v_lon.dtype)
                         extra_row[:] = 0
 
                         raw_ssu = numpy.concatenate((input_dataset['u_sur'].values, extra_column), axis=2)
                         raw_ssv = numpy.concatenate((input_dataset['v_sur'].values, extra_row), axis=1)
 
                     # correct for angles
-                    theta = numpy.stack([input_dataset['angle'].values] * times.shape[0], axis=0)
-                    rotated_ssu = raw_ssu * numpy.cos(theta) - raw_ssv * numpy.sin(theta)
-                    rotated_ssv = raw_ssu * numpy.sin(theta) + raw_ssv * numpy.cos(theta)
+                    sin_theta = numpy.repeat(numpy.expand_dims(numpy.sin(input_dataset['angle']), axis=0), len(time),
+                                             axis=0)
+                    cos_theta = numpy.repeat(numpy.expand_dims(numpy.cos(input_dataset['angle']), axis=0), len(time),
+                                             axis=0)
+                    rotated_ssu = raw_ssu * cos_theta - raw_ssv * sin_theta
+                    rotated_ssv = raw_ssu * sin_theta + raw_ssv * cos_theta
 
                     combined_ssu.append(rotated_ssu)
                     combined_ssv.append(rotated_ssv)
@@ -867,11 +849,11 @@ if __name__ == '__main__':
                 combined_ssv = numpy.concatenate(combined_ssv, axis=0)
 
                 ssu_dataarray = xarray.DataArray(combined_ssu,
-                                                 coords={'time': combined_times, 'u_lon': (('u_eta', 'u_xi'), u_lon),
+                                                 coords={'time': combined_time, 'u_lon': (('u_eta', 'u_xi'), u_lon),
                                                          'u_lat': (('u_eta', 'u_xi'), u_lat)},
                                                  dims=('time', 'u_eta', 'u_xi'))
                 ssv_dataarray = xarray.DataArray(combined_ssv,
-                                                 coords={'time': combined_times, 'v_lon': (('v_eta', 'v_xi'), v_lon),
+                                                 coords={'time': combined_time, 'v_lon': (('v_eta', 'v_xi'), v_lon),
                                                          'v_lat': (('v_eta', 'v_xi'), v_lat)},
                                                  dims=('time', 'v_eta', 'v_xi'))
 
@@ -910,16 +892,15 @@ if __name__ == '__main__':
 
     print(f'[{datetime.datetime.now()}]: Contours created.')
 
-    schema = {'geometry': 'Polygon', 'properties': {'contour': 'int', 'datetime': 'datetime'}}
+    schema = {'geometry': 'Polygon', 'properties': {'contour': 'str', 'datetime': 'datetime', 'area': 'float'}}
 
     with fiona.open(output_path, 'w', 'GPKG', schema, crs=fiona_WebMercator, layer=layer_name) as output_file:
         for contour_id, contour in contours.items():
             polygons = track_contour(contour, time_deltas)
-            # diffusion_coefficient = diffusion(polygons.values())
 
             records = [{'geometry': shapely.geometry.mapping(polygon),
-                        'properties': {'contour': contour_id, 'datetime': contour_time}} for contour_time, polygon in
-                       polygons.items()]
+                        'properties': {'contour': contour_id, 'datetime': contour_time, 'area': polygon.area}} for
+                       contour_time, polygon in polygons.items()]
 
             output_file.writerecords(records)
 
