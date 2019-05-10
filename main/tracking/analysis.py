@@ -92,7 +92,6 @@ if __name__ == '__main__':
             axis.plot(times, values.values(), label=velocity_product)
 
         axis.legend()
-
-    pyplot.show()
+        pyplot.show()
 
     print('done')
