@@ -48,11 +48,7 @@ if __name__ == '__main__':
 
     for velocity_product in velocity_products:
         time_delta = datetime.timedelta(hours=1) if 'hourly' in velocity_product else datetime.timedelta(days=1)
-
-        if 'modeled' in velocity_product:
-            source = 'wcofs_qck'
-        elif 'geostrophic' in velocity_product:
-            source = 'wcofs_qck_geostrophic'
+        source = 'wcofs_qck' if 'modeled' in velocity_product else 'wcofs_qck_geostrophic'
 
         start_time = datetime.datetime(2016, 9, 25, 1)
         period = datetime.timedelta(days=4)
