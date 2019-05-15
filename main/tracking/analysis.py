@@ -38,8 +38,9 @@ if __name__ == '__main__':
 
     from PyOFS import DATA_DIR
 
-    plot_dir = r"R:\documents\plots"
-    contour_radius = 10000
+    plot_dir = r"C:\Users\Zach\Documents\school\graduate\GEOG797\plots"
+    contour_starting_radius = 10000
+    contour_starting_area = numpy.pi * contour_starting_radius ** 2
 
     velocity_products = ['hourly_modeled', 'hourly_geostrophic', 'daily_modeled']
     contour_names = [f'{letter}{number}' for number in range(1, 5) for letter in ['A', 'B', 'C']]
@@ -98,11 +99,11 @@ if __name__ == '__main__':
         axis = figure.add_subplot(1, 1, 1)
         axis.set_title(f'starting point {contour_name}')
 
-        for velocity_product, values in contour_steps.items():
-            times = numpy.array(list(values.keys())).astype(numpy.datetime64)
-            axis.plot(times, values.values(), marker='o', markersize=3, label=velocity_product)
+        for velocity_product, contour_values in contour_steps.items():
+            times = numpy.array(list(contour_values.keys())).astype(numpy.datetime64)
+            axis.plot(times, contour_values.values(), marker='o', markersize=3, label=velocity_product)
 
-        axis.axhline(y=numpy.pi * contour_radius ** 2, linestyle=':', color='k', zorder=0)
+        axis.axhline(y=contour_starting_area, linestyle=':', color='k', zorder=0)
         axis.legend()
         pyplot.xticks(rotation=-45, ha='left', rotation_mode='anchor')
         pyplot.tight_layout()
@@ -110,5 +111,24 @@ if __name__ == '__main__':
         figure.savefig(os.path.join(plot_dir, value_type, f'{value_type}_{contour_name}.pdf'), orientation='landscape',
                        papertype='A4')
         # pyplot.show()
+
+    value_type = 'area_change'
+
+    boxplot_figure = pyplot.figure()
+    boxplot_axis = boxplot_figure.add_subplot(1, 1, 1)
+    boxplot_axis.set_ylabel(f'{value_type} (m^2/s)')
+
+    contour_values = {}
+    for contour_name in contour_names:
+        contour_steps = values[value_type][contour_name]
+        contour_values[contour_name] = list(contour_steps['hourly_modeled'].values())
+
+    boxplot_axis.boxplot(contour_values.values(), labels=contour_values.keys())
+    # axis.axhline(y=contour_starting_area)
+    boxplot_axis.axhline(y=0, color='k', linestyle='--')
+
+    boxplot_figure.savefig(os.path.join(plot_dir, f'{value_type}_boxplots.pdf'), orientation='landscape',
+                           papertype='A4')
+    # pyplot.show()
 
     print('done')
