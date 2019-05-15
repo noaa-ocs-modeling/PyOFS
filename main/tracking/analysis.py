@@ -42,7 +42,7 @@ if __name__ == '__main__':
     contour_radius = 10000
 
     velocity_products = ['hourly_modeled', 'hourly_geostrophic', 'daily_modeled']
-    contour_names = [f'{letter}{number}' for letter in ['A', 'B', 'C'] for number in range(1, 5)]
+    contour_names = [f'{letter}{number}' for number in range(1, 5) for letter in ['A', 'B', 'C']]
 
     print(f'[{datetime.datetime.now()}]: Reading...')
 
@@ -65,23 +65,27 @@ if __name__ == '__main__':
 
         with fiona.open(output_path, layer=layer_name) as contours_file:
             for contour_name in sorted(numpy.unique([feature['properties']['name'] for feature in contours_file])):
-                contour_steps = {record['properties']['datetime']: record for record in
-                                 filter(lambda record: record['properties']['name'] == contour_name, contours_file)}
+                contour_steps = {
+                    datetime.datetime.strptime(record['properties']['datetime'], '%Y-%m-%dT%H:%M:%S'): record for record
+                    in filter(lambda record: record['properties']['name'] == contour_name, contours_file)}
 
                 values['area'][contour_name][velocity_product] = {}
                 values['area_change'][contour_name][velocity_product] = {}
 
+                previous_datetime = None
                 previous_area = None
 
                 for contour_datetime in sorted(contour_steps):
                     contour_step = contour_steps[contour_datetime]
                     current_area = shapely.geometry.Polygon(contour_step["geometry"]["coordinates"][0]).area
 
-                    area_change = current_area - previous_area if previous_area is not None else 0
+                    area_change = (current_area - previous_area) / (
+                            contour_datetime - previous_datetime).total_seconds() if previous_area is not None and previous_datetime is not None else 0
 
                     values['area'][contour_name][velocity_product][contour_datetime] = current_area
                     values['area_change'][contour_name][velocity_product][contour_datetime] = area_change
 
+                    previous_datetime = contour_datetime
                     previous_area = current_area
 
     value_type = 'area'
