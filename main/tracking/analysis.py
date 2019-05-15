@@ -38,6 +38,9 @@ if __name__ == '__main__':
 
     from PyOFS import DATA_DIR
 
+    plot_dir = r"R:\documents\plots"
+    contour_radius = 10000
+
     velocity_products = ['hourly_modeled', 'hourly_geostrophic', 'daily_modeled']
     contour_names = [f'{letter}{number}' for letter in ['A', 'B', 'C'] for number in range(1, 5)]
 
@@ -81,17 +84,27 @@ if __name__ == '__main__':
 
                     previous_area = current_area
 
-    print(f'[{datetime.datetime.now()}]: Plotting...')
+    value_type = 'area'
 
-    for contour_name, contour_steps in values['area_change'].items():
+    print(f'[{datetime.datetime.now()}]: Plotting...')
+    for contour_name, contour_steps in values[value_type].items():
+        print(f'[{datetime.datetime.now()}]: Plotting {contour_name}...')
+
         figure = pyplot.figure()
         axis = figure.add_subplot(1, 1, 1)
+        axis.set_title(f'starting point {contour_name}')
 
         for velocity_product, values in contour_steps.items():
             times = numpy.array(list(values.keys())).astype(numpy.datetime64)
-            axis.plot(times, values.values(), label=velocity_product)
+            axis.plot(times, values.values(), marker='o', markersize=3, label=velocity_product)
 
+        axis.axhline(y=numpy.pi * contour_radius ** 2, linestyle=':', color='k', zorder=0)
         axis.legend()
-        pyplot.show()
+        pyplot.xticks(rotation=-45, ha='left', rotation_mode='anchor')
+        pyplot.tight_layout()
+
+        figure.savefig(os.path.join(plot_dir, value_type, f'{value_type}_{contour_name}.pdf'), orientation='landscape',
+                       papertype='A4')
+        # pyplot.show()
 
     print('done')
