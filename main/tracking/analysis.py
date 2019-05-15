@@ -127,8 +127,7 @@ if __name__ == '__main__':
     # axis.axhline(y=contour_starting_area)
     boxplot_axis.axhline(y=0, color='k', linestyle='--')
 
-    boxplot_figure.savefig(os.path.join(plot_dir, f'{value_type}_boxplots.pdf'), orientation='landscape',
-                           papertype='A4')
+    boxplot_figure.savefig(os.path.join(plot_dir, f'{value_type}_boxplot.pdf'), orientation='landscape', papertype='A4')
     # pyplot.show()
 
     print('done')
