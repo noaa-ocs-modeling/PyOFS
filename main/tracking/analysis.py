@@ -38,7 +38,7 @@ if __name__ == '__main__':
 
     from PyOFS import DATA_DIR
 
-    plot_dir = r"C:\Users\Zach\Documents\school\graduate\GEOG797\plots"
+    plot_dir = r"R:\documents\plots"
     contour_starting_radius = 10000
     contour_starting_area = numpy.pi * contour_starting_radius ** 2
 
@@ -125,7 +125,7 @@ if __name__ == '__main__':
 
     boxplot_axis.boxplot(contour_values.values(), labels=contour_values.keys())
     # axis.axhline(y=contour_starting_area)
-    boxplot_axis.axhline(y=0, color='k', linestyle='--')
+    boxplot_axis.axhline(y=0, linestyle=':', color='k', zorder=0)
 
     boxplot_figure.savefig(os.path.join(plot_dir, f'{value_type}_boxplot.pdf'), orientation='landscape', papertype='A4')
     # pyplot.show()
