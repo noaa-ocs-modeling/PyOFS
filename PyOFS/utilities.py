@@ -239,12 +239,11 @@ class NoDataError(Exception):
     pass
 
 
-def rotate_coordinates(longitude: float, latitude: float, pole: numpy.array) -> tuple:
+def rotate_coordinates(point: numpy.array, pole: numpy.array) -> tuple:
     """
     Convert longitude and latitude to rotated pole coordinates.
 
-    :param longitude: longitude
-    :param latitude: latitude
+    :param point: input coordinates
     :param pole: rotated pole
     :return: coordinates in rotated pole system
     """
@@ -253,18 +252,17 @@ def rotate_coordinates(longitude: float, latitude: float, pole: numpy.array) -> 
         pole = numpy.array(pole)
 
     # convert degrees to radians
-    longitude = longitude * numpy.pi / 180
-    latitude = latitude * numpy.pi / 180
+    point = point * numpy.pi / 180
     pole = pole * numpy.pi / 180
 
     # precalculate sin / cos
-    latitude_sine = numpy.sin(latitude)
-    latitude_cosine = numpy.cos(latitude)
+    latitude_sine = numpy.sin(point[1])
+    latitude_cosine = numpy.cos(point[1])
     pole_latitude_sine = numpy.sin(pole[1])
     pole_latitude_cosine = numpy.cos(pole[1])
 
     # calculate rotation transformation
-    phi_1 = longitude - pole[0]
+    phi_1 = point[0] - pole[0]
 
     phi_1_sine = numpy.sin(phi_1)
     phi_1_cosine = numpy.cos(phi_1)
@@ -280,19 +278,18 @@ def rotate_coordinates(longitude: float, latitude: float, pole: numpy.array) -> 
     return phi_2, theta_2
 
 
-def unrotate_coordinates(phi: float, theta: float, pole: numpy.array) -> tuple:
+def unrotate_coordinates(point: numpy.array, pole: numpy.array) -> tuple:
     """
     Convert rotated pole coordinates to longitude and latitude.
 
-    :param phi: rotated pole longitude
-    :param theta: rotated pole latitude
+    :param point: rotated pole coordinates
     :param pole: rotated pole
     :return: coordinates in rotated pole system
     """
 
     # convert degrees to radians
-    phi = phi * numpy.pi / 180
-    theta = theta * numpy.pi / 180
+    phi = point[0] * numpy.pi / 180
+    theta = point[1] * numpy.pi / 180
     pole = pole * numpy.pi / 180
 
     # precalculate sin / cos

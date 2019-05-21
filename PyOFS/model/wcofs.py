@@ -1530,20 +1530,19 @@ def write_convex_hull(netcdf_dataset: xarray.Dataset, output_filename: str, grid
         vector_file.write({'properties': {'name': layer_name}, 'geometry': shapely.geometry.mapping(polygon)})
 
 
-def rotate_coordinates_to_wcofs(longitude: float, latitude: float, pole: numpy.array, regrid: bool = False) -> tuple:
+def rotate_coordinates_to_wcofs(point: numpy.array, pole: numpy.array, regrid: bool = False) -> tuple:
     """
     Regular 2D arrays of "local" coordinates x and y of WCOFS, which is a spherical grid in rotated coordinates with the pole at phi0, theta0
     x increases along the local latitude
     y increases in the direction opposite to local longitude
 
-    :param longitude: longitude
-    :param latitude: latitude
+    :param point: input coordinates
     :param pole: rotated pole location
     :param regrid: regularize x and y using meshgrid to eliminate roundup errors and make x and y suitable to interp2
     :return: index in WCOFS grid
     """
 
-    phi, theta = utilities.rotate_coordinates(longitude, latitude, pole)
+    phi, theta = utilities.rotate_coordinates(point, pole)
 
     if regrid:
         eta, xi = numpy.meshgrid(-phi[1, :], theta[:, 1])
@@ -1554,20 +1553,17 @@ def rotate_coordinates_to_wcofs(longitude: float, latitude: float, pole: numpy.a
     return xi, eta
 
 
-def rotate_coordinates_from_wcofs(xi: float, eta: float, pole: numpy.array) -> tuple:
+def rotate_coordinates_from_wcofs(point: numpy.array, pole: numpy.array) -> tuple:
     """
     Get coordinates from WCOFS indices
 
-    :param xi: longitude
-    :param eta: latitude
+    :param point: rotated coordinates
     :param pole: rotated pole location
     :return: longitude / latitude coordinates
     """
 
-    phi = -eta
-    theta = xi
-
-    return utilities.unrotate_coordinates(phi, theta, pole)
+    point = numpy.array((-point[0], point[1]))
+    return utilities.unrotate_coordinates(point, pole)
 
 
 if __name__ == '__main__':
