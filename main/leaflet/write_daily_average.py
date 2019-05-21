@@ -92,14 +92,14 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
         elif observation == 'viirs':
             viirs_range = viirs.VIIRSRange(day_start, day_end_utc)
             viirs_range.write_raster(observation_dir,
-                                     filename_suffix=day_start.strftime('%Y%m%dT%H%M%S') + '_' + day_noon.strftime(
-                                         '%Y%m%dT%H%M%S'),
+                                     filename_suffix=day_start.strftime('%Y%m%d%H%M') + '_' + day_noon.strftime(
+                                         '%Y%m%d%H%M'),
                                      start_time=day_start_utc, end_time=day_noon_utc,
                                      fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', correct_sses=False,
                                      variables=['sst'])
             viirs_range.write_raster(observation_dir,
-                                     filename_suffix=day_noon.strftime('%Y%m%dT%H%M%S') + '_' + day_end.strftime(
-                                         '%Y%m%dT%H%M%S'),
+                                     filename_suffix=day_noon.strftime('%Y%m%d%H%M') + '_' + day_end.strftime(
+                                         '%Y%m%d%H%M'),
                                      start_time=day_noon_utc, end_time=day_end_utc,
                                      fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', correct_sses=False,
                                      variables=['sst'])
