@@ -21,6 +21,8 @@ import shapely.geometry
 import xarray
 from matplotlib import pyplot, quiver
 
+from PyOFS import utilities
+
 WGS84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
 WebMercator = pyproj.Proj(
     '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs')
@@ -272,7 +274,8 @@ class ROMSGridVectorDataset(VectorField):
         super().__init__(numpy.diff(self.dataset['time'].values))
 
     def u(self, point: numpy.array, time: datetime.datetime) -> float:
-        transformed_point = pyproj.transform(WebMercator, self.coordinate_system, *point)
+        # transformed_point = pyproj.transform(WebMercator, self.coordinate_system, *point)
+        transformed_point = utilities.rotate_coordinates(point, wcofs.WCOFS_GCS)
 
         eta_index = numpy.nanmax(self.dataset['u_eta']) * ((transformed_point[0] - numpy.nanmin(self.native_u_x)) / (
                 numpy.nanmax(self.native_u_x) - numpy.nanmin(self.native_u_x)))

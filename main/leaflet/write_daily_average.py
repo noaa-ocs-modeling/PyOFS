@@ -54,6 +54,7 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
     else:
         day_start = observation_date
 
+    day_noon = day_start + datetime.timedelta(hours=12)
     day_end = day_start + datetime.timedelta(days=1)
 
     if observation is 'smap':
@@ -62,14 +63,14 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
         if not os.path.isdir(monthly_dir):
             os.mkdir(monthly_dir)
 
-        observation_dir = os.path.join(monthly_dir, observation_date.strftime("%Y%m"))
+        observation_dir = os.path.join(monthly_dir, observation_date.strftime('%Y%m'))
     else:
         daily_dir = os.path.join(output_dir, 'daily_averages')
 
         if not os.path.isdir(daily_dir):
             os.mkdir(daily_dir)
 
-        observation_dir = os.path.join(daily_dir, observation_date.strftime("%Y%m%d"))
+        observation_dir = os.path.join(daily_dir, observation_date.strftime('%Y%m%d'))
 
     if not os.path.isdir(observation_dir):
         os.mkdir(observation_dir)
@@ -78,8 +79,8 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
     day_end_ndbc = day_end + datetime.timedelta(hours=2)
 
     day_start_utc = day_start + STUDY_AREA_TO_UTC
-    day_noon_utc = day_start + datetime.timedelta(hours=12) + STUDY_AREA_TO_UTC
-    day_end_utc = day_start + datetime.timedelta(hours=24) + STUDY_AREA_TO_UTC
+    day_noon_utc = day_noon + STUDY_AREA_TO_UTC
+    day_end_utc = day_end + STUDY_AREA_TO_UTC
 
     try:
         if observation == 'hf_radar':
@@ -89,12 +90,16 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
                                     dop_threshold=0.5)
             del hfr_range
         elif observation == 'viirs':
-            viirs_range = viirs.VIIRSRange(day_start_utc, day_end_utc)
-            viirs_range.write_raster(observation_dir, filename_suffix=f'{day_start.strftime("%Y%m%d")}_morning',
+            viirs_range = viirs.VIIRSRange(day_start, day_end_utc)
+            viirs_range.write_raster(observation_dir,
+                                     filename_suffix=day_start.strftime('%Y%m%dT%H%M%S') + '_' + day_noon.strftime(
+                                         '%Y%m%dT%H%M%S'),
                                      start_time=day_start_utc, end_time=day_noon_utc,
                                      fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', correct_sses=False,
                                      variables=['sst'])
-            viirs_range.write_raster(observation_dir, filename_suffix=f'{day_start.strftime("%Y%m%d")}_night',
+            viirs_range.write_raster(observation_dir,
+                                     filename_suffix=day_noon.strftime('%Y%m%dT%H%M%S') + '_' + day_end.strftime(
+                                         '%Y%m%dT%H%M%S'),
                                      start_time=day_noon_utc, end_time=day_end_utc,
                                      fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', correct_sses=False,
                                      variables=['sst'])
@@ -106,7 +111,8 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
             del smap_dataset
         elif observation == 'data_buoy':
             data_buoy_range = data_buoy.DataBuoyRange(data_buoy.WCOFS_NDBC_STATIONS_FILENAME)
-            output_filename = os.path.join(observation_dir, f'ndbc_data_buoys_{observation_date.strftime("%Y%m%d")}.gpkg')
+            output_filename = os.path.join(observation_dir,
+                                           f'ndbc_data_buoys_{observation_date.strftime("%Y%m%d")}.gpkg')
             data_buoy_range.write_vector(output_filename, day_start_ndbc, day_end_ndbc)
             del data_buoy_range
     except Exception as error:
@@ -326,8 +332,8 @@ def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, d
     write_observation(output_dir, output_date, 'viirs')
     logging.info('Processing SMAP SSS...')
     write_observation(output_dir, output_date, 'smap')
-    logging.info('Processing NDBC data...')
-    write_observation(output_dir, output_date, 'data_buoy')
+    # logging.info('Processing NDBC data...')
+    # write_observation(output_dir, output_date, 'data_buoy')
     logging.info(f'Wrote observations to {output_dir}')
 
     logging.info('Processing RTOFS...')  # RTOFS forecast is uploaded at 1700 UTC
