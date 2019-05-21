@@ -892,14 +892,19 @@ if __name__ == '__main__':
 
     print(f'[{datetime.datetime.now()}]: Contours created.')
 
-    schema = {'geometry': 'Polygon', 'properties': {'contour': 'str', 'datetime': 'datetime', 'area': 'float'}}
+    # define schema
+    schema = {'geometry': 'Polygon', 'properties': {'contour': 'str', 'datetime': 'datetime'}}
+
+    # add value fields to schema
+    schema['properties'].update({'area': 'float', 'perimeter': 'float'})
 
     with fiona.open(output_path, 'w', 'GPKG', schema, crs=fiona_WebMercator, layer=layer_name) as output_file:
         for contour_id, contour in contours.items():
             polygons = track_contour(contour, time_deltas)
 
             records = [{'geometry': shapely.geometry.mapping(polygon),
-                        'properties': {'contour': contour_id, 'datetime': contour_time, 'area': polygon.area}} for
+                        'properties': {'contour': contour_id, 'datetime': contour_time, 'area': polygon.area,
+                                       'perimeter': polygon.length}} for
                        contour_time, polygon in polygons.items()]
 
             output_file.writerecords(records)

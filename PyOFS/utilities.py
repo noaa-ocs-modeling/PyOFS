@@ -9,11 +9,17 @@ Created on Jun 13, 2018
 
 import datetime
 import os
+from functools import partial
 
 import fiona
+import fiona.crs
 import numpy
+import pyproj
 import rasterio
+import shapely
 import xarray
+from shapely.geometry import shape
+from shapely.ops import transform
 
 
 def copy_xarray(input_path: str, output_path: str) -> xarray.Dataset:
@@ -309,10 +315,65 @@ def unrotate_coordinates(phi: float, theta: float, pole: numpy.array) -> tuple:
     return longitude, latitude
 
 
-if __name__ == '__main__':
-    import PyOFS
+def xarray_to_geopackage(input_path: str, output_path: str, epsg: int = 4326):
+    polygons = {}
 
-    copy_xarray('https://dods.ndbc.noaa.gov/thredds/dodsC/hfradar_uswc_6km',
-                os.path.join(PyOFS.DATA_DIR, 'output', 'test', 'hfradar_uswc_6km.nc'))
+    with xarray.open_dataset(input_path) as input_dataset:
+        starting_index = 0
+        for contour_index in range(len(input_dataset['time'])):
+            ending_index = int(input_dataset['EndPoint'][contour_index].values.item()) if contour_index <= len(
+                input_dataset['EndPoint']) else -1
+
+            contour_datetime = datetime64_to_time(input_dataset['time'][contour_index])
+            longitude = input_dataset['longitude'][starting_index:ending_index]
+            latitude = input_dataset['latitude'][starting_index:ending_index]
+            polygons[contour_datetime] = shapely.geometry.Polygon(zip(longitude, latitude))
+
+            starting_index = ending_index + 1
+
+    # define schema
+    schema = {'geometry': 'Polygon', 'properties': {'datetime': 'datetime'}}
+
+    # add value fields to schema
+    schema['properties'].update({'area': 'float', 'perimeter': 'float'})
+
+    records = [{'geometry': shapely.geometry.mapping(polygon),
+                'properties': {'datetime': contour_time,
+                               'area': transform(partial(pyproj.transform, pyproj.Proj(init=f'epsg:{epsg}'),
+                                                         pyproj.Proj(init='epsg:3857')), polygon).area,
+                               'perimeter': polygon.length}} for
+               contour_time, polygon in polygons.items()]
+
+    with fiona.open(output_path, 'w', 'GPKG', schema=schema, crs=fiona.crs.from_epsg(epsg)) as output_file:
+        output_file.writerecords(records)
+
+
+if __name__ == '__main__':
+    # xarray_to_geopackage(
+    #     input_path=r"C:\Users\zachary.burnett\Downloads\lagr_contour_Exp24_r20Clon-125Clat40dr500m_20100601-20100604.nc",
+    #     output_path=r"C:\Users\zachary.burnett\Downloads\alex_contour.gpkg")
+
+    geopackage_path = r"C:\Data\develop\output\test\contours.gpkg"
+    layer_names = ['wcofs_qck_20160925T010000_20160929T010000_1h', 'wcofs_qck_20160925T010000_20160929T010000_24h',
+                   'wcofs_qck_geostrophic_20160925T010000_20160929T010000_1h']
+
+    for layer_name in layer_names:
+        records = []
+
+        with fiona.open(geopackage_path, layer=layer_name) as input_file:
+            for record in input_file:
+                polygon = shapely.geometry.Polygon(record['geometry']['coordinates'][0])
+                record['properties'].update({'area': polygon.area, 'perimeter': polygon.length})
+                records.append(record)
+
+        # define schema
+        schema = {'geometry': 'Polygon', 'properties': {'contour': 'str', 'datetime': 'datetime'}}
+
+        # add value fields to schema
+        schema['properties'].update({'area': 'float', 'perimeter': 'float'})
+
+        with fiona.open(geopackage_path, 'w', 'GPKG', schema=schema, crs=fiona.crs.from_epsg(3857),
+                        layer=f'{layer_name}_copy') as output_file:
+            output_file.writerecords(records)
 
     print('done')
