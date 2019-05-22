@@ -239,77 +239,113 @@ class NoDataError(Exception):
     pass
 
 
-def rotate_coordinates(point: numpy.array, pole: numpy.array) -> tuple:
-    """
-    Convert longitude and latitude to rotated pole coordinates.
+class RotatedPoleCoordinateSystem:
+    def __init__(self, pole: numpy.array):
+        if type(pole) is not numpy.array:
+            pole = numpy.array(pole)
 
-    :param point: input coordinates
-    :param pole: rotated pole
-    :return: coordinates in rotated pole system
-    """
+        self.pole = pole
+        self.pole_radians = pole * numpy.pi / 180
 
-    if type(pole) is not numpy.array:
-        pole = numpy.array(pole)
+        self.pole_latitude_sine = numpy.sin(pole[1])
+        self.pole_latitude_cosine = numpy.cos(pole[1])
 
-    # convert degrees to radians
-    point = point * numpy.pi / 180
-    pole = pole * numpy.pi / 180
+    def rotate_coordinates(self, point: numpy.array) -> tuple:
+        """
+        Convert longitude and latitude to rotated pole coordinates.
 
-    # precalculate sin / cos
-    latitude_sine = numpy.sin(point[1])
-    latitude_cosine = numpy.cos(point[1])
-    pole_latitude_sine = numpy.sin(pole[1])
-    pole_latitude_cosine = numpy.cos(pole[1])
+        :param point: unrotated coordinates
+        :param pole: rotated pole
+        :return: coordinates in rotated pole system
+        """
 
-    # calculate rotation transformation
-    phi_1 = point[0] - pole[0]
+        if type(point) is not numpy.array:
+            point = numpy.array(point)
 
-    phi_1_sine = numpy.sin(phi_1)
-    phi_1_cosine = numpy.cos(phi_1)
+        # convert degrees to radians
+        point = point * numpy.pi / 180
 
-    phi_2 = numpy.arctan2(phi_1_sine * latitude_cosine,
-                          phi_1_cosine * latitude_cosine * pole_latitude_sine - latitude_sine * pole_latitude_cosine)
-    theta_2 = numpy.arcsin(phi_1_cosine * latitude_cosine * pole_latitude_cosine + latitude_sine * pole_latitude_sine)
+        # precalculate sin / cos
+        longitude_sine = numpy.sin(point[0] - self.pole_radians[0])
+        longitude_cosine = numpy.cos(point[0] - self.pole_radians[0])
+        latitude_sine = numpy.sin(point[1])
+        latitude_cosine = numpy.cos(point[1])
 
-    # convert radians to degrees
-    phi_2 = phi_2 * 180 / numpy.pi
-    theta_2 = theta_2 * 180 / numpy.pi
+        # calculate rotation transformation
+        rotated_longitude = numpy.arctan2(longitude_sine * latitude_cosine,
+                                          longitude_cosine * latitude_cosine * self.pole_latitude_sine - latitude_sine * self.pole_latitude_cosine)
+        rotated_latitude = numpy.arcsin(
+            longitude_cosine * latitude_cosine * self.pole_latitude_cosine + latitude_sine * self.pole_latitude_sine)
 
-    return phi_2, theta_2
+        # convert radians to degrees
+        return rotated_longitude * 180 / numpy.pi, rotated_latitude * 180 / numpy.pi
 
+    def unrotate_coordinates(self, rotated_point: numpy.array) -> tuple:
+        """
+        Convert rotated pole coordinates to longitude and latitude.
 
-def unrotate_coordinates(point: numpy.array, pole: numpy.array) -> tuple:
-    """
-    Convert rotated pole coordinates to longitude and latitude.
+        :param rotated_point: rotated coordinates
+        :param pole: rotated pole
+        :return: coordinates in rotated pole system
+        """
 
-    :param point: rotated pole coordinates
-    :param pole: rotated pole
-    :return: coordinates in rotated pole system
-    """
+        if type(rotated_point) is not numpy.array:
+            rotated_point = numpy.array(rotated_point)
 
-    # convert degrees to radians
-    phi = point[0] * numpy.pi / 180
-    theta = point[1] * numpy.pi / 180
-    pole = pole * numpy.pi / 180
+        # convert degrees to radians
+        rotated_point = rotated_point * numpy.pi / 180
 
-    # precalculate sin / cos
-    phi_sine = numpy.sin(phi)
-    phi_cosine = numpy.cos(phi)
-    theta_sine = numpy.sin(theta)
-    theta_cosine = numpy.cos(theta)
-    pole_latitude_sine = numpy.sin(pole[1])
-    pole_latitude_cosine = numpy.cos(pole[1])
+        # precalculate sin / cos
+        rotated_longitude_sine = numpy.sin(rotated_point[0])
+        rotated_longitude_cosine = numpy.cos(rotated_point[0])
+        rotated_latitude_sine = numpy.sin(rotated_point[1])
+        rotated_latitude_cosine = numpy.cos(rotated_point[1])
 
-    # calculate rotation transformation
-    longitude = pole[0] + numpy.arctan2(phi_sine * theta_cosine,
-                                        phi_cosine * theta_cosine * pole_latitude_sine + theta_sine * pole_latitude_cosine)
-    latitude = numpy.arcsin(-phi_cosine * theta_cosine * pole_latitude_cosine + theta_sine * pole_latitude_sine)
+        # calculate rotation transformation
+        longitude = self.pole_radians[0] + numpy.arctan2(rotated_longitude_sine * rotated_latitude_cosine,
+                                                         rotated_longitude_cosine * rotated_latitude_cosine * self.pole_latitude_sine + rotated_latitude_sine * self.pole_latitude_cosine)
+        latitude = numpy.arcsin(
+            -rotated_longitude_cosine * rotated_latitude_cosine * self.pole_latitude_cosine + rotated_latitude_sine * self.pole_latitude_sine)
 
-    # convert radians to degrees
-    longitude = longitude * 180 / numpy.pi
-    latitude = latitude * 180 / numpy.pi
+        # convert radians to degrees
+        return longitude * 180 / numpy.pi, latitude * 180 / numpy.pi
 
-    return longitude, latitude
+    @staticmethod
+    def find_pole(points: numpy.array, starting_pole: numpy.array, samples: int = 10,
+                  sample_radius: float = 1) -> tuple:
+        """
+        Find pole given points with the same rotated latitude.
+
+        :param points: array of points with a constant distance to the pole
+        :param starting_pole: approximate pole to start from
+        :param samples: number of samples to take
+        :param sample_radius: radius in degrees around starting pole to search
+        :return: central point
+        """
+
+        deltas = numpy.linspace(-sample_radius, sample_radius, numpy.sqrt(samples))
+
+        discrepancies = numpy.empty((len(deltas), len(deltas)))
+
+        for lon_index, lon_delta in enumerate(deltas):
+            for lat_index, lat_delta in enumerate(deltas):
+                current_pole_candidate = starting_pole + numpy.array((lon_delta, lat_delta))
+
+                current_rotated_pole = RotatedPoleCoordinateSystem(current_pole_candidate)
+                _, rotated_latitudes = current_rotated_pole.rotate_coordinates(points)
+
+                discrepancies[lon_index, lat_index] = numpy.abs(numpy.diff(rotated_latitudes)).max()
+
+        discrepancies = xarray.DataArray(discrepancies,
+                                         coords={'lon': starting_pole[0] + deltas, 'lat': starting_pole[1] + deltas},
+                                         dims=('lon', 'lat'))
+
+        from matplotlib import pyplot
+        discrepancies.plot.imshow()
+        pyplot.show()
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({tuple(self.pole)})'
 
 
 def xarray_to_geopackage(input_path: str, output_path: str, epsg: int = 4326):

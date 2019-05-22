@@ -244,84 +244,72 @@ class VectorDataset(VectorField):
 
 
 class ROMSGridVectorDataset(VectorField):
-    def __init__(self, dataset: xarray.Dataset, u_name: str = 'u', v_name: str = 'v',
-                 x_names: Tuple[str, str] = ('u_lon', 'v_lon'), y_names: Tuple[str, str] = ('u_lat', 'v_lat'),
-                 t_name: str = 'time', coordinate_system: pyproj.Proj = None):
+    def __init__(self, dataset: xarray.Dataset, u: str = 'u', v: str = 'v', u_lon: str = 'u_lon', u_lat: str = 'u_lat',
+                 v_lon: str = 'v_lon', v_lat: str = 'v_lat', t: str = 'time'):
         """
         Create new velocity field from given observation.
 
         :param dataset: xarray observation containing velocity data (u, v)
-        :param u_name: name of u variable
-        :param v_name: name of v variable
-        :param x_names: names of x coordinates
-        :param y_names: names of y coordinates
-        :param t_name: name of time coordinate
-        :param coordinate_system: coordinate system of observation
+        :param u: u variable
+        :param v: v variable
+        :param u_lon: u longitude coordinate
+        :param u_lat: u latitude coordinate
+        :param v_lon: v longitude coordinate
+        :param v_lat: v latitude coordinate
+        :param t: time coordinate
         """
 
-        self.coordinate_system = coordinate_system if coordinate_system is not None else WGS84
+        utilities.RotatedPoleCoordinateSystem.find_pole((dataset[u][u_lon].values, dataset[u][u_lat].values),
+                                                        wcofs.ROTATED_POLE, samples=10)
 
-        variables_to_rename = {u_name: 'u', v_name: 'v', t_name: 'time'}
-        variables_to_rename.update(dict(zip(x_names, ('u_x', 'v_x'))))
-        variables_to_rename.update(dict(zip(y_names, ('u_y', 'v_y'))))
-        self.dataset = dataset.rename(variables_to_rename)
+        self.rotated_pole = utilities.RotatedPoleCoordinateSystem(wcofs.ROTATED_POLE)
 
-        self.native_u_x, self.native_u_y = pyproj.transform(WGS84, self.coordinate_system, self.dataset['u_x'].values,
-                                                            self.dataset['u_y'].values)
-        self.native_v_x, self.native_v_y = pyproj.transform(WGS84, self.coordinate_system, self.dataset['v_x'].values,
-                                                            self.dataset['v_y'].values)
+        u_x, u_y = self.rotated_pole.rotate_coordinates((dataset[u][u_lat].values, dataset[u][u_lon].values))
+        v_x, v_y = self.rotated_pole.rotate_coordinates((dataset[v][v_lat].values, dataset[v][v_lon].values))
+
+        times = dataset[t]
+
+        self.dataset = xarray.Dataset(
+            {'u': xarray.DataArray(dataset[u].values, coords={'u_x': u_x[0, :], 'u_y': u_y[:, 0], 'time': times},
+                                   dims=('time', 'u_y', 'u_x')),
+             'v': xarray.DataArray(dataset[v].values, coords={'v_x': v_x[0, :], 'v_y': v_y[:, 0], 'time': times},
+                                   dims=('time', 'v_y', 'v_x'))})
 
         super().__init__(numpy.diff(self.dataset['time'].values))
 
+    def _interpolate(self, variable: str, point: numpy.array, time: datetime.datetime) -> xarray.DataArray:
+        transformed_point = self.rotated_pole.rotate_coordinates(point)
+
+        eta_index = self.dataset[f'{variable}_eta'].max() * (
+                (transformed_point[0] - self.dataset[f'{variable}_x'].min()) / (
+                self.dataset[f'{variable}_x'].max() - self.dataset[f'{variable}_x'].min()))
+        xi_index = self.dataset[f'{variable}_xi'].max() * (
+                (transformed_point[1] - self.dataset[f'{variable}_y'].min()) / (
+                self.dataset[f'{variable}_y'].max() - self.dataset[f'{variable}_y'].min()))
+
+        eta_indices = [math.floor(eta_index), math.ceil(eta_index)]
+        xi_indices = [math.floor(xi_index), math.ceil(xi_index)]
+        times = [self.dataset['time'].sel(time=time, method='bfill').values,
+                 self.dataset['time'].sel(time=time, method='ffill').values]
+
+        if times[0] == times[1]:
+            times = times[0]
+
+        return self.dataset[variable].sel(u_eta=eta_indices, u_xi=xi_indices, time=times).interp(
+            u_eta=eta_index - eta_indices[0], u_xi=xi_index - xi_indices[0], time=time)
+
     def u(self, point: numpy.array, time: datetime.datetime) -> float:
-        # transformed_point = pyproj.transform(WebMercator, self.coordinate_system, *point)
-        transformed_point = utilities.rotate_coordinates(point, wcofs.WCOFS_GCS)
-
-        eta_index = numpy.nanmax(self.dataset['u_eta']) * ((transformed_point[0] - numpy.nanmin(self.native_u_x)) / (
-                numpy.nanmax(self.native_u_x) - numpy.nanmin(self.native_u_x)))
-        xi_index = numpy.nanmax(self.dataset['u_xi']) * ((transformed_point[1] - numpy.nanmin(self.native_u_y)) / (
-                numpy.nanmax(self.native_u_y) - numpy.nanmin(self.native_u_y)))
-
-        eta_index_bounds = [math.floor(eta_index), math.ceil(eta_index)]
-        xi_index_bounds = [math.floor(xi_index), math.ceil(xi_index)]
-        time_bounds = [self.dataset['time'].sel(time=time, method='bfill').values,
-                       self.dataset['time'].sel(time=time, method='ffill').values]
-
-        if time_bounds[0] == time_bounds[1]:
-            time = time_bounds[0]
-            return self.dataset['u'].sel(u_eta=eta_index_bounds, u_xi=xi_index_bounds, time=time).interp(
-                u_eta=eta_index - eta_index_bounds[0], u_xi=xi_index - xi_index_bounds[0]).values.item()
-        else:
-            return self.dataset['u'].sel(u_eta=eta_index_bounds, u_xi=xi_index_bounds, time=time_bounds).interp(
-                time=time, u_eta=eta_index - eta_index_bounds[0], u_xi=xi_index - xi_index_bounds[0]).values.item()
+        return self._interpolate('u', point, time).values.item()
 
     def v(self, point: numpy.array, time: datetime.datetime) -> float:
-        transformed_point = pyproj.transform(WebMercator, self.coordinate_system, *point)
-
-        eta_index = numpy.nanmax(self.dataset['v_eta']) * ((transformed_point[0] - numpy.nanmin(self.native_v_x)) / (
-                numpy.nanmax(self.native_v_x) - numpy.nanmin(self.native_v_x)))
-        xi_index = numpy.nanmax(self.dataset['v_xi']) * ((transformed_point[1] - numpy.nanmin(self.native_v_y)) / (
-                numpy.nanmax(self.native_v_y) - numpy.nanmin(self.native_v_y)))
-
-        eta_index_bounds = [math.floor(eta_index), math.ceil(eta_index)]
-        xi_index_bounds = [math.floor(xi_index), math.ceil(xi_index)]
-        time_bounds = [self.dataset['time'].sel(time=time, method='bfill').values,
-                       self.dataset['time'].sel(time=time, method='ffill').values]
-
-        if time_bounds[0] == time_bounds[1]:
-            time = time_bounds[0]
-            return self.dataset['v'].sel(v_eta=eta_index_bounds, v_xi=xi_index_bounds, time=time).interp(
-                v_eta=eta_index - eta_index_bounds[0], v_xi=xi_index - xi_index_bounds[0]).values.item()
-        else:
-            return self.dataset['v'].sel(v_eta=eta_index_bounds, v_xi=xi_index_bounds, time=time_bounds).interp(
-                time=time, v_eta=eta_index - eta_index_bounds[0], v_xi=xi_index - xi_index_bounds[0]).values.item()
+        return self._interpolate('v', point, time).values.item()
 
     def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs) -> quiver.Quiver:
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
-        lon, lat = pyproj.transform(self.coordinate_system, WGS84, *numpy.meshgrid(self.dataset['u_x'].values,
-                                                                                   self.dataset['u_y'].values))
+        lon, lat = self.rotated_pole.unrotate_coordinates(
+            *numpy.meshgrid(self.dataset['u_x'].values, self.dataset['u_y'].values))
 
         u_shape = self.dataset['u'].shape
         v_shape = self.dataset['v'].shape
@@ -350,7 +338,7 @@ class Particle:
         :param field: velocity field
         """
 
-        self.locations = [numpy.array(pyproj.transform(WGS84, WebMercator, location[0], location[1]))]
+        self.locations = [location]
         self.time = time
         self.field = field
 
@@ -872,10 +860,20 @@ if __name__ == '__main__':
                 vector_dataset = vector_dataset.resample(time='D').mean()
 
         if 'WCOFS' in source.upper():
-            velocity_field = ROMSGridVectorDataset(vector_dataset, u_name='ssu', v_name='ssv',
-                                                   coordinate_system=wcofs.WCOFS_GCS)
+            velocity_field = ROMSGridVectorDataset(vector_dataset, u='ssu', v='ssv')
         else:
             velocity_field = VectorDataset(vector_dataset, u_name='ssu', v_name='ssv')
+
+    # u = velocity_field.dataset['u'].sel(time=start_time)
+    #
+    # transformed_point = utilities.rotate_coordinates((-135.08643988445394, 45.821736984330855), wcofs.ROTATED_POLE)
+    #
+    # u_eta_index = u['u_eta'].max() * ((transformed_point[0] - u['u_x'].min()) / (u['u_x'].max() - u['u_x'].min()))
+    # u_xi_index = u['u_xi'].max() * ((transformed_point[1] - u['u_y'].min()) / (u['u_y'].max() - u['u_y'].min()))
+    #
+    # pyplot.quiver(numpy.flip(numpy.ma.array(u, mask=u == 0)))
+    # pyplot.plot(eta_index, xi_index, 'o')
+    # pyplot.show()
 
     contours = {}
 
