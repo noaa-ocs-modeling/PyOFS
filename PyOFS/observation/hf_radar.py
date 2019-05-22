@@ -88,25 +88,25 @@ class HFRadarRange:
             self.url = self.source
 
         try:
-            self.netcdf_dataset = xarray.open_dataset(self.url)
+            self.dataset = xarray.open_dataset(self.url)
         except OSError:
             raise utilities.NoDataError(f'No HFR observation found at {self.url}')
 
-        raw_times = self.netcdf_dataset['time']
+        raw_times = self.dataset['time']
 
-        self.netcdf_dataset['time'] = xarray.DataArray(numpy.array(raw_times.values, dtype='datetime64[h]'),
-                                                       coords=raw_times.coords, dims=raw_times.dims,
-                                                       attrs=raw_times.attrs)
+        self.dataset['time'] = xarray.DataArray(numpy.array(raw_times.values, dtype='datetime64[h]'),
+                                                coords=raw_times.coords, dims=raw_times.dims,
+                                                attrs=raw_times.attrs)
 
-        self.netcdf_dataset = self.netcdf_dataset.sel(time=slice(self.start_time, self.end_time))
+        self.dataset = self.dataset.sel(time=slice(self.start_time, self.end_time))
 
         logging.info(f'Collecting HFR velocity from {self.source} between ' +
-                     f'{str(self.netcdf_dataset["time"].min().values)[:19]}' +
-                     f' and {str(self.netcdf_dataset["time"].max().values)[:19]}...')
+                     f'{str(self.dataset["time"].min().values)[:19]}' +
+                     f' and {str(self.dataset["time"].max().values)[:19]}...')
 
         if HFRadarRange.grid_transform is None:
-            lon = self.netcdf_dataset['lon'].values
-            lat = self.netcdf_dataset['lat'].values
+            lon = self.dataset['lon'].values
+            lat = self.dataset['lat'].values
 
             # define image properties
             west = numpy.min(lon)
@@ -128,11 +128,11 @@ class HFRadarRange:
         :return: array of data.
         """
 
-        output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(time).values
+        output_data = self.dataset[DATA_VARIABLES[variable]].sel(time).values
 
         if dop_threshold is not None:
-            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=time) <= dop_threshold) & (
-                    self.netcdf_dataset['DOPy'].sel(time=time) <= dop_threshold))
+            dop_mask = ((self.dataset['DOPx'].sel(time=time) <= dop_threshold) & (
+                    self.dataset['DOPy'].sel(time=time) <= dop_threshold))
             output_data[~dop_mask] = numpy.nan
 
         return output_data
@@ -155,7 +155,7 @@ class HFRadarRange:
         if end_time is None:
             end_time = self.end_time
 
-        output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(time=slice(start_time, end_time))
+        output_data = self.dataset[DATA_VARIABLES[variable]].sel(time=slice(start_time, end_time))
 
         if dop_threshold is not None:
             output_data.values[~self.dop_mask(dop_threshold)] = numpy.nan
@@ -171,8 +171,8 @@ class HFRadarRange:
         :return: tuple of bounds (west, north, east, south)
         """
 
-        return (self.netcdf_dataset.geospatial_lon_min, self.netcdf_dataset.geospatial_lat_max,
-                self.netcdf_dataset.geospatial_lon_max, self.netcdf_dataset.geospatial_lat_min)
+        return (self.dataset.geospatial_lon_min, self.dataset.geospatial_lat_max,
+                self.dataset.geospatial_lon_max, self.dataset.geospatial_lat_min)
 
     def cell_size(self) -> tuple:
         """
@@ -193,11 +193,11 @@ class HFRadarRange:
 
         layer_records = []
 
-        for site_index in range(self.netcdf_dataset['nSites']):
-            site_code = self.netcdf_dataset['site_code'][site_index].tobytes().decode().strip('\x00').strip()
-            site_network_code = self.netcdf_dataset['site_netCode'][site_index].tobytes().decode().strip('\x00').strip()
-            lon = float(self.netcdf_dataset['site_lon'][site_index])
-            lat = float(self.netcdf_dataset['site_lat'][site_index])
+        for site_index in range(self.dataset['nSites']):
+            site_code = self.dataset['site_code'][site_index].tobytes().decode().strip('\x00').strip()
+            site_network_code = self.dataset['site_netCode'][site_index].tobytes().decode().strip('\x00').strip()
+            lon = float(self.dataset['site_lon'][site_index])
+            lat = float(self.dataset['site_lat'][site_index])
 
             record = {
                 'id': site_index + 1, 'geometry': {'type': 'Point', 'coordinates': (lon, lat)}, 'properties': {
@@ -238,11 +238,11 @@ class HFRadarRange:
         if end_time is None:
             end_time = self.end_time
 
-        time_interval_selection = self.netcdf_dataset.sel(time=slice(start_time, end_time))
+        time_interval_selection = self.dataset.sel(time=slice(start_time, end_time))
 
         if dop_threshold is not None:
-            dop_mask = ((self.netcdf_dataset['DOPx'].sel(time=slice(start_time, end_time)) <= dop_threshold) & (
-                    self.netcdf_dataset['DOPy'].sel(time=slice(start_time, end_time)) <= dop_threshold)).values
+            dop_mask = ((self.dataset['DOPx'].sel(time=slice(start_time, end_time)) <= dop_threshold) & (
+                    self.dataset['DOPy'].sel(time=slice(start_time, end_time)) <= dop_threshold)).values
             time_interval_selection[~dop_mask] = numpy.nan
 
         # create dict to store features
@@ -261,15 +261,15 @@ class HFRadarRange:
 
             feature_index = 1
 
-            for col in range(len(self.netcdf_dataset['lon'])):
-                for row in range(len(self.netcdf_dataset['lat'])):
+            for col in range(len(self.dataset['lon'])):
+                for row in range(len(self.dataset['lat'])):
                     data = [float(hfr_data[variable_name][row, col].values) for variable, variable_name in
                             variables.items()]
 
                     # stop if record has masked values
                     if not (numpy.isnan(data)).all():
-                        lon = self.netcdf_dataset['lon'][col]
-                        lat = self.netcdf_dataset['lat'][row]
+                        lon = self.dataset['lon'][col]
+                        lat = self.dataset['lat'][row]
 
                         record = {
                             'id': feature_index, 'geometry': {'type': 'Point', 'coordinates': (lon, lat)},
@@ -329,14 +329,14 @@ class HFRadarRange:
 
         feature_index = 1
 
-        for col in range(len(self.netcdf_dataset['lon'])):
-            for row in range(len(self.netcdf_dataset['lat'])):
+        for col in range(len(self.dataset['lon'])):
+            for row in range(len(self.dataset['lat'])):
                 data = [float(variable_means[variable][row, col]) for variable in variables]
 
                 # stop if record has masked values
                 if not (numpy.isnan(data)).all():
-                    lon = self.netcdf_dataset['lon'][col]
-                    lat = self.netcdf_dataset['lat'][row]
+                    lon = self.dataset['lon'][col]
+                    lat = self.dataset['lat'][row]
 
                     record = {
                         'id': feature_index, 'geometry': {'type': 'Point', 'coordinates': (lon, lat)},
@@ -411,7 +411,7 @@ class HFRadarRange:
                 mean_cell_length = numpy.min(self.cell_size())
                 west, north, east, south = self.bounds()
 
-                input_lon, input_lat = numpy.meshgrid(self.netcdf_dataset['lon'], self.netcdf_dataset['lat'])
+                input_lon, input_lat = numpy.meshgrid(self.dataset['lon'], self.dataset['lat'])
                 output_lon = numpy.arange(west, east, mean_cell_length)[None, :]
                 output_lat = numpy.arange(south, north, mean_cell_length)[:, None]
 
@@ -457,8 +457,8 @@ class HFRadarRange:
         if end_time is None:
             end_time = self.end_time
 
-        dop_x = self.netcdf_dataset['DOPx'].sel(time=slice(start_time, end_time))
-        dop_y = self.netcdf_dataset['DOPy'].sel(time=slice(start_time, end_time))
+        dop_x = self.dataset['DOPx'].sel(time=slice(start_time, end_time))
+        dop_y = self.dataset['DOPy'].sel(time=slice(start_time, end_time))
         return ((dop_x <= threshold) & (dop_y <= threshold)).values
 
     def to_xarray(self, variables: Collection[str] = None, start_time: datetime.datetime = None,
@@ -491,12 +491,12 @@ class HFRadarRange:
                                                 dop_threshold=dop_threshold)
 
                 output_dataset.update({variable: xarray.DataArray(output_data,
-                                                                  coords={'lat': self.netcdf_dataset['lat'],
-                                                                          'lon': self.netcdf_dataset['lon']},
+                                                                  coords={'lat': self.dataset['lat'],
+                                                                          'lon': self.dataset['lon']},
                                                                   dims=('lat', 'lon'))})
         else:
             for variable in variables:
-                output_data = self.netcdf_dataset[DATA_VARIABLES[variable]].sel(time=slice(start_time, end_time))
+                output_data = self.dataset[DATA_VARIABLES[variable]].sel(time=slice(start_time, end_time))
 
                 if dop_threshold is not None:
                     output_data.values[~self.dop_mask(dop_threshold)] = numpy.nan
@@ -550,7 +550,7 @@ if __name__ == '__main__':
 
     hfr_range = HFRadarRange(start_time, end_time, source='UCSD')
 
-    cell = hfr_range.netcdf_dataset.isel(lon=67, lat=270)
+    cell = hfr_range.dataset.isel(lon=67, lat=270)
 
     _, axes = pyplot.subplots(nrows=2)
 

@@ -55,9 +55,9 @@ class DataBuoyDataset:
         self.url = f'{SOURCE_URL}/{self.station_name}/{self.station_name}o9999.nc'
 
         try:
-            self.netcdf_dataset = xarray.open_dataset(self.url)
-            self.longitude = self.netcdf_dataset['longitude'].values.item()
-            self.latitude = self.netcdf_dataset['latitude'].values.item()
+            self.dataset = xarray.open_dataset(self.url)
+            self.longitude = self.dataset['longitude'].values.item()
+            self.latitude = self.dataset['latitude'].values.item()
         except:
             raise utilities.NoDataError(f'No NDBC observation found at {self.url}')
 
@@ -80,7 +80,7 @@ class DataBuoyDataset:
         :return: dictionary of data from the given station over the given time interval
         """
 
-        return self.netcdf_dataset[variable].sel(time=slice(start_time, end_time))
+        return self.dataset[variable].sel(time=slice(start_time, end_time))
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}({self.station_name})'

@@ -94,14 +94,14 @@ class RTOFSDataset:
         self.study_area_polygon_filename = study_area_polygon_filename
         self.study_area_geojson = utilities.get_first_record(self.study_area_polygon_filename)['geometry']
 
-        self.netcdf_datasets = {}
+        self.datasets = {}
         self.dataset_locks = {}
 
         date_string = self.model_time.strftime('%Y%m%d')
 
         if self.time_interval == 'daily':
             for forecast_direction, datasets in DATASET_STRUCTURE[self.source].items():
-                self.netcdf_datasets[forecast_direction] = {}
+                self.datasets[forecast_direction] = {}
                 self.dataset_locks[forecast_direction] = {}
 
                 date_dir = f'rtofs_global{date_string}'
@@ -113,16 +113,16 @@ class RTOFSDataset:
                     try:
                         dataset = xarray.open_dataset(url)
 
-                        self.netcdf_datasets[forecast_direction][dataset_name] = dataset
+                        self.datasets[forecast_direction][dataset_name] = dataset
                         self.dataset_locks[forecast_direction][dataset_name] = threading.Lock()
                     except OSError as error:
                         logging.error(f'Error collecting RTOFS: {error}')
 
-        if (len(self.netcdf_datasets['nowcast']) + len(self.netcdf_datasets['forecast'])) > 0:
-            if len(self.netcdf_datasets['nowcast']) > 0:
-                sample_dataset = next(iter(self.netcdf_datasets['nowcast'].values()))
+        if (len(self.datasets['nowcast']) + len(self.datasets['forecast'])) > 0:
+            if len(self.datasets['nowcast']) > 0:
+                sample_dataset = next(iter(self.datasets['nowcast'].values()))
             else:
-                sample_dataset = next(iter(self.netcdf_datasets['forecast'].values()))
+                sample_dataset = next(iter(self.datasets['forecast'].values()))
 
             # for some reason RTOFS has longitude values shifted by 360
             self.raw_lon = sample_dataset['lon'].values
@@ -165,13 +165,13 @@ class RTOFSDataset:
             time = time.replace(hour=0, minute=0, second=0, microsecond=0)
 
         if direction in DATASET_STRUCTURE[self.source]:
-            if len(self.netcdf_datasets[direction]) > 0:
+            if len(self.datasets[direction]) > 0:
                 if variable in DATA_VARIABLES:
                     datasets = DATA_VARIABLES[variable][self.source]
                     dataset_name, variable_name = next(iter(datasets.items()))
 
                     with self.dataset_locks[direction][dataset_name]:
-                        data_variable = self.netcdf_datasets[direction][dataset_name][
+                        data_variable = self.datasets[direction][dataset_name][
                             DATA_VARIABLES[variable][self.source][dataset_name]]
 
                         # TODO study areas that cross over longitude +74.16 may have problems here
