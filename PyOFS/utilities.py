@@ -10,6 +10,7 @@ Created on Jun 13, 2018
 import datetime
 import os
 from functools import partial
+from typing import Tuple
 
 import fiona
 import fiona.crs
@@ -240,23 +241,21 @@ class NoDataError(Exception):
 
 
 class RotatedPoleCoordinateSystem:
-    def __init__(self, pole: numpy.array):
-        if type(pole) is not numpy.array:
-            pole = numpy.array(pole)
+    def __init__(self, pole: Tuple[float, float]):
+        """
+        New rotated pole coordinate system.
 
-        self.pole = pole
-        self.pole_radians = pole * numpy.pi / 180
+        :param pole: unrotated coordinates of pole
+        """
 
-        self.pole_latitude_sine = numpy.sin(pole[1])
-        self.pole_latitude_cosine = numpy.cos(pole[1])
+        self.pole = pole if type(pole) is numpy.array else numpy.array(pole)
 
-    def rotate_coordinates(self, point: numpy.array) -> tuple:
+    def rotate_coordinates(self, point: Tuple[float, float]) -> tuple:
         """
         Convert longitude and latitude to rotated pole coordinates.
 
         :param point: unrotated coordinates
-        :param pole: rotated pole
-        :return: coordinates in rotated pole system
+        :return: coordinates rotated around pole
         """
 
         if type(point) is not numpy.array:
@@ -264,29 +263,32 @@ class RotatedPoleCoordinateSystem:
 
         # convert degrees to radians
         point = point * numpy.pi / 180
+        pole = self.pole * numpy.pi / 180
 
-        # precalculate sin / cos
-        longitude_sine = numpy.sin(point[0] - self.pole_radians[0])
-        longitude_cosine = numpy.cos(point[0] - self.pole_radians[0])
-        latitude_sine = numpy.sin(point[1])
-        latitude_cosine = numpy.cos(point[1])
+        # calculate sine and cosine
+        local_longitude = point[0] - pole[0]
+        sine_longitude = numpy.sin(local_longitude)
+        cosine_longitude = numpy.cos(local_longitude)
+        sine_latitude = numpy.sin(point[1])
+        cosine_latitude = numpy.cos(point[1])
+        sine_pole_latitude = numpy.sin(pole[1])
+        cosine_pole_latitude = numpy.cos(pole[1])
 
-        # calculate rotation transformation
-        rotated_longitude = numpy.arctan2(longitude_sine * latitude_cosine,
-                                          longitude_cosine * latitude_cosine * self.pole_latitude_sine - latitude_sine * self.pole_latitude_cosine)
+        # precalculate rotation transformation
+        rotated_longitude = numpy.arctan2(sine_longitude * cosine_latitude,
+                                          cosine_longitude * cosine_latitude * sine_pole_latitude - sine_latitude * cosine_pole_latitude)
         rotated_latitude = numpy.arcsin(
-            longitude_cosine * latitude_cosine * self.pole_latitude_cosine + latitude_sine * self.pole_latitude_sine)
+            cosine_longitude * cosine_latitude * cosine_pole_latitude + sine_latitude * sine_pole_latitude)
 
         # convert radians to degrees
         return rotated_longitude * 180 / numpy.pi, rotated_latitude * 180 / numpy.pi
 
-    def unrotate_coordinates(self, rotated_point: numpy.array) -> tuple:
+    def unrotate_coordinates(self, rotated_point: Tuple[float, float]) -> tuple:
         """
         Convert rotated pole coordinates to longitude and latitude.
 
         :param rotated_point: rotated coordinates
-        :param pole: rotated pole
-        :return: coordinates in rotated pole system
+        :return: coordinates unrotated around pole
         """
 
         if type(rotated_point) is not numpy.array:
@@ -294,18 +296,21 @@ class RotatedPoleCoordinateSystem:
 
         # convert degrees to radians
         rotated_point = rotated_point * numpy.pi / 180
+        pole = self.pole * numpy.pi / 180
 
-        # precalculate sin / cos
-        rotated_longitude_sine = numpy.sin(rotated_point[0])
-        rotated_longitude_cosine = numpy.cos(rotated_point[0])
-        rotated_latitude_sine = numpy.sin(rotated_point[1])
-        rotated_latitude_cosine = numpy.cos(rotated_point[1])
+        # precalculate sine and cosine
+        sine_rotated_longitude = numpy.sin(rotated_point[0])
+        cosine_rotated_longitude = numpy.cos(rotated_point[0])
+        sine_rotated_latitude = numpy.sin(rotated_point[1])
+        cosine_rotated_latitude = numpy.cos(rotated_point[1])
+        sine_pole_latitude = numpy.sin(pole[1])
+        cosine_pole_latitude = numpy.cos(pole[1])
 
         # calculate rotation transformation
-        longitude = self.pole_radians[0] + numpy.arctan2(rotated_longitude_sine * rotated_latitude_cosine,
-                                                         rotated_longitude_cosine * rotated_latitude_cosine * self.pole_latitude_sine + rotated_latitude_sine * self.pole_latitude_cosine)
+        longitude = pole[0] + numpy.arctan2(sine_rotated_longitude * cosine_rotated_latitude,
+                                            cosine_rotated_longitude * cosine_rotated_latitude * sine_pole_latitude + sine_rotated_latitude * cosine_pole_latitude)
         latitude = numpy.arcsin(
-            -rotated_longitude_cosine * rotated_latitude_cosine * self.pole_latitude_cosine + rotated_latitude_sine * self.pole_latitude_sine)
+            -cosine_rotated_longitude * cosine_rotated_latitude * cosine_pole_latitude + sine_rotated_latitude * sine_pole_latitude)
 
         # convert radians to degrees
         return longitude * 180 / numpy.pi, latitude * 180 / numpy.pi

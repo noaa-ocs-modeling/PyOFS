@@ -26,7 +26,6 @@ from PyOFS import utilities
 WGS84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
 WebMercator = pyproj.Proj(
     '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs')
-fiona_WebMercator = fiona.crs.from_epsg(3857)
 
 
 class VectorField:
@@ -59,7 +58,7 @@ class VectorField:
         """
         v velocity in m/s at coordinates
 
-        :param point: coordinates in linear units
+        :param point: lon / lat coordinates
         :param time: time
         :return: v value at coordinate in m/s
         """
@@ -70,7 +69,7 @@ class VectorField:
         """
         absolute velocity in m/s at coordinate
 
-        :param point: coordinates in linear units
+        :param point: lon / lat coordinates
         :param time: time
         :return: magnitude of uv vector in m/s
         """
@@ -81,7 +80,7 @@ class VectorField:
         """
         angle of uv vector
 
-        :param point: coordinates in linear units
+        :param point: lon / lat coordinates
         :param time: time
         :return: radians from east of uv vector
         """
@@ -109,7 +108,7 @@ class VectorField:
         """
 
         point, time = position
-        if numpy.any(numpy.isnan(point)) or time is None:
+        if numpy.any(numpy.isnan(point)):
             vector = numpy.array([0.0, 0.0])
         else:
             vector = numpy.array([self.u(point, time), self.v(point, time)])
@@ -155,7 +154,7 @@ class RankineVortex(VectorField):
         else:
             return self.angular_velocity * self.radius ** 2 / radial_distance
 
-    def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs) -> quiver.Quiver:
+    def plot(self, axis: pyplot.Axes = None, **kwargs) -> quiver.Quiver:
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
@@ -168,7 +167,7 @@ class RankineVortex(VectorField):
                             math.sin(2 * math.pi / num_points * point_index) * radius + self.center[1]) for
                            point_index in range(0, num_points + 1)])
 
-        vectors = [self[point, time] for point in points]
+        vectors = [self[point, datetime.datetime.now()] for point in points]
         points = list(zip(*pyproj.transform(WebMercator, WGS84, *zip(*points))))
 
         quiver_plot = axis.quiver(*zip(*points), *zip(*vectors), units='width', **kwargs)
@@ -230,6 +229,9 @@ class VectorDataset(VectorField):
             return self.dataset['v'].sel(time=time_bounds).interp(time=time, x=point[0], y=point[1]).values.item()
 
     def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs) -> quiver.Quiver:
+        if time is None:
+            time = self.dataset['time'].values[0]
+
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
@@ -244,8 +246,8 @@ class VectorDataset(VectorField):
 
 
 class ROMSGridVectorDataset(VectorField):
-    def __init__(self, dataset: xarray.Dataset, u: str = 'u', v: str = 'v', u_lon: str = 'u_lon', u_lat: str = 'u_lat',
-                 v_lon: str = 'v_lon', v_lat: str = 'v_lat', t: str = 'time'):
+    def __init__(self, dataset: xarray.Dataset, u: str = 'u', v: str = 'v', u_x: str = 'u_x', u_y: str = 'u_y',
+                 v_x: str = 'v_x', v_y: str = 'v_y', t: str = 'time'):
         """
         Create new velocity field from given observation.
 
@@ -259,57 +261,57 @@ class ROMSGridVectorDataset(VectorField):
         :param t: time coordinate
         """
 
-        utilities.RotatedPoleCoordinateSystem.find_pole((dataset[u][u_lon].values, dataset[u][u_lat].values),
-                                                        wcofs.ROTATED_POLE, samples=10)
-
         self.rotated_pole = utilities.RotatedPoleCoordinateSystem(wcofs.ROTATED_POLE)
 
-        u_x, u_y = self.rotated_pole.rotate_coordinates((dataset[u][u_lat].values, dataset[u][u_lon].values))
-        v_x, v_y = self.rotated_pole.rotate_coordinates((dataset[v][v_lat].values, dataset[v][v_lon].values))
-
-        times = dataset[t]
-
         self.dataset = xarray.Dataset(
-            {'u': xarray.DataArray(dataset[u].values, coords={'u_x': u_x[0, :], 'u_y': u_y[:, 0], 'time': times},
-                                   dims=('time', 'u_y', 'u_x')),
-             'v': xarray.DataArray(dataset[v].values, coords={'v_x': v_x[0, :], 'v_y': v_y[:, 0], 'time': times},
-                                   dims=('time', 'v_y', 'v_x'))})
+            {'u': xarray.DataArray(dataset[u].values,
+                                   coords={'time': dataset[t], 'u_x': dataset[u_x], 'u_y': dataset[u_y]},
+                                   dims=('time', 'u_x', 'u_y')),
+             'v': xarray.DataArray(dataset[v].values,
+                                   coords={'time': dataset[t], 'v_x': dataset[v_x], 'v_y': dataset[v_y]},
+                                   dims=('time', 'v_x', 'v_y'))})
 
         super().__init__(numpy.diff(self.dataset['time'].values))
 
-    def _interpolate(self, variable: str, point: numpy.array, time: datetime.datetime) -> xarray.DataArray:
-        transformed_point = self.rotated_pole.rotate_coordinates(point)
+    def interp(self, variable: str, point: numpy.array, time: datetime.datetime) -> xarray.DataArray:
+        rotated_point = self.rotated_pole.rotate_coordinates(point)
 
-        eta_index = self.dataset[f'{variable}_eta'].max() * (
-                (transformed_point[0] - self.dataset[f'{variable}_x'].min()) / (
-                self.dataset[f'{variable}_x'].max() - self.dataset[f'{variable}_x'].min()))
-        xi_index = self.dataset[f'{variable}_xi'].max() * (
-                (transformed_point[1] - self.dataset[f'{variable}_y'].min()) / (
-                self.dataset[f'{variable}_y'].max() - self.dataset[f'{variable}_y'].min()))
+        x_name = f'{variable}_x'
+        y_name = f'{variable}_y'
 
-        eta_indices = [math.floor(eta_index), math.ceil(eta_index)]
-        xi_indices = [math.floor(xi_index), math.ceil(xi_index)]
-        times = [self.dataset['time'].sel(time=time, method='bfill').values,
-                 self.dataset['time'].sel(time=time, method='ffill').values]
+        x_range = [self.dataset[x_name].sel({x_name: rotated_point[0]}, method='bfill').values.item(),
+                   self.dataset[x_name].sel({x_name: rotated_point[0]}, method='ffill').values.item()]
+        y_range = [self.dataset[y_name].sel({y_name: rotated_point[1]}, method='bfill').values.item(),
+                   self.dataset[y_name].sel({y_name: rotated_point[1]}, method='ffill').values.item()]
+        time_range = [self.dataset['time'].sel(time=time, method='bfill').values,
+                      self.dataset['time'].sel(time=time, method='ffill').values]
 
-        if times[0] == times[1]:
-            times = times[0]
+        if time_range[0] == time_range[1]:
+            time_range = time_range[0]
 
-        return self.dataset[variable].sel(u_eta=eta_indices, u_xi=xi_indices, time=times).interp(
-            u_eta=eta_index - eta_indices[0], u_xi=xi_index - xi_indices[0], time=time)
+        cell = self.dataset[variable].sel({'time': time_range, x_name: x_range, y_name: y_range})
+
+        if 'time' in cell.dims:
+            return cell.interp({'time': time, x_name: rotated_point[0], y_name: rotated_point[1]})
+        else:
+            return cell.interp({x_name: rotated_point[0], y_name: rotated_point[1]})
 
     def u(self, point: numpy.array, time: datetime.datetime) -> float:
-        return self._interpolate('u', point, time).values.item()
+        return self.interp('u', point, time).values.item() / (
+                geodetic_radius(point[1]) * (numpy.cos(point[1] * numpy.pi / 180) * 180 / numpy.pi))
 
     def v(self, point: numpy.array, time: datetime.datetime) -> float:
-        return self._interpolate('v', point, time).values.item()
+        return self.interp('v', point, time).values.item() / (geodetic_radius(point[1]))
 
     def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs) -> quiver.Quiver:
+        if time is None:
+            time = self.dataset['time'].values[0]
+
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
         lon, lat = self.rotated_pole.unrotate_coordinates(
-            *numpy.meshgrid(self.dataset['u_x'].values, self.dataset['u_y'].values))
+            numpy.meshgrid(self.dataset['u_x'].values, self.dataset['u_y'].values))
 
         u_shape = self.dataset['u'].shape
         v_shape = self.dataset['v'].shape
@@ -338,7 +340,7 @@ class Particle:
         :param field: velocity field
         """
 
-        self.locations = [location]
+        self.locations = [numpy.array(location)]
         self.time = time
         self.field = field
 
@@ -360,13 +362,13 @@ class Particle:
         if order > 0 and not any(numpy.isnan(self.vector)):
             k_1 = delta_seconds * self.field[self.coordinates(), self.time]
 
-            if order > 1:
+            if order >= 2:
                 k_2 = delta_seconds * self.field[self.coordinates() + 0.5 * k_1, self.time + 0.5 * delta_t]
 
-                if order > 2:
+                if order >= 3:
                     k_3 = delta_seconds * self.field[self.coordinates() + 0.5 * k_2, self.time + 0.5 * delta_t]
 
-                    if order > 3:
+                    if order >= 4:
                         k_4 = delta_seconds * self.field[self.coordinates() + k_3, self.time + delta_t]
 
                         if order > 4:
@@ -382,19 +384,25 @@ class Particle:
         else:
             delta_vector = numpy.array([0, 0])
 
-        self.locations.append(self.coordinates() + delta_vector)
+        new_coordinates = self.coordinates() + delta_vector
+
+        self.locations.append(new_coordinates)
         self.time += delta_t
 
-        self.vector = self.field[self.coordinates(), self.time]
+        self.vector = self.field[new_coordinates, self.time]
 
-    def coordinates(self) -> numpy.array:
+    def coordinates(self, projection: pyproj.Proj = None) -> numpy.array:
         """
-        Get current linear coordinates.
+        Get current coordinates.
 
-        :return tuple of projected coordinates
+        :param projection: output coordinate projection
+        :return tuple of coordinates
         """
 
-        return self.locations[-1]
+        if projection is None or projection == WGS84:
+            return self.locations[-1]
+        else:
+            return pyproj.transform(WGS84, projection, *self.locations[-1])
 
     def geometry(self) -> shapely.geometry.Point:
         """
@@ -463,12 +471,12 @@ class ParticleContour:
         if delta_t is None:
             delta_t = self.field.delta_t
 
-        with futures.ThreadPoolExecutor() as concurrency_pool:
-            for particle in self.particles:
-                concurrency_pool.submit(particle.step, delta_t, order)
+        # with futures.ThreadPoolExecutor() as concurrency_pool:
+        #     for particle in self.particles:
+        #         concurrency_pool.submit(particle.step, delta_t, order)
 
-        # for particle in self.particles:
-        #     particle.step(delta_t, order)
+        for particle in self.particles:
+            particle.step(delta_t, order)
 
         self.time += delta_t
 
@@ -520,7 +528,9 @@ class CircleContour(ParticleContour):
         for point_angle in [point_index * 2 * math.pi / num_points for point_index in range(num_points + 1)]:
             point_x = math.cos(point_angle) * radius + center_x
             point_y = math.sin(point_angle) * radius + center_y
-            points.append(pyproj.transform(WebMercator, WGS84, point_x, point_y))
+            point = pyproj.transform(WebMercator, WGS84, point_x, point_y)
+            # point = (point_x, point_y)
+            points.append(point)
 
         # points = list(zip(*pyproj.transform(WebMercator, WGS84, *shapely.geometry.Point(center_x, center_y).buffer(
         #     radius).exterior.coords.xy)))
@@ -608,6 +618,18 @@ class PointContour(ParticleContour):
         return f'point contour at time {self.time} at {self.coordinates()}'
 
 
+def geodetic_radius(latitude: float) -> float:
+    semimajor_radius = 6378137
+    semiminor_radius = 6356752.314245
+
+    sine_latitude = numpy.sin(latitude * numpy.pi / 180) * 180 / numpy.pi
+    cosine_latitude = numpy.cos(latitude * numpy.pi / 180) * 180 / numpy.pi
+
+    return numpy.sqrt(
+        ((semimajor_radius ** 2 * cosine_latitude) ** 2 + (semiminor_radius ** 2 + sine_latitude) ** 2) / (
+                (semimajor_radius * cosine_latitude) ** 2 + (semiminor_radius + sine_latitude) ** 2))
+
+
 def translate_geographic_coordinates(point: numpy.array, offset: numpy.array) -> numpy.array:
     """
     Add meter offset to geographic coordinates using WebMercator.
@@ -671,7 +693,7 @@ if __name__ == '__main__':
     from PyOFS.model import rtofs, wcofs
     from PyOFS.observation import hf_radar
 
-    source = 'wcofs_qck_geostrophic'
+    source = 'wcofs_qck'
     contour_shape = 'circle'
     order = 4
 
@@ -680,7 +702,7 @@ if __name__ == '__main__':
     contour_centers = {}
     start_time = datetime.datetime(2016, 9, 25, 1)
 
-    period = datetime.timedelta(days=4)
+    period = datetime.timedelta(hours=5)
     time_delta = datetime.timedelta(hours=1)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
@@ -695,12 +717,14 @@ if __name__ == '__main__':
                     layer='study_points') as contour_centers_file:
         for point in contour_centers_file:
             contour_id = point['properties']['name']
-            contour_centers[contour_id] = point['geometry']['coordinates']
+
+            if contour_id == 'A4':
+                contour_centers[contour_id] = point['geometry']['coordinates']
 
     print(f'[{datetime.datetime.now()}]: Creating velocity field...')
     if source == 'rankine':
         vortex_radius = contour_radius * 5
-        vortex_center = translate_geographic_coordinates(contour_centers.values()[0],
+        vortex_center = translate_geographic_coordinates(next(iter(contour_centers.values())),
                                                          numpy.array([contour_radius * -2, contour_radius * -2]))
         vortex_period = datetime.timedelta(days=5)
         velocity_field = RankineVortex(vortex_center, vortex_radius, vortex_period, time_deltas)
@@ -728,6 +752,8 @@ if __name__ == '__main__':
                 vector_dataset = wcofs.WCOFSDataset(start_time, source).to_xarray(variables=('ssu', 'ssv'))
                 vector_dataset.to_netcdf(data_path)
             if 'WCOFS_QCK' in source.upper():
+                rotated_pole = utilities.RotatedPoleCoordinateSystem(wcofs.ROTATED_POLE)
+
                 qck_path = os.path.join(DATA_DIR, 'input', 'wcofs', 'qck')
                 input_filenames = os.listdir(qck_path)
 
@@ -735,6 +761,7 @@ if __name__ == '__main__':
                 combined_ssu = []
                 combined_ssv = []
 
+                theta = None
                 u_lon = None
                 u_lat = None
                 v_lon = None
@@ -756,42 +783,12 @@ if __name__ == '__main__':
                         # coriolis_frequencies = 4 * math.pi / sidereal_rotation_period.total_seconds() * numpy.sin(
                         #     input_dataset['lat_rho'].values * math.pi / 180)
 
-                        coriolis = input_dataset['f']
+                        coriolis_frequencies = input_dataset['f']
                         delta_x_reciprocal = input_dataset['pn']
                         delta_y_reciprocal = input_dataset['pm']
                         sea_level = input_dataset['zeta']
 
-                        # sea_level.where(numpy.repeat(numpy.expand_dims(mask_rho, axis=0), sea_level.shape[0], axis=0) == 0) = numpy.nan
-
-                        # def rho2uv(data: numpy.array) -> Tuple[numpy.array, numpy.array]:
-                        #     data_u = (data[:-1, :] + data[1:, :]) / 2
-                        #     data_v = (data[:, :-1] + data[:, 1:]) / 2
-                        #     return data_u, data_v
-                        #
-                        #
-                        # dx_u, dx_v = rho2uv(delta_x)
-                        # dy_u, dy_v = rho2uv(delta_y)
-                        # coriolis_u, coriolis_v = rho2uv(coriolis)
-                        #
-                        # # rho indices
-                        # jj, ii = numpy.meshgrid(range(coriolis.shape[0]), range(coriolis.shape[1]))
-                        #
-                        # # fractional indices of u and v points
-                        # [ii_u, ii_v] = rho2uv(ii)
-                        # [jj_u, jj_v] = rho2uv(jj)
-                        #
-                        # dzdy_v = sea_level.diff('xi_rho') / dy_v
-                        # dzdx_u = sea_level.diff('eta_rho') / dx_u
-                        #
-                        # dzdy_u = scipy.interpolate.griddata((jj_u, ii_u), dzdy_v.isel(ocean_time=0).values,
-                        #                                     tuple((numpy.ravel(ii_v), numpy.ravel(jj_v))))
-                        # dzdx_v = scipy.interpolate.griddata((jj_v, ii_v), dzdx_u.isel(ocean_time=0).values,
-                        #                                     tuple((numpy.ravel(ii_u), numpy.ravel(jj_u))))
-                        #
-                        # ug = -gravitational_acceleration / coriolis_u * dzdy_u
-                        # vg = gravitational_acceleration / coriolis_v * dzdx_v
-
-                        first_term = gravitational_acceleration / coriolis
+                        first_term = gravitational_acceleration / coriolis_frequencies
 
                         raw_ssu = numpy.repeat(numpy.expand_dims(-first_term * input_dataset['pm'], axis=0), len(time),
                                                axis=0) * numpy.concatenate(
@@ -805,6 +802,9 @@ if __name__ == '__main__':
                         raw_ssu[numpy.isnan(raw_ssu)] = 0
                         raw_ssv[numpy.isnan(raw_ssv)] = 0
                     else:
+                        if theta is None:
+                            theta = input_dataset['angle'].values
+
                         if u_lon is None or u_lat is None or v_lon is None or v_lat is None:
                             u_lon = input_dataset['lon_u'].values
                             u_lat = input_dataset['lat_u'].values
@@ -822,38 +822,62 @@ if __name__ == '__main__':
                         extra_row = numpy.empty((time.shape[0], 1, v_lon.shape[1]), dtype=v_lon.dtype)
                         extra_row[:] = 0
 
-                        raw_ssu = numpy.concatenate((input_dataset['u_sur'].values, extra_column), axis=2)
-                        raw_ssv = numpy.concatenate((input_dataset['v_sur'].values, extra_row), axis=1)
+                    raw_ssu = numpy.concatenate((input_dataset['u_sur'].values, extra_column), axis=2)
+                    raw_ssv = numpy.concatenate((input_dataset['v_sur'].values, extra_row), axis=1)
 
-                    # correct for angles
-                    sin_theta = numpy.repeat(numpy.expand_dims(numpy.sin(input_dataset['angle']), axis=0), len(time),
-                                             axis=0)
-                    cos_theta = numpy.repeat(numpy.expand_dims(numpy.cos(input_dataset['angle']), axis=0), len(time),
-                                             axis=0)
-                    rotated_ssu = raw_ssu * cos_theta - raw_ssv * sin_theta
-                    rotated_ssv = raw_ssu * sin_theta + raw_ssv * cos_theta
+                    # # correct for angles
+                    # sin_theta = numpy.repeat(numpy.expand_dims(numpy.sin(input_dataset['angle']), axis=0), len(time),
+                    #                          axis=0)
+                    # cos_theta = numpy.repeat(numpy.expand_dims(numpy.cos(input_dataset['angle']), axis=0), len(time),
+                    #                          axis=0)
+                    # rotated_ssu = raw_ssu * cos_theta - raw_ssv * sin_theta
+                    # rotated_ssv = raw_ssu * sin_theta + raw_ssv * cos_theta
 
-                    combined_ssu.append(rotated_ssu)
-                    combined_ssv.append(rotated_ssv)
+                    combined_ssu.append(raw_ssu)
+                    combined_ssv.append(raw_ssv)
 
                 combined_ssu = numpy.concatenate(combined_ssu, axis=0)
                 combined_ssv = numpy.concatenate(combined_ssv, axis=0)
 
-                ssu_dataarray = xarray.DataArray(combined_ssu,
-                                                 coords={'time': combined_time, 'u_lon': (('u_eta', 'u_xi'), u_lon),
-                                                         'u_lat': (('u_eta', 'u_xi'), u_lat)},
-                                                 dims=('time', 'u_eta', 'u_xi'))
-                ssv_dataarray = xarray.DataArray(combined_ssv,
-                                                 coords={'time': combined_time, 'v_lon': (('v_eta', 'v_xi'), v_lon),
-                                                         'v_lat': (('v_eta', 'v_xi'), v_lat)},
-                                                 dims=('time', 'v_eta', 'v_xi'))
+                u_x, u_y = rotated_pole.rotate_coordinates((u_lon, u_lat))
+                v_x, v_y = rotated_pole.rotate_coordinates((v_lon, v_lat))
 
-                vector_dataset = xarray.Dataset({'ssu': ssu_dataarray, 'ssv': ssv_dataarray})
+                ssu_dataarray = xarray.DataArray(combined_ssu,
+                                                 coords={'time': combined_time, 'u_x': u_x[:, 0], 'u_y': u_y[0, :]},
+                                                 dims=('time', 'u_x', 'u_y'))
+                ssv_dataarray = xarray.DataArray(combined_ssv,
+                                                 coords={'time': combined_time, 'v_x': v_x[:, 0], 'v_y': v_y[0, :]},
+                                                 dims=('time', 'v_x', 'v_y'))
+                theta_dataarray = xarray.DataArray(theta, coords={'v_x': v_x[:, 0], 'v_y': v_y[0, :]},
+                                                   dims=('v_x', 'v_y'))
+
+                # ssu_dataarray = xarray.DataArray(combined_ssu,
+                #                                  coords={'time': combined_time, 'u_lon': (('u_eta', 'u_xi'), u_lon),
+                #                                          'u_lat': (('u_eta', 'u_xi'), u_lat)},
+                #                                  dims=('time', 'u_eta', 'u_xi'))
+                # ssv_dataarray = xarray.DataArray(combined_ssv,
+                #                                  coords={'time': combined_time, 'v_lon': (('v_eta', 'v_xi'), v_lon),
+                #                                          'v_lat': (('v_eta', 'v_xi'), v_lat)},
+                #                                  dims=('time', 'v_eta', 'v_xi'))
+
+                vector_dataset = xarray.Dataset({'ssu': ssu_dataarray, 'ssv': ssv_dataarray, 'angle': theta_dataarray})
                 vector_dataset.to_netcdf(data_path)
             else:
                 raise ValueError(f'Source not recognized: "{source}"')
         else:
             vector_dataset = xarray.open_dataset(data_path)
+
+        # schema = {'geometry': 'Point', 'properties': {'u': 'float', 'v': 'float'}}
+        #
+        # for layer_time in vector_dataset['time']:
+        #     points = zip(*rotated_pole.unrotate_coordinates((vector_dataset['u_x'], vector_dataset['u_y'])))
+        #
+        #     records = [dict(zip(('geometry', 'properties'), (points, dict(zip(('u', 'v'), (vector_dataset['u'], vector_dataset['v']))))))]
+        #
+        #     with fiona.open(os.path.join(DATA_DIR, 'output', 'test', 'ssuv.gpkg'), 'w', 'GPKG', schema,
+        #                     crs=fiona.crs.from_epsg(3857),
+        #                     layer=f'vectors_{layer_time.strftime("%Y%m%d%H%M%S")}') as output_layer:
+        #         output_layer.writerecords(records)
 
         if time_delta != datetime.timedelta(seconds=(numpy.diff(vector_dataset['time'][0:2]) * 1e-9).item()):
             if time_delta == datetime.timedelta(days=1):
@@ -873,6 +897,15 @@ if __name__ == '__main__':
     #
     # pyplot.quiver(numpy.flip(numpy.ma.array(u, mask=u == 0)))
     # pyplot.plot(eta_index, xi_index, 'o')
+    # pyplot.show()
+
+    # study_point = velocity_field.rotated_pole.rotate_coordinates(contour_centers['A4'])
+    #
+    # x_slice = slice(study_point[0] - 1, study_point[0] + 1)
+    # y_slice = slice(study_point[1] - 1, study_point[1] + 1)
+    #
+    # pyplot.quiver(velocity_field.dataset['u'].sel(time=start_time, u_x=x_slice, u_y=y_slice),
+    #               velocity_field.dataset['v'].sel(time=start_time, v_x=x_slice, v_y=y_slice))
     # pyplot.show()
 
     contours = {}
@@ -899,7 +932,7 @@ if __name__ == '__main__':
     # add value fields to schema
     schema['properties'].update({'area': 'float', 'perimeter': 'float'})
 
-    with fiona.open(output_path, 'w', 'GPKG', schema, crs=fiona_WebMercator, layer=layer_name) as output_file:
+    with fiona.open(output_path, 'w', 'GPKG', schema, crs=fiona.crs.from_epsg(4326), layer=layer_name) as output_layer:
         for contour_id, contour in contours.items():
             polygons = track_contour(contour, time_deltas)
 
@@ -908,7 +941,7 @@ if __name__ == '__main__':
                                        'perimeter': polygon.length}} for
                        contour_time, polygon in polygons.items()]
 
-            output_file.writerecords(records)
+            output_layer.writerecords(records)
 
         # with futures.ThreadPoolExecutor() as concurrency_pool:
         #     running_futures = [concurrency_pool.submit(track_contour, contour, time_deltas) for contour in contours]
