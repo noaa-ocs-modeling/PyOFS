@@ -250,13 +250,16 @@ class RotatedPoleCoordinateSystem:
 
         self.pole = pole if type(pole) is numpy.array else numpy.array(pole)
 
-    def rotate_coordinates(self, point: Tuple[float, float]) -> tuple:
+    def rotate_coordinates(self, point: Tuple[float, float], projection: pyproj.Proj = None) -> tuple:
         """
         Convert longitude and latitude to rotated pole coordinates.
 
         :param point: unrotated coordinates
         :return: coordinates rotated around pole
         """
+
+        if projection is not None:
+            point = pyproj.transform(projection, pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs'), point[0], point[1])
 
         if type(point) is not numpy.array:
             point = numpy.array(point)
