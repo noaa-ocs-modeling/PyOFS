@@ -10,6 +10,7 @@ Created on Feb 27, 2019
 import datetime
 import os
 from concurrent import futures
+from itertools import repeat
 from typing import List, Tuple, Union, Dict
 
 import cartopy.feature
@@ -22,13 +23,6 @@ import xarray
 from matplotlib import pyplot, quiver
 
 from PyOFS import utilities
-
-WGS84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
-WebMercator = pyproj.Proj(
-    '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs')
-
-GRAVITATIONAL_ACCELERATION = 9.80665
-SIDEREAL_ROTATION_PERIOD = datetime.timedelta(hours=23, minutes=56, seconds=4.1)
 
 
 class VectorField:
@@ -131,7 +125,7 @@ class RankineVortex(VectorField):
         :param time_deltas: time differences
         """
 
-        self.center = numpy.array(pyproj.transform(WGS84, WebMercator, *center))
+        self.center = numpy.array(pyproj.transform(utilities.WGS84, utilities.WebMercator, *center))
         self.radius = radius
         self.angular_velocity = 2 * math.pi / period.total_seconds()
 
@@ -165,7 +159,7 @@ class RankineVortex(VectorField):
                            point_index in range(0, num_points + 1)])
 
         vectors = [self[point, datetime.datetime.now()] for point in points]
-        points = list(zip(*pyproj.transform(WebMercator, WGS84, *zip(*points))))
+        points = list(zip(*pyproj.transform(utilities.WebMercator, utilities.WGS84, *zip(*points))))
 
         quiver_plot = axis.quiver(*zip(*points), *zip(*vectors), units='width', **kwargs)
         axis.quiverkey(quiver_plot, 0.9, 0.9, 1, r'$1 \frac{m}{s}$', labelpos='E', coordinates='figure')
@@ -192,12 +186,12 @@ class VectorDataset(VectorField):
         :param coordinate_system: coordinate system of observation
         """
 
-        self.coordinate_system = coordinate_system if coordinate_system is not None else WGS84
+        self.coordinate_system = coordinate_system if coordinate_system is not None else utilities.WGS84
 
         variables_to_rename = {u_name: 'u', v_name: 'v', x_name: 'x', y_name: 'y', t_name: 'time'}
         self.dataset = dataset.rename(variables_to_rename)
 
-        x, y = pyproj.transform(self.coordinate_system, WebMercator,
+        x, y = pyproj.transform(self.coordinate_system, utilities.WebMercator,
                                 *numpy.meshgrid(self.dataset['x'].values, self.dataset['y'].values))
 
         self.dataset['x'] = x[0, :]
@@ -206,7 +200,7 @@ class VectorDataset(VectorField):
         super().__init__(numpy.diff(self.dataset['time'].values))
 
     def interp(self, variable: str, point: numpy.array, time: datetime.datetime) -> xarray.DataArray:
-        transformed_point = pyproj.transform(WebMercator, self.coordinate_system, point[0], point[1])
+        transformed_point = pyproj.transform(utilities.WebMercator, self.coordinate_system, point[0], point[1])
 
         x_name = f'{variable}_x'
         y_name = f'{variable}_y'
@@ -247,7 +241,7 @@ class VectorDataset(VectorField):
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
-        lon, lat = pyproj.transform(WebMercator, WGS84,
+        lon, lat = pyproj.transform(utilities.WebMercator, utilities.WGS84,
                                     *numpy.meshgrid(self.dataset['x'].values, self.dataset['y'].values))
 
         quiver_plot = axis.quiver(lon, lat, self.dataset['u'].sel(time=time, method='nearest'),
@@ -330,12 +324,12 @@ class ROMSGridVectorDataset(VectorField):
             return (cell.interp({'time': time}) if 'time' in cell.dims else cell).values
 
     def u(self, point: numpy.array, time: datetime.datetime) -> float:
-        return self.interp('u', point, time, WebMercator)
+        return self.interp('u', point, time, utilities.WebMercator)
 
         # / (geodetic_radius(point[1]) * numpy.cos(point[1] * numpy.pi / 180)) * 180 / numpy.pi
 
     def v(self, point: numpy.array, time: datetime.datetime) -> float:
-        return self.interp('v', point, time, WebMercator)
+        return self.interp('v', point, time, utilities.WebMercator)
         # / geodetic_radius(point[1]) * 180 / numpy.pi
 
     def __getitem__(self, position: Tuple[numpy.array, datetime.datetime]) -> numpy.array:
@@ -344,7 +338,7 @@ class ROMSGridVectorDataset(VectorField):
         vector[numpy.isnan(vector)] = 0
 
         # correct for angles
-        rotated_point = numpy.array(self.rotated_pole.rotate_coordinates(point, WebMercator))
+        rotated_point = numpy.array(self.rotated_pole.rotate_coordinates(point, utilities.WebMercator))
         angle_x_name, angle_y_name = self.grid_angle_sines.dims
         grid_angle_sines = []
         grid_angle_cosines = []
@@ -462,10 +456,10 @@ class Particle:
         :return tuple of coordinates
         """
 
-        if projection is None or projection == WebMercator:
+        if projection is None or projection == utilities.WebMercator:
             return self.locations[-1]
         else:
-            return pyproj.transform(WebMercator, projection, *self.locations[-1])
+            return pyproj.transform(utilities.WebMercator, projection, *self.locations[-1])
 
     def geometry(self) -> shapely.geometry.Point:
         """
@@ -491,11 +485,12 @@ class Particle:
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
-        return axis.plot(*pyproj.transform(WebMercator, WGS84, *zip(*self.locations[locations])), linestyle='--',
+        return axis.plot(*pyproj.transform(utilities.WebMercator, utilities.WGS84, *zip(*self.locations[locations])),
+                         linestyle='--',
                          marker='o', **kwargs)
 
     def __str__(self) -> str:
-        return f'{self.time} {self.coordinates(WGS84)} -> {self.vector}'
+        return f'{self.time} {self.coordinates(utilities.WGS84)} -> {self.vector}'
 
     def __repr__(self):
         return str(self)
@@ -521,9 +516,8 @@ class ParticleContour:
         vectors = self.field[numpy.array(points).T, self.time]
 
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            running_futures = [concurrency_pool.submit(Particle, point, time, field, vector) for point, vector in
-                               zip(points, zip(vectors[0], vectors[1]))]
-            self.particles = [completed_future.result() for completed_future in futures.as_completed(running_futures)]
+            self.particles = list(concurrency_pool.map(Particle, points, repeat(self.time), repeat(self.field),
+                                                       zip(vectors[0], vectors[1])))
 
     def step(self, delta_t: datetime.timedelta = None, order: int = 1):
         """
@@ -586,8 +580,9 @@ class ParticleContour:
         if axis is None:
             axis = pyplot.axes()
 
-        return axis.plot(*zip(*[pyproj.transform(WebMercator, WGS84, *particle.coordinates()) for particle in
-                                self.particles + [self.particles[0]]]), **kwargs)
+        return axis.plot(
+            *zip(*[pyproj.transform(utilities.WebMercator, utilities.WGS84, *particle.coordinates()) for particle in
+                   self.particles + [self.particles[0]]]), **kwargs)
 
     def geometry(self) -> shapely.geometry.Polygon:
         return shapely.geometry.Polygon([particle.coordinates() for particle in self.particles])
@@ -615,7 +610,7 @@ class CircleContour(ParticleContour):
         :param interval: interval between points in m
         """
 
-        center_x, center_y = pyproj.transform(WGS84, WebMercator, center[0], center[1])
+        center_x, center_y = pyproj.transform(utilities.WGS84, utilities.WebMercator, center[0], center[1])
 
         num_points = round(2 * math.pi * radius / interval)
         points = []
@@ -626,8 +621,7 @@ class CircleContour(ParticleContour):
             # points.append(pyproj.transform(WebMercator, WGS84, point_x, point_y))
             points.append((point_x, point_y))
 
-        # points = list(zip(*pyproj.transform(WebMercator, WGS84, *shapely.geometry.Point(center_x, center_y).buffer(
-        #     radius).exterior.coords.xy)))
+        # points = list(zip(*shapely.geometry.Point(center_x, center_y).buffer(radius).exterior.coords.xy))
 
         super().__init__(points, time, field)
 
@@ -650,14 +644,14 @@ class RectangleContour(ParticleContour):
         :param interval: interval between points in meters
         """
 
-        corners = {'sw': pyproj.transform(WGS84, WebMercator, west_lon, south_lat),
-                   'nw': pyproj.transform(WGS84, WebMercator, west_lon, north_lat),
-                   'ne': pyproj.transform(WGS84, WebMercator, east_lon, north_lat),
-                   'se': pyproj.transform(WGS84, WebMercator, east_lon, south_lat)}
+        corners = {'sw': pyproj.transform(utilities.WGS84, utilities.WebMercator, west_lon, south_lat),
+                   'nw': pyproj.transform(utilities.WGS84, utilities.WebMercator, west_lon, north_lat),
+                   'ne': pyproj.transform(utilities.WGS84, utilities.WebMercator, east_lon, north_lat),
+                   'se': pyproj.transform(utilities.WGS84, utilities.WebMercator, east_lon, south_lat)}
         points = []
 
         for corner_name, corner in corners.items():
-            points.append(pyproj.transform(WebMercator, WGS84, *corner))
+            points.append(pyproj.transform(utilities.WebMercator, utilities.WGS84, *corner))
 
             if corner_name is 'sw':
                 edge_length = corners['nw'][1] - corners['sw'][1]
@@ -705,7 +699,7 @@ class PointContour(ParticleContour):
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
-        lon, lat = pyproj.transform(WebMercator, WGS84, *self.particles[0].coordinates())
+        lon, lat = pyproj.transform(utilities.WebMercator, utilities.WGS84, *self.particles[0].coordinates())
 
         return axis.plot(lon, lat, **kwargs)
 
@@ -713,74 +707,13 @@ class PointContour(ParticleContour):
         return f'point contour at time {self.time} at {self.coordinates()}'
 
 
-def geodetic_radius(latitude: float) -> float:
-    """
-    Get the approximate radius of the Earth, using the WGS84 ellipsoid at a given latitude.
-
-    :param latitude: latitude in degrees
-    :return: WGS84 ellipsoid radius
-    """
-
-    semimajor_radius = 6378137
-    semiminor_radius = 6356752.314245
-
-    sine_latitude = numpy.sin(latitude * numpy.pi / 180) * 180 / numpy.pi
-    cosine_latitude = numpy.cos(latitude * numpy.pi / 180) * 180 / numpy.pi
-
-    return numpy.sqrt(
-        ((semimajor_radius ** 2 * cosine_latitude) ** 2 + (semiminor_radius ** 2 + sine_latitude) ** 2) / (
-                (semimajor_radius * cosine_latitude) ** 2 + (semiminor_radius + sine_latitude) ** 2))
-
-
-def rossby_radius(latitude: float, barotropic: bool = False) -> float:
-    """
-    Get the Rossby deformation radius given a latitude and water depth.
-
-    :param latitude: latitude in degrees
-    :param barotropic: whether to assume a barotropic ocean
-    :return: Rossby radius
-    """
-
-    coriolis_frequency = numpy.sin(latitude * numpy.pi / 180) * 4 * numpy.pi / SIDEREAL_ROTATION_PERIOD.total_seconds()
-
-    if barotropic:
-        water_depth = 3688.08
-        rossby_radius = numpy.sqrt(GRAVITATIONAL_ACCELERATION * water_depth) / coriolis_frequency
-    else:
-        # TODO find potential density and scale height
-        potential_density = None
-        brunt_vaisala_frequency = numpy.sqrt(-GRAVITATIONAL_ACCELERATION / potential_density)
-        scale_height = None
-        rossby_radius = brunt_vaisala_frequency * scale_height / (numpy.pi * coriolis_frequency)
-
-    return rossby_radius
-
-
-def translate_geographic_coordinates(point: numpy.array, offset: numpy.array) -> numpy.array:
-    """
-    Add meter offset to geographic coordinates using WebMercator.
-
-    :param point: geographic coordinates
-    :param offset: translation vector in meters
-    :return: new geographic coordinates
-    """
-
-    if type(point) is not numpy.array:
-        point = numpy.array(point)
-
-    if type(offset) is not numpy.array:
-        offset = numpy.array(offset)
-
-    return numpy.array(pyproj.transform(WebMercator, WGS84, *(pyproj.transform(WGS84, WebMercator, *point)) + offset))
-
-
 def create_contour(contour_center: tuple, contour_radius: float, start_time: datetime.datetime,
                    velocity_field: VectorField, contour_shape: str) -> ParticleContour:
     if contour_shape == 'circle':
         return CircleContour(contour_center, contour_radius, start_time, velocity_field)
     elif contour_shape == 'square':
-        southwest_corner = translate_geographic_coordinates(contour_center, -contour_radius)
-        northeast_corner = translate_geographic_coordinates(contour_center, contour_radius)
+        southwest_corner = utilities.translate_geographic_coordinates(contour_center, -contour_radius)
+        northeast_corner = utilities.translate_geographic_coordinates(contour_center, contour_radius)
         return RectangleContour(southwest_corner[0], northeast_corner[0], southwest_corner[1],
                                 northeast_corner[1], start_time, velocity_field)
     else:
@@ -823,7 +756,7 @@ if __name__ == '__main__':
     contour_shape = 'circle'
     order = 2
 
-    contour_radius = 100000
+    contour_radius = 50000
 
     contour_centers = {}
     start_time = datetime.datetime(2016, 9, 25, 1)
@@ -845,18 +778,22 @@ if __name__ == '__main__':
             contour_id = point['properties']['name']
             contour_centers[contour_id] = point['geometry']['coordinates']
 
-    print(rossby_radius(numpy.array(sorted([contour_center[1] for contour_center in contour_centers.values()]))))
+    rossby_radii = utilities.rossby_deformation_radius(
+        numpy.array(sorted([contour_center[1] for contour_center in contour_centers.values()])))
+    print(rossby_radii)
 
     print(f'[{datetime.datetime.now()}]: Creating velocity field...')
     if source == 'rankine':
         vortex_radius = contour_radius * 5
-        vortex_center = translate_geographic_coordinates(next(iter(contour_centers.values())),
-                                                         numpy.array([contour_radius * -2, contour_radius * -2]))
+        vortex_center = utilities.translate_geographic_coordinates(next(iter(contour_centers.values())),
+                                                                   numpy.array(
+                                                                       [contour_radius * -2, contour_radius * -2]))
         vortex_period = datetime.timedelta(days=5)
         velocity_field = RankineVortex(vortex_center, vortex_radius, vortex_period, time_deltas)
 
         radii = range(1, vortex_radius * 2, 50)
-        points = [numpy.array(pyproj.transform(WGS84, WebMercator, *vortex_center)) + numpy.array([radius, 0]) for
+        points = [numpy.array(pyproj.transform(utilities.WGS84, utilities.WebMercator, *vortex_center)) + numpy.array(
+            [radius, 0]) for
                   radius in radii]
         velocities = [velocity_field.velocity(point, start_time) for point in points]
     else:
@@ -914,7 +851,7 @@ if __name__ == '__main__':
                         delta_y_reciprocal = input_dataset['pm']
                         sea_level = input_dataset['zeta']
 
-                        first_term = GRAVITATIONAL_ACCELERATION / coriolis_frequencies
+                        first_term = utilities.GRAVITATIONAL_ACCELERATION / coriolis_frequencies
 
                         raw_ssu = numpy.repeat(numpy.expand_dims(-first_term * input_dataset['pm'], axis=0), len(time),
                                                axis=0) * numpy.concatenate(

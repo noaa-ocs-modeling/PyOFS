@@ -22,6 +22,13 @@ import xarray
 from shapely.geometry import shape
 from shapely.ops import transform
 
+WGS84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
+WebMercator = pyproj.Proj(
+    '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs')
+
+GRAVITATIONAL_ACCELERATION = 9.80665  # meters per second squared
+SIDEREAL_ROTATION_PERIOD = datetime.timedelta(hours=23, minutes=56, seconds=4.1)
+
 
 def copy_xarray(input_path: str, output_path: str) -> xarray.Dataset:
     """
@@ -387,6 +394,62 @@ def xarray_to_geopackage(input_path: str, output_path: str, epsg: int = 4326):
 
     with fiona.open(output_path, 'w', 'GPKG', schema=schema, crs=fiona.crs.from_epsg(epsg)) as output_file:
         output_file.writerecords(records)
+
+
+def geodetic_radius(latitude: float) -> float:
+    """
+    Get the approximate radius of the Earth, using the WGS84 ellipsoid at a given latitude.
+
+    :param latitude: latitude in degrees
+    :return: WGS84 ellipsoid radius
+    """
+
+    semimajor_radius = 6378137
+    semiminor_radius = 6356752.314245
+
+    sine_latitude = numpy.sin(latitude * numpy.pi / 180) * 180 / numpy.pi
+    cosine_latitude = numpy.cos(latitude * numpy.pi / 180) * 180 / numpy.pi
+
+    return numpy.sqrt(
+        ((semimajor_radius ** 2 * cosine_latitude) ** 2 + (semiminor_radius ** 2 + sine_latitude) ** 2) / (
+                (semimajor_radius * cosine_latitude) ** 2 + (semiminor_radius + sine_latitude) ** 2))
+
+
+def rossby_deformation_radius(latitude: float) -> float:
+    """
+    Get the Rossby deformation radius given a latitude and water depth.
+
+    :param latitude: latitude in degrees
+    :param barotropic: whether to assume a barotropic ocean
+    :return: Rossby radius
+    """
+
+    oceanic_speed_of_sound = 1500  # meters per second
+    oceanic_potential_density = 1025  # kilograms per cubic meter
+
+    coriolis_frequency = numpy.sin(latitude * numpy.pi / 180) * 4 * numpy.pi / SIDEREAL_ROTATION_PERIOD.total_seconds()
+
+    brunt_vaisala_frequency = numpy.sqrt(GRAVITATIONAL_ACCELERATION / oceanic_potential_density)
+    scale_height = oceanic_speed_of_sound ** 2 / GRAVITATIONAL_ACCELERATION
+    return brunt_vaisala_frequency * scale_height / (numpy.pi * coriolis_frequency)
+
+
+def translate_geographic_coordinates(point: numpy.array, offset: numpy.array) -> numpy.array:
+    """
+    Add meter offset to geographic coordinates using WebMercator.
+
+    :param point: geographic coordinates
+    :param offset: translation vector in meters
+    :return: new geographic coordinates
+    """
+
+    if type(point) is not numpy.array:
+        point = numpy.array(point)
+
+    if type(offset) is not numpy.array:
+        offset = numpy.array(offset)
+
+    return numpy.array(pyproj.transform(WebMercator, WGS84, *(pyproj.transform(WGS84, WebMercator, *point)) + offset))
 
 
 if __name__ == '__main__':
