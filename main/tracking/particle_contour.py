@@ -752,7 +752,7 @@ if __name__ == '__main__':
     from PyOFS.model import rtofs, wcofs
     from PyOFS.observation import hf_radar
 
-    source = 'wcofs_qck'
+    source = 'wcofs_qck_geostrophic'
     contour_shape = 'circle'
     order = 2
 
@@ -777,10 +777,6 @@ if __name__ == '__main__':
         for point in contour_centers_file:
             contour_id = point['properties']['name']
             contour_centers[contour_id] = point['geometry']['coordinates']
-
-    rossby_radii = utilities.rossby_deformation_radius(
-        numpy.array(sorted([contour_center[1] for contour_center in contour_centers.values()])))
-    print(rossby_radii)
 
     print(f'[{datetime.datetime.now()}]: Creating velocity field...')
     if source == 'rankine':
@@ -812,7 +808,7 @@ if __name__ == '__main__':
             elif source.upper() == 'WCOFS':
                 source = 'avg' if time_delta.total_seconds() / 3600 / 24 >= 1 else '2ds'
 
-                vector_dataset = wcofs.WCOFSDataset(start_time, source).to_xarray(variables=('ssu', 'ssv'))
+                vector_dataset = wcofs.WCOFSDataset(start_time, source).to_xarray(variables=('ssu', 'ssv', 'angle'))
                 vector_dataset.to_netcdf(data_path)
             if 'WCOFS_QCK' in source.upper():
                 rotated_pole = utilities.RotatedPoleCoordinateSystem(wcofs.ROTATED_POLE)
@@ -834,6 +830,9 @@ if __name__ == '__main__':
 
                 for input_filename in sorted(input_filenames):
                     input_dataset = xarray.open_dataset(os.path.join(qck_path, input_filename))
+
+                    if grid_angles is None:
+                        grid_angles = input_dataset['angle'].values
 
                     time = input_dataset['ocean_time'].values
                     combined_time.extend(time)
@@ -865,9 +864,6 @@ if __name__ == '__main__':
                         raw_ssu[numpy.isnan(raw_ssu)] = 0
                         raw_ssv[numpy.isnan(raw_ssv)] = 0
                     else:
-                        if grid_angles is None:
-                            grid_angles = input_dataset['angle'].values
-
                         if rho_lon is None or rho_lat is None or u_lon is None or u_lat is None or v_lon is None or v_lat is None:
                             rho_lon = input_dataset['lon_rho'].values
                             rho_lat = input_dataset['lat_rho'].values
@@ -888,8 +884,8 @@ if __name__ == '__main__':
                         extra_row = numpy.empty((time.shape[0], 1, v_lon.shape[1]), dtype=v_lon.dtype)
                         extra_row[:] = 0
 
-                    raw_ssu = numpy.concatenate((input_dataset['u_sur'].values, extra_column), axis=2)
-                    raw_ssv = numpy.concatenate((input_dataset['v_sur'].values, extra_row), axis=1)
+                        raw_ssu = numpy.concatenate((input_dataset['u_sur'].values, extra_column), axis=2)
+                        raw_ssv = numpy.concatenate((input_dataset['v_sur'].values, extra_row), axis=1)
 
                     # # correct for angles
                     # sin_theta = numpy.repeat(numpy.expand_dims(numpy.sin(input_dataset['angle']), axis=0), len(time),

@@ -37,9 +37,8 @@ WCOFS_GCS = pyproj.Proj(
 
 GRID_LOCATIONS = {'face': 'rho', 'edge1': 'u', 'edge2': 'v', 'node': 'psi'}
 COORDINATE_VARIABLES = ['grid', 'ocean_time', 'lon_rho', 'lat_rho', 'lon_u', 'lat_u', 'lon_v', 'lat_v', 'lon_psi',
-                        'lat_psi',
-                        'angle', 'pm', 'pn']
-STATIC_VARIABLES = ['h', 'f', 'mask_rho', 'mask_u', 'mask_v', 'mask_psi']
+                        'lat_psi']
+STATIC_VARIABLES = ['h', 'f', 'mask_rho', 'mask_u', 'mask_v', 'mask_psi', 'angle', 'pm', 'pn']
 DATA_VARIABLES = {
     'sst': {'2ds': 'temp_sur', 'avg': 'temp'},
     'ssu': {'2ds': 'u_sur', 'avg': 'u'},
