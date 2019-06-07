@@ -655,13 +655,8 @@ class WCOFSDataset:
         rho_lon = WCOFSDataset.data_coordinates['rho']['lon'][row, col]
         rho_lat = WCOFSDataset.data_coordinates['rho']['lat'][row, col]
 
-        record = {
-            'geometry': {
-                'id': feature_index, 'type': 'Point', 'coordinates': (float(rho_lon), float(rho_lat))
-            }, 'properties': {
-                'row': row, 'col': col, 'rho_lon': float(rho_lon), 'rho_lat': float(rho_lat)
-            }
-        }
+        record = {'id': feature_index, 'geometry': {'type': 'Point', 'coordinates': (float(rho_lon), float(rho_lat))},
+                  'properties': {'row': row, 'col': col, 'rho_lon': float(rho_lon), 'rho_lat': float(rho_lat)}}
 
         for variable in variable_means.keys():
             record['properties'][variable] = float(variable_means[variable][row, col])

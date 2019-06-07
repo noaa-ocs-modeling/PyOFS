@@ -23,7 +23,7 @@ from shapely.geometry import shape
 from shapely.ops import transform
 
 WGS84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
-WebMercator = pyproj.Proj(
+WEB_MERCATOR = pyproj.Proj(
     '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs')
 
 GRAVITATIONAL_ACCELERATION = 9.80665  # meters per second squared
@@ -257,7 +257,7 @@ class RotatedPoleCoordinateSystem:
 
         self.pole = pole if type(pole) is numpy.array else numpy.array(pole)
 
-    def rotate_coordinates(self, point: Tuple[float, float], projection: pyproj.Proj = None) -> tuple:
+    def rotate_coordinates(self, point: numpy.array, projection: pyproj.Proj = None) -> numpy.array:
         """
         Convert longitude and latitude to rotated pole coordinates.
 
@@ -265,11 +265,14 @@ class RotatedPoleCoordinateSystem:
         :return: coordinates rotated around pole
         """
 
-        if projection is not None:
-            point = pyproj.transform(projection, pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs'), point[0], point[1])
-
         if type(point) is not numpy.array:
             point = numpy.array(point)
+
+        if len(point.shape) > 1:
+            point = point.T
+
+        if projection is not None:
+            point = numpy.array(pyproj.transform(projection, WGS84, point[0], point[1]))
 
         # convert degrees to radians
         point = point * numpy.pi / 180
@@ -291,9 +294,9 @@ class RotatedPoleCoordinateSystem:
             cosine_longitude * cosine_latitude * cosine_pole_latitude + sine_latitude * sine_pole_latitude)
 
         # convert radians to degrees
-        return rotated_longitude * 180 / numpy.pi, rotated_latitude * 180 / numpy.pi
+        return numpy.array((rotated_longitude * 180 / numpy.pi, rotated_latitude * 180 / numpy.pi))
 
-    def unrotate_coordinates(self, rotated_point: Tuple[float, float]) -> tuple:
+    def unrotate_coordinates(self, rotated_point: numpy.array) -> numpy.array:
         """
         Convert rotated pole coordinates to longitude and latitude.
 
@@ -323,11 +326,11 @@ class RotatedPoleCoordinateSystem:
             -cosine_rotated_longitude * cosine_rotated_latitude * cosine_pole_latitude + sine_rotated_latitude * sine_pole_latitude)
 
         # convert radians to degrees
-        return longitude * 180 / numpy.pi, latitude * 180 / numpy.pi
+        return numpy.array((longitude * 180 / numpy.pi, latitude * 180 / numpy.pi))
 
     @staticmethod
     def find_pole(points: numpy.array, starting_pole: numpy.array, samples: int = 10,
-                  sample_radius: float = 1) -> tuple:
+                  sample_radius: float = 1) -> numpy.array:
         """
         Find pole given points with the same rotated latitude.
 
@@ -449,7 +452,7 @@ def translate_geographic_coordinates(point: numpy.array, offset: numpy.array) ->
     if type(offset) is not numpy.array:
         offset = numpy.array(offset)
 
-    return numpy.array(pyproj.transform(WebMercator, WGS84, *(pyproj.transform(WGS84, WebMercator, *point)) + offset))
+    return numpy.array(pyproj.transform(WEB_MERCATOR, WGS84, *(pyproj.transform(WGS84, WEB_MERCATOR, *point)) + offset))
 
 
 if __name__ == '__main__':
