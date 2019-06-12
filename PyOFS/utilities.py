@@ -268,9 +268,6 @@ class RotatedPoleCoordinateSystem:
         if type(point) is not numpy.array:
             point = numpy.array(point)
 
-        if len(point.shape) > 1:
-            point = point.T
-
         if projection is not None:
             point = numpy.array(pyproj.transform(projection, WGS84, point[0], point[1]))
 

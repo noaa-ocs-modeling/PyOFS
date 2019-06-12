@@ -207,7 +207,7 @@ class VectorDataset(VectorField):
 
         super().__init__(numpy.diff(self.dataset['time'].values))
 
-    def interp(self, variable: str, point: numpy.array, time: datetime.datetime) -> xarray.DataArray:
+    def _interpolate(self, variable: str, point: numpy.array, time: datetime.datetime) -> xarray.DataArray:
         transformed_point = pyproj.transform(utilities.WEB_MERCATOR, self.coordinate_system, point[0], point[1])
 
         x_name = f'{variable}_x'
@@ -228,19 +228,19 @@ class VectorDataset(VectorField):
         cell = self.dataset[variable].sel({'time': time_range, x_name: x_range, y_name: y_range})
 
         if len(transformed_point.shape) > 1:
-            cell = cell._interpolate({'time': time}) if 'time' in cell.dims else cell
+            cell = cell.interp({'time': time}) if 'time' in cell.dims else cell
             return xarray.concat(
-                [cell._interpolate({x_name: location[0], y_name: location[1]}) for location in transformed_point.T],
+                [cell.interp({x_name: location[0], y_name: location[1]}) for location in transformed_point.T],
                 dim='point')
         else:
-            cell = cell._interpolate({x_name: transformed_point[0], y_name: transformed_point[1]})
-            return cell._interpolate({'time': time}) if 'time' in cell.dims else cell
+            cell = cell.interp({x_name: transformed_point[0], y_name: transformed_point[1]})
+            return cell.interp({'time': time}) if 'time' in cell.dims else cell
 
     def u(self, point: numpy.array, time: datetime.datetime) -> float:
-        return self.interp('u', point, time).values
+        return self._interpolate('u', point, time).values
 
     def v(self, point: numpy.array, time: datetime.datetime) -> float:
-        return self.interp('v', point, time).values
+        return self._interpolate('v', point, time).values
 
     def plot(self, time: datetime.datetime, axis: pyplot.Axes = None, **kwargs) -> quiver.Quiver:
         if time is None:
@@ -314,7 +314,7 @@ class ROMSGridVectorDataset(VectorField):
                 xarray.DataArray(numpy.empty((rotated_point.shape[1], rotated_point.shape[1]), dtype=float),
                                  dims=('u_x', 'u_y'), coords={'u_x': rotated_point[0], 'u_y': rotated_point[1]}))
 
-            interpolated = interpolated._interpolate({'time': time}) if 'time' in interpolated.dims else interpolated
+            interpolated = interpolated.interp({'time': time}) if 'time' in interpolated.dims else interpolated
 
             values = []
 
@@ -328,8 +328,8 @@ class ROMSGridVectorDataset(VectorField):
 
             return numpy.array(values)
         else:
-            cell = cell._interpolate({x_name: rotated_point[0], y_name: rotated_point[1]})
-            return (cell._interpolate({'time': time}) if 'time' in cell.dims else cell).values
+            cell = cell.interp({x_name: rotated_point[0], y_name: rotated_point[1]})
+            return (cell.interp({'time': time}) if 'time' in cell.dims else cell).values
 
     def u(self, point: numpy.array, time: datetime.datetime) -> float:
         return self._interpolate('u', point, time)
@@ -552,11 +552,13 @@ class ParticleContour:
         if type(points) is not numpy.array:
             points = numpy.array(points)
 
+        points = points.T
+
         if projection != self.field.projection:
-            points = numpy.array(pyproj.transform(projection, self.field.projection, points[:, 1], points[:, 1])).T
+            points = numpy.array(pyproj.transform(projection, self.field.projection, points[0], points[1]))
 
         self.vertices = points
-        self.vectors = self.field[points, self.time]
+        self._fill_intervals()
 
     def step(self, delta_t: datetime.timedelta = None, order: int = 1):
         """
@@ -596,9 +598,9 @@ class ParticleContour:
         else:
             delta_vector = numpy.array([0, 0])
 
-        self.vertices = self.vertices + delta_vector
         self.time += delta_t
-        self.vectors = self.field[self.vertices, self.time]
+        self.vertices = self.vertices + delta_vector
+        self._fill_intervals()
 
     def plot(self, axis: pyplot.Axes = None, **kwargs) -> pyplot.Line2D:
         """
@@ -612,11 +614,11 @@ class ParticleContour:
             axis = pyplot.axes()
 
         return axis.plot(
-            *zip(*[pyproj.transform(utilities.WEB_MERCATOR, utilities.WGS84, *particle.coordinates()) for particle in
-                   self.particles + [self.particles[0]]]), **kwargs)
+            *zip(*[pyproj.transform(utilities.WEB_MERCATOR, utilities.WGS84, *vertex) for vertex in
+                   list(self.vertices.T) + [self.vertices.T[0]]]), **kwargs)
 
     def geometry(self) -> shapely.geometry.Polygon:
-        return shapely.geometry.Polygon([particle.coordinates() for particle in self.particles])
+        return shapely.geometry.Polygon(self.vertices.T)
 
     def area(self) -> float:
         return self.geometry().area
@@ -624,11 +626,22 @@ class ParticleContour:
     def bounds(self) -> Tuple[float, float, float, float]:
         return self.geometry().bounds
 
-    def _ensure_max_interval(self):
-        pass
+    def _fill_intervals(self):
+        differences = numpy.diff(
+            numpy.concatenate((self.vertices, numpy.expand_dims(self.vertices[:, 0], axis=1)), axis=1), axis=1)
+
+        large_difference_indices = numpy.where(numpy.abs(differences[1] / differences[0]) > self.max_interval)[0]
+
+        if len(large_difference_indices) > 0:
+            new_particles = self.vertices[:, large_difference_indices] + (differences[:, large_difference_indices] / 2)
+            self.vertices = numpy.insert(self.vertices, large_difference_indices, new_particles, axis=1)
+            print(f'Added {len(new_particles.T)} new particle{"s" if len(new_particles.T) > 1 else ""}.')
 
     def __str__(self) -> str:
         return f'contour at time {self.time} with bounds {self.bounds()} and area {self.area()} m^2'
+
+    def __repr__(self) -> str:
+        return str(self)
 
 
 class CircleContour(ParticleContour):
@@ -734,7 +747,7 @@ def create_contour(contour_center: tuple, contour_radius: float, start_time: dat
 
 def track_contour(contour: ParticleContour, time_deltas: List[datetime.timedelta]) -> Dict[
     datetime.datetime, shapely.geometry.Polygon]:
-    print(f'[{datetime.datetime.now()}]: Advecting contour with {len(contour.particles)} particles...')
+    print(f'[{datetime.datetime.now()}]: Advecting contour with {len(contour.vertices.T)} particles...')
 
     polygons = {}
     polygons[contour.time] = contour.geometry()
@@ -768,17 +781,17 @@ if __name__ == '__main__':
     contour_shape = 'circle'
     order = 2
 
-    contour_radius = 50000
+    contour_radius = 10000
 
     contour_centers = {}
     start_time = datetime.datetime(2016, 9, 25, 1)
 
     period = datetime.timedelta(days=4)
-    time_delta = datetime.timedelta(days=1)
+    time_delta = datetime.timedelta(hours=1)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
 
-    output_path = os.path.join(DATA_DIR, 'output', 'test', 'alex_contours.gpkg')
+    output_path = os.path.join(DATA_DIR, 'output', 'test', 'test_contours.gpkg')
     layer_name = f'{source}_{start_time.strftime("%Y%m%dT%H%M%S")}_{(start_time + period).strftime("%Y%m%dT%H%M%S")}_' + \
                  f'{int(time_delta.total_seconds() / 3600)}h'
 
@@ -939,8 +952,8 @@ if __name__ == '__main__':
 
     contours = {}
 
-    # print(f'[{datetime.datetime.now()}]: Creating {len(contour_centers)} initial contours...')
-    #
+    print(f'[{datetime.datetime.now()}]: Creating {len(contour_centers)} initial contours...')
+
     # with futures.ThreadPoolExecutor() as concurrency_pool:
     #     running_futures = {
     #         concurrency_pool.submit(create_contour, contour_center, contour_radius, start_time, velocity_field,

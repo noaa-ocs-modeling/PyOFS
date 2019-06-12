@@ -259,8 +259,7 @@ class WCOFSDataset:
             raise utilities.NoDataError(
                 f'No WCOFS datasets found for {self.model_time} at the given time deltas ({self.time_deltas}).')
 
-    @staticmethod
-    def bounds(variable: str = 'psi') -> tuple:
+    def bounds(self, variable: str = 'psi') -> tuple:
         """
         Returns bounds of grid of given variable.
 
@@ -268,8 +267,8 @@ class WCOFSDataset:
         :return: tuple of (west, north, east, south)
         """
 
-        grid_name = WCOFSDataset.variable_grids[variable]
-        return WCOFSDataset.grid_bounds[grid_name]
+        grid_name = self.variable_grids[variable]
+        return self.grid_bounds[grid_name]
 
     def data(self, variable: str, time_delta: int, native_grid: bool = False) -> numpy.ndarray:
         """
