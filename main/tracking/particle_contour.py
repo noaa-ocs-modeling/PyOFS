@@ -17,6 +17,7 @@ import fiona.crs
 import math
 import numpy
 import pyproj
+import scipy.interpolate
 import shapely.geometry
 import xarray
 from matplotlib import pyplot, quiver
@@ -623,22 +624,51 @@ class ParticleContour:
     def area(self) -> float:
         return self.geometry().area
 
+    def perimeter(self) -> float:
+        return self.geometry().length
+
     def bounds(self) -> Tuple[float, float, float, float]:
         return self.geometry().bounds
 
     def _fill_intervals(self):
-        differences = numpy.diff(
-            numpy.concatenate((self.vertices, numpy.expand_dims(self.vertices[:, 0], axis=1)), axis=1), axis=1)
+        centroid = self.geometry().centroid.xy
+        differences = self.vertices - centroid
 
-        large_difference_indices = numpy.where(numpy.abs(differences[1] / differences[0]) > self.max_interval)[0]
+        original_angles = numpy.arctan2(differences[1], differences[0])
+        original_distances = numpy.sqrt(differences[0] ** 2 + differences[1] ** 2)
+        polar = scipy.interpolate.interp1d(original_angles, original_distances)
+        number_of_vertices = 2 * numpy.pi * numpy.max(original_distances) / self.max_interval
+        angles = numpy.linspace(numpy.min(original_angles), numpy.max(original_angles), number_of_vertices)
+        distances = polar(angles)
 
-        if len(large_difference_indices) > 0:
-            new_particles = self.vertices[:, large_difference_indices] + (differences[:, large_difference_indices] / 2)
-            self.vertices = numpy.insert(self.vertices, large_difference_indices, new_particles, axis=1)
-            print(f'Added {len(new_particles.T)} new particle{"s" if len(new_particles.T) > 1 else ""}.')
+        # pyplot.polar(original_angles, original_distances, 'bo')
+        # pyplot.polar(angles, distances, 'r-')
+        # pyplot.show()
+
+        self.vertices = centroid + numpy.stack((distances * numpy.cos(angles), distances * numpy.sin(angles)))
+
+        # differences = numpy.diff(
+        #     numpy.concatenate((self.vertices, numpy.expand_dims(self.vertices[:, 0], axis=1)), axis=1), axis=1)
+        # distances = numpy.sqrt(differences[0] ** 2 + differences[1] ** 2)
+        # small_distance_indices = numpy.where(distances < self.max_interval)[0]
+        #
+        # if len(small_distance_indices) > 0:
+        #     self.vertices = numpy.delete(self.vertices, small_distance_indices, axis=1)
+        #     print(f'Removed {len(small_distance_indices)} particles.')
+        #
+        # differences = numpy.diff(
+        #     numpy.concatenate((self.vertices, numpy.expand_dims(self.vertices[:, 0], axis=1)), axis=1), axis=1)
+        # distances = numpy.sqrt(differences[0] ** 2 + differences[1] ** 2)
+        # large_distance_indices = numpy.where(distances > self.max_interval)[0]
+        #
+        # if len(large_distance_indices) > 0:
+        #     new_particles = self.vertices[:, large_distance_indices] + (differences[:, large_distance_indices] / 2)
+        #     self.vertices = numpy.insert(self.vertices, large_distance_indices, new_particles, axis=1)
+        #     print(f'Added {len(large_distance_indices)} new particles.')
 
     def __str__(self) -> str:
-        return f'contour at time {self.time} with bounds {self.bounds()} and area {self.area()} m^2'
+        return f'contour with {self.vertices.shape[1]} vertices at time {self.time} with {self.area()} m^2 area and ' + \
+               f'{self.perimeter()} m perimeter'
 
     def __repr__(self) -> str:
         return str(self)
@@ -779,14 +809,14 @@ if __name__ == '__main__':
 
     source = 'wcofs_qck'
     contour_shape = 'circle'
-    order = 2
+    order = 4
 
-    contour_radius = 10000
+    contour_radius = 20000
 
     contour_centers = {}
     start_time = datetime.datetime(2016, 9, 25, 1)
 
-    period = datetime.timedelta(days=4)
+    period = datetime.timedelta(days=1)
     time_delta = datetime.timedelta(hours=1)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
@@ -954,21 +984,21 @@ if __name__ == '__main__':
 
     print(f'[{datetime.datetime.now()}]: Creating {len(contour_centers)} initial contours...')
 
-    # with futures.ThreadPoolExecutor() as concurrency_pool:
-    #     running_futures = {
-    #         concurrency_pool.submit(create_contour, contour_center, contour_radius, start_time, velocity_field,
-    #                                 contour_shape): contour_id for contour_id, contour_center in
-    #         contour_centers.items()}
-    #
-    #     for completed_future in futures.as_completed(running_futures):
-    #         contour_id = running_futures[completed_future]
-    #         contour = completed_future.result()
-    #         contours[contour_id] = contour
-    #         print(f'[{datetime.datetime.now()}]: Contour {contour_id} created: {contour}')
+    with futures.ThreadPoolExecutor() as concurrency_pool:
+        running_futures = {
+            concurrency_pool.submit(create_contour, contour_center, contour_radius, start_time, velocity_field,
+                                    contour_shape): contour_id for contour_id, contour_center in
+            contour_centers.items()}
 
-    with fiona.open(r"C:\Data\develop\output\test\alex_contours.gpkg") as contour_file:
-        contours['1'] = ParticleContour(next(iter(contour_file))['geometry']['coordinates'][0], start_time,
-                                        velocity_field)
+        for completed_future in futures.as_completed(running_futures):
+            contour_id = running_futures[completed_future]
+            contour = completed_future.result()
+            contours[contour_id] = contour
+            print(f'[{datetime.datetime.now()}]: Contour {contour_id} created: {contour}')
+
+    # with fiona.open(r"C:\Data\develop\output\test\alex_contours.gpkg") as contour_file:
+    #     contours['1'] = ParticleContour(next(iter(contour_file))['geometry']['coordinates'][0], start_time,
+    #                                     velocity_field)
 
     print(f'[{datetime.datetime.now()}]: Contours created.')
 

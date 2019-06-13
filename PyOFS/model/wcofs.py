@@ -296,10 +296,10 @@ class WCOFSDataset:
                         # get surface layer; the last layer (of 40) at dimension 1
                         if not native_grid and variable in ['ssu', 'ssv']:
                             # correct for angles
-                            raw_u = self.datasets[dataset_index][DATA_VARIABLES['ssu'][self.source]][day_index,
-                                    -1, :-1, :].values
-                            raw_v = self.datasets[dataset_index][DATA_VARIABLES['ssv'][self.source]][day_index,
-                                    -1, :, :-1].values
+                            raw_u = self.datasets[dataset_index][DATA_VARIABLES['ssu'][self.source]][day_index, -1, :-1,
+                                    :].values
+                            raw_v = self.datasets[dataset_index][DATA_VARIABLES['ssv'][self.source]][day_index, -1, :,
+                                    :-1].values
                             theta = WCOFSDataset.angle[:-1, :-1]
 
                             if variable == 'ssu':
@@ -320,8 +320,12 @@ class WCOFSDataset:
                                 output_data = data_variable[day_index, -1, :, :].values
             else:
                 with self.dataset_locks[time_delta]:
-                    output_data = self.datasets[time_delta][DATA_VARIABLES[variable][self.source]][0, :,
-                                  :].values
+                    output_data = self.datasets[time_delta][DATA_VARIABLES[variable][self.source]][0, :, :].values
+
+        large_value_indices = numpy.where(output_data > 1e10)
+
+        if len(large_value_indices) > 0:
+            output_data[large_value_indices] = numpy.nan
 
         return output_data
 
