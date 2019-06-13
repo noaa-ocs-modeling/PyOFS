@@ -37,9 +37,8 @@ WCOFS_GCS = pyproj.Proj(
 
 GRID_LOCATIONS = {'face': 'rho', 'edge1': 'u', 'edge2': 'v', 'node': 'psi'}
 COORDINATE_VARIABLES = ['grid', 'ocean_time', 'lon_rho', 'lat_rho', 'lon_u', 'lat_u', 'lon_v', 'lat_v', 'lon_psi',
-                        'lat_psi',
-                        'angle', 'pm', 'pn']
-STATIC_VARIABLES = ['h', 'f', 'mask_rho', 'mask_u', 'mask_v', 'mask_psi']
+                        'lat_psi']
+STATIC_VARIABLES = ['h', 'f', 'mask_rho', 'mask_u', 'mask_v', 'mask_psi', 'angle', 'pm', 'pn']
 DATA_VARIABLES = {
     'sst': {'2ds': 'temp_sur', 'avg': 'temp'},
     'ssu': {'2ds': 'u_sur', 'avg': 'u'},
@@ -134,20 +133,20 @@ class WCOFSDataset:
         month_string = self.model_time.strftime('%Y%m')
         date_string = self.model_time.strftime('%Y%m%d')
 
-        self.netcdf_datasets = {}
+        self.datasets = {}
 
         for source in SOURCE_URLS:
             if self.source == 'avg':
                 for day in self.time_deltas:
-                    if (day < 0 and -1 in self.netcdf_datasets.keys()) or (
-                            day >= 0 and 1 in self.netcdf_datasets.keys()):
+                    if (day < 0 and -1 in self.datasets.keys()) or (
+                            day >= 0 and 1 in self.datasets.keys()):
                         continue
 
                     model_type = 'nowcast' if day < 0 else 'forecast'
                     url = f'{source}/{month_string}/nos.{self.wcofs_string}.avg.{model_type}.{date_string}.t{WCOFS_MODEL_RUN_HOUR:02}z.nc'
 
                     try:
-                        self.netcdf_datasets[-1 if day < 0 else 1] = xarray.open_dataset(url, decode_times=False)
+                        self.datasets[-1 if day < 0 else 1] = xarray.open_dataset(url, decode_times=False)
                         self.source_url = source
                     except OSError as error:
                         logging.warning(error)
@@ -158,15 +157,15 @@ class WCOFSDataset:
                           f'{abs(hour):03}.{date_string}.t{WCOFS_MODEL_RUN_HOUR:02}z.nc'
 
                     try:
-                        self.netcdf_datasets[hour] = xarray.open_dataset(url, decode_times=False)
+                        self.datasets[hour] = xarray.open_dataset(url, decode_times=False)
                         self.source_url = source
                     except OSError as error:
                         logging.warning(error)
 
-        if len(self.netcdf_datasets) > 0:
-            self.dataset_locks = {time_delta: threading.Lock() for time_delta in self.netcdf_datasets.keys()}
+        if len(self.datasets) > 0:
+            self.dataset_locks = {time_delta: threading.Lock() for time_delta in self.datasets.keys()}
 
-            sample_dataset = next(iter(self.netcdf_datasets.values()))
+            sample_dataset = next(iter(self.datasets.values()))
 
             with GLOBAL_LOCK:
                 if WCOFSDataset.variable_grids is None:
@@ -260,8 +259,7 @@ class WCOFSDataset:
             raise utilities.NoDataError(
                 f'No WCOFS datasets found for {self.model_time} at the given time deltas ({self.time_deltas}).')
 
-    @staticmethod
-    def bounds(variable: str = 'psi') -> tuple:
+    def bounds(self, variable: str = 'psi') -> tuple:
         """
         Returns bounds of grid of given variable.
 
@@ -269,8 +267,8 @@ class WCOFSDataset:
         :return: tuple of (west, north, east, south)
         """
 
-        grid_name = WCOFSDataset.variable_grids[variable]
-        return WCOFSDataset.grid_bounds[grid_name]
+        grid_name = self.variable_grids[variable]
+        return self.grid_bounds[grid_name]
 
     def data(self, variable: str, time_delta: int, native_grid: bool = False) -> numpy.ndarray:
         """
@@ -298,10 +296,10 @@ class WCOFSDataset:
                         # get surface layer; the last layer (of 40) at dimension 1
                         if not native_grid and variable in ['ssu', 'ssv']:
                             # correct for angles
-                            raw_u = self.netcdf_datasets[dataset_index][DATA_VARIABLES['ssu'][self.source]][day_index,
-                                    -1, :-1, :].values
-                            raw_v = self.netcdf_datasets[dataset_index][DATA_VARIABLES['ssv'][self.source]][day_index,
-                                    -1, :, :-1].values
+                            raw_u = self.datasets[dataset_index][DATA_VARIABLES['ssu'][self.source]][day_index, -1, :-1,
+                                    :].values
+                            raw_v = self.datasets[dataset_index][DATA_VARIABLES['ssv'][self.source]][day_index, -1, :,
+                                    :-1].values
                             theta = WCOFSDataset.angle[:-1, :-1]
 
                             if variable == 'ssu':
@@ -315,15 +313,19 @@ class WCOFSDataset:
                                 extra_column[:] = numpy.nan
                                 output_data = numpy.concatenate((output_data, extra_column), axis=1)
                         else:
-                            data_variable = self.netcdf_datasets[dataset_index][DATA_VARIABLES[variable][self.source]]
+                            data_variable = self.datasets[dataset_index][DATA_VARIABLES[variable][self.source]]
                             if len(data_variable.shape) == 3:
                                 output_data = data_variable[day_index, :, :].values
                             if len(data_variable.shape) == 4:
                                 output_data = data_variable[day_index, -1, :, :].values
             else:
                 with self.dataset_locks[time_delta]:
-                    output_data = self.netcdf_datasets[time_delta][DATA_VARIABLES[variable][self.source]][0, :,
-                                  :].values
+                    output_data = self.datasets[time_delta][DATA_VARIABLES[variable][self.source]][0, :, :].values
+
+        large_value_indices = numpy.where(output_data > 1e10)
+
+        if len(large_value_indices) > 0:
+            output_data[large_value_indices] = numpy.nan
 
         return output_data
 
@@ -336,7 +338,7 @@ class WCOFSDataset:
         :return: array of data
         """
 
-        time_deltas = time_deltas if time_deltas is not None else self.netcdf_datasets.keys()
+        time_deltas = time_deltas if time_deltas is not None else self.datasets.keys()
 
         variable_data = []
 
@@ -385,7 +387,7 @@ class WCOFSDataset:
         study_area_geojson = utilities.get_first_record(study_area_polygon_filename)['geometry']
 
         if x_size is None or y_size is None:
-            sample_dataset = next(iter(self.netcdf_datasets.values()))
+            sample_dataset = next(iter(self.datasets.values()))
 
             # if cell sizes are not specified, get maximum coordinate differences between cell points on psi grid
             if x_size is None:
@@ -656,13 +658,8 @@ class WCOFSDataset:
         rho_lon = WCOFSDataset.data_coordinates['rho']['lon'][row, col]
         rho_lat = WCOFSDataset.data_coordinates['rho']['lat'][row, col]
 
-        record = {
-            'geometry': {
-                'id': feature_index, 'type': 'Point', 'coordinates': (float(rho_lon), float(rho_lat))
-            }, 'properties': {
-                'row': row, 'col': col, 'rho_lon': float(rho_lon), 'rho_lat': float(rho_lat)
-            }
-        }
+        record = {'id': feature_index, 'geometry': {'type': 'Point', 'coordinates': (float(rho_lon), float(rho_lat))},
+                  'properties': {'row': row, 'col': col, 'rho_lon': float(rho_lon), 'rho_lat': float(rho_lat)}}
 
         for variable in variable_means.keys():
             record['properties'][variable] = float(variable_means[variable][row, col])
@@ -732,6 +729,18 @@ class WCOFSDataset:
         """
 
         self.to_xarray(variables, native_grid).to_netcdf(output_file)
+
+    def plot(self, variables: Collection[str] = None, time_delta: int = None):
+        from matplotlib import pyplot
+
+        figure = pyplot.figure()
+
+        for variable in variables:
+            variable_data = self.data(variable, time_delta)
+
+            axis = figure.axes()
+            axis.set_title(variable)
+            axis.imshow(variable_data)
 
     def __repr__(self):
         used_params = [self.model_time.__repr__()]

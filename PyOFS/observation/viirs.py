@@ -124,7 +124,7 @@ class VIIRSDataset:
                     logging.warning(f'{source} does not have a reanalysis archive')
 
             try:
-                self.netcdf_dataset = xarray.open_dataset(url)
+                self.dataset = xarray.open_dataset(url)
                 self.url = url
                 break
             except Exception as error:
@@ -167,7 +167,7 @@ class VIIRSDataset:
                         try:
                             with open(output_filename, 'wb') as output_file:
                                 ftp_connection.retrbinary(f'RETR {ftp_path}', output_file.write)
-                                self.netcdf_dataset = xarray.open_dataset(output_filename)
+                                self.dataset = xarray.open_dataset(output_filename)
                         except Exception as error:
                             raise error
                         finally:
@@ -185,13 +185,13 @@ class VIIRSDataset:
             raise utilities.NoDataError(f'No VIIRS observation found at {self.data_time} UTC.')
 
         # construct rectangular polygon of granule extent
-        if 'geospatial_bounds' in self.netcdf_dataset.attrs:
-            self.data_extent = shapely.wkt.loads(self.netcdf_dataset.geospatial_bounds)
-        elif 'geospatial_lon_min' in self.netcdf_dataset.attrs:
-            lon_min = float(self.netcdf_dataset.geospatial_lon_min)
-            lon_max = float(self.netcdf_dataset.geospatial_lon_max)
-            lat_min = float(self.netcdf_dataset.geospatial_lat_min)
-            lat_max = float(self.netcdf_dataset.geospatial_lat_max)
+        if 'geospatial_bounds' in self.dataset.attrs:
+            self.data_extent = shapely.wkt.loads(self.dataset.geospatial_bounds)
+        elif 'geospatial_lon_min' in self.dataset.attrs:
+            lon_min = float(self.dataset.geospatial_lon_min)
+            lon_max = float(self.dataset.geospatial_lon_max)
+            lat_min = float(self.dataset.geospatial_lat_min)
+            lat_max = float(self.dataset.geospatial_lat_max)
 
             if lon_min < lon_max:
                 self.data_extent = shapely.geometry.Polygon(
@@ -206,8 +206,8 @@ class VIIRSDataset:
         else:
             logging.warning(f'{self.data_time} UTC: Dataset has no stored bounds...')
 
-        lon_pixel_size = self.netcdf_dataset.geospatial_lon_resolution
-        lat_pixel_size = self.netcdf_dataset.geospatial_lat_resolution
+        lon_pixel_size = self.dataset.geospatial_lon_resolution
+        lat_pixel_size = self.dataset.geospatial_lat_resolution
 
         if VIIRSDataset.study_area_extent is None:
             logging.debug(f'Calculating indices and transform from granule at {self.data_time} UTC...')
@@ -223,14 +223,14 @@ class VIIRSDataset:
                                                                                lon_pixel_size, lat_pixel_size)
 
         if VIIRSDataset.study_area_bounds is not None:
-            self.netcdf_dataset = self.netcdf_dataset.isel(time=0).sel(lon=slice(VIIRSDataset.study_area_bounds[0],
-                                                                                 VIIRSDataset.study_area_bounds[2]),
-                                                                       lat=slice(VIIRSDataset.study_area_bounds[3],
-                                                                                 VIIRSDataset.study_area_bounds[1]))
+            self.dataset = self.dataset.isel(time=0).sel(lon=slice(VIIRSDataset.study_area_bounds[0],
+                                                                   VIIRSDataset.study_area_bounds[2]),
+                                                         lat=slice(VIIRSDataset.study_area_bounds[3],
+                                                                   VIIRSDataset.study_area_bounds[1]))
 
         if VIIRSDataset.study_area_coordinates is None:
             VIIRSDataset.study_area_coordinates = {
-                'lon': self.netcdf_dataset['lon'], 'lat': self.netcdf_dataset['lat']
+                'lon': self.dataset['lon'], 'lat': self.dataset['lat']
             }
 
     def bounds(self) -> tuple:
@@ -249,7 +249,7 @@ class VIIRSDataset:
         :return: tuple of cell sizes (x_size, y_size)
         """
 
-        return self.netcdf_dataset.geospatial_lon_resolution, self.netcdf_dataset.geospatial_lat_resolution
+        return self.dataset.geospatial_lon_resolution, self.dataset.geospatial_lat_resolution
 
     def data(self, variable: str = 'sst', correct_sses=True) -> numpy.ndarray:
         """
@@ -274,7 +274,7 @@ class VIIRSDataset:
         """
 
         # observation SST data (masked array) using vertically reflected VIIRS grid
-        output_sst_data = self.netcdf_dataset['sea_surface_temperature'].values
+        output_sst_data = self.dataset['sea_surface_temperature'].values
 
         # check for unmasked data
         if not numpy.isnan(output_sst_data).all():
@@ -310,7 +310,7 @@ class VIIRSDataset:
         """
 
         # observation bias values using vertically reflected VIIRS grid
-        sses_data = self.netcdf_dataset['sses_bias'].values
+        sses_data = self.dataset['sses_bias'].values
 
         # replace masked values with 0
         sses_data[numpy.isnan(sses_data)] = 0

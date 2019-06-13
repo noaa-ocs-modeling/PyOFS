@@ -56,16 +56,16 @@ class SMAPDataset:
 
         for source, source_url in SOURCE_URLS['OpenDAP'].items():
             try:
-                self.netcdf_dataset = xarray.open_dataset(source_url)
+                self.dataset = xarray.open_dataset(source_url)
                 break
             except Exception as error:
                 logging.error(f'Error collecting observation from {source}: {error}')
 
         # construct rectangular polygon of granule extent
-        lon_min = float(self.netcdf_dataset.geospatial_lon_min)
-        lon_max = float(self.netcdf_dataset.geospatial_lon_max)
-        lat_min = float(self.netcdf_dataset.geospatial_lat_min)
-        lat_max = float(self.netcdf_dataset.geospatial_lat_max)
+        lon_min = float(self.dataset.geospatial_lon_min)
+        lon_max = float(self.dataset.geospatial_lon_max)
+        lat_min = float(self.dataset.geospatial_lat_min)
+        lat_max = float(self.dataset.geospatial_lat_max)
 
         if lon_min < lon_max:
             self.data_extent = shapely.geometry.Polygon(
@@ -78,8 +78,8 @@ class SMAPDataset:
                 shapely.geometry.Polygon(
                     [(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
 
-        lon_pixel_size = numpy.mean(numpy.diff(self.netcdf_dataset['longitude'].values))
-        lat_pixel_size = numpy.mean(numpy.diff(self.netcdf_dataset['latitude'].values))
+        lon_pixel_size = numpy.mean(numpy.diff(self.dataset['longitude'].values))
+        lat_pixel_size = numpy.mean(numpy.diff(self.dataset['latitude'].values))
 
         if SMAPDataset.study_area_extent is None:
             # get first record in layer
@@ -93,14 +93,14 @@ class SMAPDataset:
                                                                               lon_pixel_size, lat_pixel_size)
 
         if SMAPDataset.study_area_bounds is not None:
-            self.netcdf_dataset = self.netcdf_dataset.sel(longitude=slice(SMAPDataset.study_area_bounds[0],
-                                                                          SMAPDataset.study_area_bounds[2]),
-                                                          latitude=slice(SMAPDataset.study_area_bounds[3],
-                                                                         SMAPDataset.study_area_bounds[1]))
+            self.dataset = self.dataset.sel(longitude=slice(SMAPDataset.study_area_bounds[0],
+                                                            SMAPDataset.study_area_bounds[2]),
+                                            latitude=slice(SMAPDataset.study_area_bounds[3],
+                                                           SMAPDataset.study_area_bounds[1]))
 
         if SMAPDataset.study_area_coordinates is None:
             SMAPDataset.study_area_coordinates = {
-                'lon': self.netcdf_dataset['longitude'], 'lat': self.netcdf_dataset['latitude']
+                'lon': self.dataset['longitude'], 'lat': self.dataset['latitude']
             }
 
     def bounds(self) -> tuple:
@@ -119,7 +119,7 @@ class SMAPDataset:
         :return: tuple of cell sizes (x_size, y_size)
         """
 
-        return self.netcdf_dataset.geospatial_lon_resolution, self.netcdf_dataset.geospatial_lat_resolution
+        return self.dataset.geospatial_lon_resolution, self.dataset.geospatial_lat_resolution
 
     def data(self, data_time: datetime.datetime, variable: str = 'sss') -> numpy.ndarray:
         """
@@ -148,8 +148,8 @@ class SMAPDataset:
         # SMOS has data on month-long resolution
         data_time = datetime.datetime(data_time.year, data_time.month, 16)
 
-        if numpy.datetime64(data_time) in self.netcdf_dataset['times'].values:
-            return self.netcdf_dataset['smap_sss'].sel(times=data_time).values
+        if numpy.datetime64(data_time) in self.dataset['times'].values:
+            return self.dataset['smap_sss'].sel(times=data_time).values
         else:
             raise utilities.NoDataError(f'No data exists for {data_time.strftime("%Y%m%dT%H%M%S")}.')
 

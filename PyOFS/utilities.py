@@ -10,6 +10,7 @@ Created on Jun 13, 2018
 import datetime
 import os
 from functools import partial
+from typing import Tuple
 
 import fiona
 import fiona.crs
@@ -20,6 +21,13 @@ import shapely
 import xarray
 from shapely.geometry import shape
 from shapely.ops import transform
+
+WGS84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
+WEB_MERCATOR = pyproj.Proj(
+    '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs')
+
+GRAVITATIONAL_ACCELERATION = 9.80665  # meters per second squared
+SIDEREAL_ROTATION_PERIOD = datetime.timedelta(hours=23, minutes=56, seconds=4.1)
 
 
 def copy_xarray(input_path: str, output_path: str) -> xarray.Dataset:
@@ -239,77 +247,120 @@ class NoDataError(Exception):
     pass
 
 
-def rotate_coordinates(point: numpy.array, pole: numpy.array) -> tuple:
-    """
-    Convert longitude and latitude to rotated pole coordinates.
+class RotatedPoleCoordinateSystem:
+    def __init__(self, pole: Tuple[float, float]):
+        """
+        New rotated pole coordinate system.
 
-    :param point: input coordinates
-    :param pole: rotated pole
-    :return: coordinates in rotated pole system
-    """
+        :param pole: unrotated coordinates of pole
+        """
 
-    if type(pole) is not numpy.array:
-        pole = numpy.array(pole)
+        self.pole = pole if type(pole) is numpy.array else numpy.array(pole)
 
-    # convert degrees to radians
-    point = point * numpy.pi / 180
-    pole = pole * numpy.pi / 180
+    def rotate_coordinates(self, point: numpy.array, projection: pyproj.Proj = None) -> numpy.array:
+        """
+        Convert longitude and latitude to rotated pole coordinates.
 
-    # precalculate sin / cos
-    latitude_sine = numpy.sin(point[1])
-    latitude_cosine = numpy.cos(point[1])
-    pole_latitude_sine = numpy.sin(pole[1])
-    pole_latitude_cosine = numpy.cos(pole[1])
+        :param point: unrotated coordinates
+        :return: coordinates rotated around pole
+        """
 
-    # calculate rotation transformation
-    phi_1 = point[0] - pole[0]
+        if type(point) is not numpy.array:
+            point = numpy.array(point)
 
-    phi_1_sine = numpy.sin(phi_1)
-    phi_1_cosine = numpy.cos(phi_1)
+        if projection is not None:
+            point = numpy.array(pyproj.transform(projection, WGS84, point[0], point[1]))
 
-    phi_2 = numpy.arctan2(phi_1_sine * latitude_cosine,
-                          phi_1_cosine * latitude_cosine * pole_latitude_sine - latitude_sine * pole_latitude_cosine)
-    theta_2 = numpy.arcsin(phi_1_cosine * latitude_cosine * pole_latitude_cosine + latitude_sine * pole_latitude_sine)
+        # convert degrees to radians
+        point = point * numpy.pi / 180
+        pole = self.pole * numpy.pi / 180
 
-    # convert radians to degrees
-    phi_2 = phi_2 * 180 / numpy.pi
-    theta_2 = theta_2 * 180 / numpy.pi
+        # calculate sine and cosine
+        local_longitude = point[0] - pole[0]
+        sine_longitude = numpy.sin(local_longitude)
+        cosine_longitude = numpy.cos(local_longitude)
+        sine_latitude = numpy.sin(point[1])
+        cosine_latitude = numpy.cos(point[1])
+        sine_pole_latitude = numpy.sin(pole[1])
+        cosine_pole_latitude = numpy.cos(pole[1])
 
-    return phi_2, theta_2
+        # precalculate rotation transformation
+        rotated_longitude = numpy.arctan2(sine_longitude * cosine_latitude,
+                                          cosine_longitude * cosine_latitude * sine_pole_latitude - sine_latitude * cosine_pole_latitude)
+        rotated_latitude = numpy.arcsin(
+            cosine_longitude * cosine_latitude * cosine_pole_latitude + sine_latitude * sine_pole_latitude)
 
+        # convert radians to degrees
+        return numpy.array((rotated_longitude * 180 / numpy.pi, rotated_latitude * 180 / numpy.pi))
 
-def unrotate_coordinates(point: numpy.array, pole: numpy.array) -> tuple:
-    """
-    Convert rotated pole coordinates to longitude and latitude.
+    def unrotate_coordinates(self, rotated_point: numpy.array) -> numpy.array:
+        """
+        Convert rotated pole coordinates to longitude and latitude.
 
-    :param point: rotated pole coordinates
-    :param pole: rotated pole
-    :return: coordinates in rotated pole system
-    """
+        :param rotated_point: rotated coordinates
+        :return: coordinates unrotated around pole
+        """
 
-    # convert degrees to radians
-    phi = point[0] * numpy.pi / 180
-    theta = point[1] * numpy.pi / 180
-    pole = pole * numpy.pi / 180
+        if type(rotated_point) is not numpy.array:
+            rotated_point = numpy.array(rotated_point)
 
-    # precalculate sin / cos
-    phi_sine = numpy.sin(phi)
-    phi_cosine = numpy.cos(phi)
-    theta_sine = numpy.sin(theta)
-    theta_cosine = numpy.cos(theta)
-    pole_latitude_sine = numpy.sin(pole[1])
-    pole_latitude_cosine = numpy.cos(pole[1])
+        # convert degrees to radians
+        rotated_point = rotated_point * numpy.pi / 180
+        pole = self.pole * numpy.pi / 180
 
-    # calculate rotation transformation
-    longitude = pole[0] + numpy.arctan2(phi_sine * theta_cosine,
-                                        phi_cosine * theta_cosine * pole_latitude_sine + theta_sine * pole_latitude_cosine)
-    latitude = numpy.arcsin(-phi_cosine * theta_cosine * pole_latitude_cosine + theta_sine * pole_latitude_sine)
+        # precalculate sine and cosine
+        sine_rotated_longitude = numpy.sin(rotated_point[0])
+        cosine_rotated_longitude = numpy.cos(rotated_point[0])
+        sine_rotated_latitude = numpy.sin(rotated_point[1])
+        cosine_rotated_latitude = numpy.cos(rotated_point[1])
+        sine_pole_latitude = numpy.sin(pole[1])
+        cosine_pole_latitude = numpy.cos(pole[1])
 
-    # convert radians to degrees
-    longitude = longitude * 180 / numpy.pi
-    latitude = latitude * 180 / numpy.pi
+        # calculate rotation transformation
+        longitude = pole[0] + numpy.arctan2(sine_rotated_longitude * cosine_rotated_latitude,
+                                            cosine_rotated_longitude * cosine_rotated_latitude * sine_pole_latitude + sine_rotated_latitude * cosine_pole_latitude)
+        latitude = numpy.arcsin(
+            -cosine_rotated_longitude * cosine_rotated_latitude * cosine_pole_latitude + sine_rotated_latitude * sine_pole_latitude)
 
-    return longitude, latitude
+        # convert radians to degrees
+        return numpy.array((longitude * 180 / numpy.pi, latitude * 180 / numpy.pi))
+
+    @staticmethod
+    def find_pole(points: numpy.array, starting_pole: numpy.array, samples: int = 10,
+                  sample_radius: float = 1) -> numpy.array:
+        """
+        Find pole given points with the same rotated latitude.
+
+        :param points: array of points with a constant distance to the pole
+        :param starting_pole: approximate pole to start from
+        :param samples: number of samples to take
+        :param sample_radius: radius in degrees around starting pole to search
+        :return: central point
+        """
+
+        deltas = numpy.linspace(-sample_radius, sample_radius, numpy.sqrt(samples))
+
+        discrepancies = numpy.empty((len(deltas), len(deltas)))
+
+        for lon_index, lon_delta in enumerate(deltas):
+            for lat_index, lat_delta in enumerate(deltas):
+                current_pole_candidate = starting_pole + numpy.array((lon_delta, lat_delta))
+
+                current_rotated_pole = RotatedPoleCoordinateSystem(current_pole_candidate)
+                _, rotated_latitudes = current_rotated_pole.rotate_coordinates(points)
+
+                discrepancies[lon_index, lat_index] = numpy.abs(numpy.diff(rotated_latitudes)).max()
+
+        discrepancies = xarray.DataArray(discrepancies,
+                                         coords={'lon': starting_pole[0] + deltas, 'lat': starting_pole[1] + deltas},
+                                         dims=('lon', 'lat'))
+
+        from matplotlib import pyplot
+        discrepancies.plot.imshow()
+        pyplot.show()
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({tuple(self.pole)})'
 
 
 def xarray_to_geopackage(input_path: str, output_path: str, epsg: int = 4326):
@@ -343,6 +394,62 @@ def xarray_to_geopackage(input_path: str, output_path: str, epsg: int = 4326):
 
     with fiona.open(output_path, 'w', 'GPKG', schema=schema, crs=fiona.crs.from_epsg(epsg)) as output_file:
         output_file.writerecords(records)
+
+
+def geodetic_radius(latitude: float) -> float:
+    """
+    Get the approximate radius of the Earth, using the WGS84 ellipsoid at a given latitude.
+
+    :param latitude: latitude in degrees
+    :return: WGS84 ellipsoid radius
+    """
+
+    semimajor_radius = 6378137
+    semiminor_radius = 6356752.314245
+
+    sine_latitude = numpy.sin(latitude * numpy.pi / 180) * 180 / numpy.pi
+    cosine_latitude = numpy.cos(latitude * numpy.pi / 180) * 180 / numpy.pi
+
+    return numpy.sqrt(
+        ((semimajor_radius ** 2 * cosine_latitude) ** 2 + (semiminor_radius ** 2 + sine_latitude) ** 2) / (
+                (semimajor_radius * cosine_latitude) ** 2 + (semiminor_radius + sine_latitude) ** 2))
+
+
+def rossby_deformation_radius(latitude: float) -> float:
+    """
+    Get the Rossby deformation radius given a latitude and water depth.
+
+    :param latitude: latitude in degrees
+    :param barotropic: whether to assume a barotropic ocean
+    :return: Rossby radius
+    """
+
+    oceanic_speed_of_sound = 1500  # meters per second
+    oceanic_potential_density = 1025  # kilograms per cubic meter
+
+    coriolis_frequency = numpy.sin(latitude * numpy.pi / 180) * 4 * numpy.pi / SIDEREAL_ROTATION_PERIOD.total_seconds()
+
+    brunt_vaisala_frequency = numpy.sqrt(GRAVITATIONAL_ACCELERATION / oceanic_potential_density)
+    scale_height = oceanic_speed_of_sound ** 2 / GRAVITATIONAL_ACCELERATION
+    return brunt_vaisala_frequency * scale_height / (numpy.pi * coriolis_frequency)
+
+
+def translate_geographic_coordinates(point: numpy.array, offset: numpy.array) -> numpy.array:
+    """
+    Add meter offset to geographic coordinates using WebMercator.
+
+    :param point: geographic coordinates
+    :param offset: translation vector in meters
+    :return: new geographic coordinates
+    """
+
+    if type(point) is not numpy.array:
+        point = numpy.array(point)
+
+    if type(offset) is not numpy.array:
+        offset = numpy.array(offset)
+
+    return numpy.array(pyproj.transform(WEB_MERCATOR, WGS84, *(pyproj.transform(WGS84, WEB_MERCATOR, *point)) + offset))
 
 
 if __name__ == '__main__':
