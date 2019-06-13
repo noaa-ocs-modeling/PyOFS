@@ -9,8 +9,8 @@ def upload_to_azure(local_path: str, remote_path: str, credentials: str, overwri
               f'--overwrite={str(overwrite).lower()} --follow-symlinks --recursive --from-to=LocalBlob ' + \
               f'--blob-type=BlockBlob --put-md5; $env:AZCOPY_CRED_TYPE = "";'
 
-    print(command)
-    os.system(f'{POWERSHELL_PATH} {command}')
+    os.chdir(os.path.split(POWERSHELL_PATH)[0])
+    os.system(f'powershell.exe < {command}')
 
 
 if __name__ == '__main__':
