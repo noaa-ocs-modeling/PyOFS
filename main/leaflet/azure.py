@@ -20,4 +20,3 @@ if __name__ == '__main__':
 
     upload_to_azure(os.path.join(local_data_path, 'reference'), f'{remote_data_path}', credentials,
                     overwrite=True)
-    upload_to_azure(os.path.join(local_data_path, 'output'), f'{remote_data_path}', credentials, overwrite=True)

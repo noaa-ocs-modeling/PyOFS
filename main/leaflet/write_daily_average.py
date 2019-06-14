@@ -399,7 +399,8 @@ if __name__ == '__main__':
 
     azure_blob_url = 'https://ocscoastalmodelingsa.blob.core.windows.net/$web/data'
 
-    azure.upload_to_azure(REFERENCE_DIR, f'{azure_blob_url}', credentials, overwrite=True)
+    azure.upload_to_azure(os.path.join(REFERENCE_DIR, 'files.json'), f'{azure_blob_url}/reference', credentials,
+                          overwrite=True)
 
     for day_delta in day_deltas:
         day = model_run_date + datetime.timedelta(days=day_delta)
