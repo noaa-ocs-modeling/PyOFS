@@ -13,6 +13,8 @@ import os
 import sys
 from typing import Collection, Union
 
+from main.leaflet import write_json, upload_to_azure
+
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
 import pytz
@@ -23,6 +25,7 @@ from PyOFS.model import wcofs, rtofs
 
 LOG_DIR = os.path.join(DATA_DIR, 'log')
 OUTPUT_DIR = os.path.join(DATA_DIR, 'output')
+REFERENCE_DIR = os.path.join(DATA_DIR, r'reference\files.json')
 
 # offset from study area to UTC
 STUDY_AREA_TIMEZONE = 'US/Pacific'
@@ -228,6 +231,12 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
         if not os.path.isdir(daily_average_dir):
             os.mkdir(daily_average_dir)
 
+    if scalar_variables is None:
+        scalar_variables = []
+
+    if vector_variables is None:
+        vector_variables = []
+
     if grid_size_km == 4:
         grid_filename = wcofs.WCOFS_4KM_GRID_FILENAME
         if data_assimilation:
@@ -334,6 +343,7 @@ def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, d
     write_observation(output_dir, output_date, 'smap')
     # logging.info('Processing NDBC data...')
     # write_observation(output_dir, output_date, 'data_buoy')
+
     logging.info(f'Wrote observations to {output_dir}')
 
     logging.info('Processing RTOFS...')  # RTOFS forecast is uploaded at 1700 UTC
@@ -375,12 +385,26 @@ if __name__ == '__main__':
 
     # from PyOFS import utilities
     #
-    # model_run_dates = utilities.range_daily(datetime.datetime.now(),
-    #                                         datetime.datetime.now() - datetime.timedelta(days=2))
+    # model_run_dates = utilities.range_daily(datetime.datetime.now(), datetime.datetime(2018, 6, 1))
     # for model_run_date in model_run_dates:
-    #     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas, log_path=log_path)
+    #     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas)
 
     model_run_date = datetime.date.today()
     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas)
+
+    write_json.dir_structure_to_json(OUTPUT_DIR, os.path.join(DATA_DIR, r'reference\files.json'))
+
+    with open(os.path.join(DATA_DIR, f'azure_credentials.txt')) as credentials_file:
+        credentials = credentials_file.readline()
+
+    azure_blob_url = 'https://ocscoastalmodelingsa.blob.core.windows.net/$web/data'
+
+    upload_to_azure.upload_to_azure(REFERENCE_DIR, f'{azure_blob_url}/reference', credentials, overwrite=True)
+
+    for day_delta in day_deltas:
+        day = model_run_date + datetime.timedelta(days=day_delta)
+        daily_averages_dir = os.path.join(OUTPUT_DIR, day.strftime('%Y%m%d'))
+        upload_to_azure.upload_to_azure(daily_averages_dir, f'{azure_blob_url}/output/daily_averages', credentials,
+                                        overwrite=True)
 
     print('done')
