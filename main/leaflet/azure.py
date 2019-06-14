@@ -18,6 +18,6 @@ if __name__ == '__main__':
     with open(r"D:\data\azure_credentials.txt") as credentials_file:
         credentials = credentials_file.readline()
 
-    upload_to_azure(os.path.join(local_data_path, 'reference'), f'{remote_data_path}/reference', credentials,
+    upload_to_azure(os.path.join(local_data_path, 'reference'), f'{remote_data_path}', credentials,
                     overwrite=True)
-    upload_to_azure(os.path.join(local_data_path, 'output'), f'{remote_data_path}/output', credentials, overwrite=True)
+    upload_to_azure(os.path.join(local_data_path, 'output'), f'{remote_data_path}', credentials, overwrite=True)
