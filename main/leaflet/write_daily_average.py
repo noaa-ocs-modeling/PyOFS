@@ -13,7 +13,7 @@ import os
 import sys
 from typing import Collection, Union
 
-from main.leaflet import write_json, upload_to_azure
+from main.leaflet import write_json, azure
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
@@ -399,12 +399,12 @@ if __name__ == '__main__':
 
     azure_blob_url = 'https://ocscoastalmodelingsa.blob.core.windows.net/$web/data'
 
-    upload_to_azure.upload_to_azure(REFERENCE_DIR, f'{azure_blob_url}/reference', credentials, overwrite=True)
+    azure.upload_to_azure(REFERENCE_DIR, f'{azure_blob_url}/reference', credentials, overwrite=True)
 
     for day_delta in day_deltas:
         day = model_run_date + datetime.timedelta(days=day_delta)
-        daily_averages_dir = os.path.join(OUTPUT_DIR, day.strftime('%Y%m%d'))
-        upload_to_azure.upload_to_azure(daily_averages_dir, f'{azure_blob_url}/output/daily_averages', credentials,
-                                        overwrite=True)
+        daily_averages_dir = os.path.join(OUTPUT_DIR, 'daily_averages', day.strftime('%Y%m%d'))
+        azure.upload_to_azure(daily_averages_dir, f'{azure_blob_url}/output/daily_averages', credentials,
+                              overwrite=True)
 
     print('done')

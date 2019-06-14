@@ -15,7 +15,7 @@ if __name__ == '__main__':
     local_data_path = r'D:\data'
     remote_data_path = 'https://ocscoastalmodelingsa.blob.core.windows.net/$web/data'
 
-    with open(r"D:\www\azure_credentials.txt") as credentials_file:
+    with open(r"D:\data\azure_credentials.txt") as credentials_file:
         credentials = credentials_file.readline()
 
     upload_to_azure(os.path.join(local_data_path, 'reference'), f'{remote_data_path}/reference', credentials,
