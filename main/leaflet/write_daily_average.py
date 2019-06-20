@@ -394,9 +394,19 @@ if __name__ == '__main__':
     write_json.dir_structure_to_json(OUTPUT_DIR, os.path.join(DATA_DIR, 'reference', 'files.json'))
 
     with open(os.path.join(DATA_DIR, f'azure_credentials.txt')) as credentials_file:
-        credentials = credentials_file.readline()
+        azure_blob_url, credentials = credentials_file.readlines()
 
-    azure_blob_url = 'https://ocscoastalmodelingsa.blob.core.windows.net/$web/data'
+    azure.upload_to_azure(os.path.join(REFERENCE_DIR, 'files.json'), f'{azure_blob_url}/reference', credentials,
+                          overwrite=True)
+
+    for day_delta in day_deltas:
+        day = model_run_date + datetime.timedelta(days=day_delta)
+        daily_averages_dir = os.path.join(OUTPUT_DIR, 'daily_averages', day.strftime('%Y%m%d'))
+        azure.upload_to_azure(daily_averages_dir, f'{azure_blob_url}/output/daily_averages', credentials,
+                              overwrite=True)
+
+    with open(os.path.join(DATA_DIR, f'azure_credentials_old.txt')) as credentials_file:
+        azure_blob_url, credentials = credentials_file.readlines()
 
     azure.upload_to_azure(os.path.join(REFERENCE_DIR, 'files.json'), f'{azure_blob_url}/reference', credentials,
                           overwrite=True)
