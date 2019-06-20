@@ -13,9 +13,8 @@ import os
 import sys
 from typing import Collection, Union
 
-from main.leaflet import write_json, azure
-
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
+from main.leaflet import write_json, azure
 
 import pytz
 
@@ -385,14 +384,14 @@ if __name__ == '__main__':
 
     # from PyOFS import utilities
     #
-    # model_run_dates = utilities.range_daily(datetime.datetime.now(), datetime.datetime(2018, 6, 1))
+    # model_run_dates = utilities.range_daily(datetime.datetime.now(), datetime.datetime(2019, 6, 14))
     # for model_run_date in model_run_dates:
     #     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas)
 
     model_run_date = datetime.date.today()
     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas)
 
-    write_json.dir_structure_to_json(OUTPUT_DIR, os.path.join(DATA_DIR, r'reference\files.json'))
+    write_json.dir_structure_to_json(OUTPUT_DIR, os.path.join(DATA_DIR, 'reference', 'files.json'))
 
     with open(os.path.join(DATA_DIR, f'azure_credentials.txt')) as credentials_file:
         credentials = credentials_file.readline()
