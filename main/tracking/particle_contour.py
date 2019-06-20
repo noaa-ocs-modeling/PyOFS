@@ -816,7 +816,7 @@ if __name__ == '__main__':
     contour_centers = {}
     start_time = datetime.datetime(2016, 9, 25, 1)
 
-    period = datetime.timedelta(days=1)
+    period = datetime.timedelta(days=4)
     time_delta = datetime.timedelta(hours=1)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
