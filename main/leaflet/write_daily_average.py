@@ -391,22 +391,24 @@ if __name__ == '__main__':
     model_run_date = datetime.date.today()
     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas)
 
-    write_json.dir_structure_to_json(OUTPUT_DIR, os.path.join(DATA_DIR, 'reference', 'files.json'))
+    files_json_filename = os.path.join(REFERENCE_DIR, 'files.json')
+
+    write_json.dir_structure_to_json(OUTPUT_DIR, files_json_filename)
 
     azure_credential_files = [os.path.join(DATA_DIR, azure_credentials_filename) for azure_credentials_filename in
                               ['azure_credentials.txt', 'azure_credentials_old.txt']]
 
     for azure_credential_file in azure_credential_files:
-        with open(os.path.join(DATA_DIR, f'azure_credentials.txt')) as credentials_file:
+        with open(azure_credential_file) as credentials_file:
             azure_blob_url, credentials = (line.strip('\n') for line in credentials_file.readlines())
 
-        azure.upload_to_azure(os.path.join(REFERENCE_DIR, 'files.json'), f'{azure_blob_url}/reference', credentials,
+        azure.upload_to_azure(files_json_filename, f'{azure_blob_url}/reference/files.json', credentials,
                               overwrite=True)
 
         for day_delta in day_deltas:
             day = model_run_date + datetime.timedelta(days=day_delta)
             daily_averages_dir = os.path.join(OUTPUT_DIR, 'daily_averages', day.strftime('%Y%m%d'))
-            azure.upload_to_azure(daily_averages_dir, f'{azure_blob_url}/output/daily_averages', credentials,
+            azure.upload_to_azure(daily_averages_dir, f'{azure_blob_url}/output/daily_averages/', credentials,
                                   overwrite=True)
 
     print('done')
