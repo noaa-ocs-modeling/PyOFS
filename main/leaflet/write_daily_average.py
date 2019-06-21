@@ -24,7 +24,7 @@ from PyOFS.model import wcofs, rtofs
 
 LOG_DIR = os.path.join(DATA_DIR, 'log')
 OUTPUT_DIR = os.path.join(DATA_DIR, 'output')
-REFERENCE_DIR = os.path.join(DATA_DIR, r'reference\files.json')
+REFERENCE_DIR = os.path.join(DATA_DIR, 'reference')
 
 # offset from study area to UTC
 STUDY_AREA_TIMEZONE = 'US/Pacific'
@@ -393,28 +393,20 @@ if __name__ == '__main__':
 
     write_json.dir_structure_to_json(OUTPUT_DIR, os.path.join(DATA_DIR, 'reference', 'files.json'))
 
-    with open(os.path.join(DATA_DIR, f'azure_credentials.txt')) as credentials_file:
-        azure_blob_url, credentials = credentials_file.readlines()
+    azure_credential_files = [os.path.join(DATA_DIR, azure_credentials_filename) for azure_credentials_filename in
+                              ['azure_credentials.txt', 'azure_credentials_old.txt']]
 
-    azure.upload_to_azure(os.path.join(REFERENCE_DIR, 'files.json'), f'{azure_blob_url}/reference', credentials,
-                          overwrite=True)
+    for azure_credential_file in azure_credential_files:
+        with open(os.path.join(DATA_DIR, f'azure_credentials.txt')) as credentials_file:
+            azure_blob_url, credentials = (line.strip('\n') for line in credentials_file.readlines())
 
-    for day_delta in day_deltas:
-        day = model_run_date + datetime.timedelta(days=day_delta)
-        daily_averages_dir = os.path.join(OUTPUT_DIR, 'daily_averages', day.strftime('%Y%m%d'))
-        azure.upload_to_azure(daily_averages_dir, f'{azure_blob_url}/output/daily_averages', credentials,
+        azure.upload_to_azure(os.path.join(REFERENCE_DIR, 'files.json'), f'{azure_blob_url}/reference', credentials,
                               overwrite=True)
 
-    with open(os.path.join(DATA_DIR, f'azure_credentials_old.txt')) as credentials_file:
-        azure_blob_url, credentials = credentials_file.readlines()
-
-    azure.upload_to_azure(os.path.join(REFERENCE_DIR, 'files.json'), f'{azure_blob_url}/reference', credentials,
-                          overwrite=True)
-
-    for day_delta in day_deltas:
-        day = model_run_date + datetime.timedelta(days=day_delta)
-        daily_averages_dir = os.path.join(OUTPUT_DIR, 'daily_averages', day.strftime('%Y%m%d'))
-        azure.upload_to_azure(daily_averages_dir, f'{azure_blob_url}/output/daily_averages', credentials,
-                              overwrite=True)
+        for day_delta in day_deltas:
+            day = model_run_date + datetime.timedelta(days=day_delta)
+            daily_averages_dir = os.path.join(OUTPUT_DIR, 'daily_averages', day.strftime('%Y%m%d'))
+            azure.upload_to_azure(daily_averages_dir, f'{azure_blob_url}/output/daily_averages', credentials,
+                                  overwrite=True)
 
     print('done')
