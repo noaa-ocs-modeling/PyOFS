@@ -631,25 +631,45 @@ class ParticleContour:
         return self.geometry().bounds
 
     def _fill_intervals(self):
-        centroid = self.geometry().centroid.xy
-        differences = self.vertices - centroid
+        differences = numpy.diff(
+            numpy.concatenate((self.vertices, numpy.expand_dims(self.vertices[:, 0], axis=1)), axis=1), axis=1)
+        distances = numpy.sqrt(differences[0] ** 2 + differences[1] ** 2)
 
-        original_angles = numpy.arctan2(differences[1], differences[0])
-        original_distances = numpy.sqrt(differences[0] ** 2 + differences[1] ** 2)
-        polar = scipy.interpolate.interp1d(original_angles, original_distances)
-        number_of_vertices = 2 * numpy.pi * numpy.max(original_distances) / self.max_interval
-        angles = numpy.linspace(numpy.min(original_angles), numpy.max(original_angles), number_of_vertices)
-        distances = polar(angles)
+        old_perimeter_lengths = numpy.cumsum(distances)
 
-        # pyplot.polar(original_angles, original_distances, 'bo')
-        # pyplot.polar(angles, distances, 'r-')
-        # pyplot.show()
+        new_perimeter_lengths = numpy.arange(old_perimeter_lengths[-1])
 
-        self.vertices = centroid + numpy.stack((distances * numpy.cos(angles), distances * numpy.sin(angles)))
+        old_x = self.vertices[0]
+        old_y = self.vertices[1]
 
-        # differences = numpy.diff(
-        #     numpy.concatenate((self.vertices, numpy.expand_dims(self.vertices[:, 0], axis=1)), axis=1), axis=1)
-        # distances = numpy.sqrt(differences[0] ** 2 + differences[1] ** 2)
+        x = scipy.interpolate.interp1d(old_perimeter_lengths, old_x)
+        y = scipy.interpolate.interp1d(old_perimeter_lengths, old_y)
+
+        new_x = x(new_perimeter_lengths)
+        new_y = y(new_perimeter_lengths)
+
+        pyplot.plot(old_x, old_y, 'bo')
+        pyplot.plot(new_x, new_y, 'r-')
+        pyplot.show()
+
+        self.vertices = numpy.stack((new_x, new_y))
+
+        # centroid = self.geometry().centroid.xy
+        # differences = self.vertices - centroid
+        #
+        # original_angles = numpy.arctan2(differences[1], differences[0])
+        # original_distances = numpy.sqrt(differences[0] ** 2 + differences[1] ** 2)
+        # polar = scipy.interpolate.interp1d(original_angles, original_distances)
+        # number_of_vertices = 2 * numpy.pi * numpy.max(original_distances) / self.max_interval
+        # angles = numpy.linspace(numpy.min(original_angles), numpy.max(original_angles), number_of_vertices)
+        # distances = polar(angles)
+        #
+        # # pyplot.polar(original_angles, original_distances, 'bo')
+        # # pyplot.polar(angles, distances, 'r-')
+        # # pyplot.show()
+        #
+        # self.vertices = centroid + numpy.stack((distances * numpy.cos(angles), distances * numpy.sin(angles)))
+
         # small_distance_indices = numpy.where(distances < self.max_interval)[0]
         #
         # if len(small_distance_indices) > 0:
@@ -777,8 +797,6 @@ def create_contour(contour_center: tuple, contour_radius: float, start_time: dat
 
 def track_contour(contour: ParticleContour, time_deltas: List[datetime.timedelta]) -> Dict[
     datetime.datetime, shapely.geometry.Polygon]:
-    print(f'[{datetime.datetime.now()}]: Advecting contour with {len(contour.vertices.T)} particles...')
-
     polygons = {}
     polygons[contour.time] = contour.geometry()
 
@@ -811,12 +829,12 @@ if __name__ == '__main__':
     contour_shape = 'circle'
     order = 4
 
-    contour_radius = 20000
+    contour_radius = 50000
 
     contour_centers = {}
     start_time = datetime.datetime(2016, 9, 25, 1)
 
-    period = datetime.timedelta(days=4)
+    period = datetime.timedelta(hours=4)
     time_delta = datetime.timedelta(hours=1)
 
     time_deltas = [time_delta for index in range(int(period / time_delta))]
@@ -831,7 +849,9 @@ if __name__ == '__main__':
                     layer='study_points') as contour_centers_file:
         for point in contour_centers_file:
             contour_id = point['properties']['name']
-            contour_centers[contour_id] = point['geometry']['coordinates']
+
+            if '1' not in contour_id:
+                contour_centers[contour_id] = point['geometry']['coordinates']
 
     print(f'[{datetime.datetime.now()}]: Creating velocity field...')
     if source == 'rankine':
@@ -982,23 +1002,23 @@ if __name__ == '__main__':
 
     contours = {}
 
-    print(f'[{datetime.datetime.now()}]: Creating {len(contour_centers)} initial contours...')
+    # print(f'[{datetime.datetime.now()}]: Creating {len(contour_centers)} initial contours...')
+    #
+    # with futures.ThreadPoolExecutor() as concurrency_pool:
+    #     running_futures = {
+    #         concurrency_pool.submit(create_contour, contour_center, contour_radius, start_time, velocity_field,
+    #                                 contour_shape): contour_id for contour_id, contour_center in
+    #         contour_centers.items()}
+    #
+    #     for completed_future in futures.as_completed(running_futures):
+    #         contour_id = running_futures[completed_future]
+    #         contour = completed_future.result()
+    #         contours[contour_id] = contour
+    #         print(f'[{datetime.datetime.now()}]: Contour {contour_id} created: {contour}')
 
-    with futures.ThreadPoolExecutor() as concurrency_pool:
-        running_futures = {
-            concurrency_pool.submit(create_contour, contour_center, contour_radius, start_time, velocity_field,
-                                    contour_shape): contour_id for contour_id, contour_center in
-            contour_centers.items()}
-
-        for completed_future in futures.as_completed(running_futures):
-            contour_id = running_futures[completed_future]
-            contour = completed_future.result()
-            contours[contour_id] = contour
-            print(f'[{datetime.datetime.now()}]: Contour {contour_id} created: {contour}')
-
-    # with fiona.open(r"C:\Data\develop\output\test\alex_contours.gpkg") as contour_file:
-    #     contours['1'] = ParticleContour(next(iter(contour_file))['geometry']['coordinates'][0], start_time,
-    #                                     velocity_field)
+    with fiona.open(r"C:\Data\develop\output\test\alex_contours.gpkg") as contour_file:
+        contours['1'] = ParticleContour(next(iter(contour_file))['geometry']['coordinates'][0], start_time,
+                                        velocity_field)
 
     print(f'[{datetime.datetime.now()}]: Contours created.')
 
