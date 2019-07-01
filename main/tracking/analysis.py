@@ -8,7 +8,6 @@ Created on Feb 27, 2019
 """
 
 import datetime
-import functools
 import os
 from typing import List
 
@@ -45,10 +44,11 @@ if __name__ == '__main__':
     from PyOFS import DATA_DIR
 
     plot_dir = r"R:\documents\plots"
-    contour_starting_radius = 10000
+    contour_starting_radius = 50000
 
-    velocity_products = ['hourly_modeled', 'hourly_geostrophic', 'daily_modeled']
-    contour_names = [f'{letter}{number}' for number in range(1, 5) for letter in ['A', 'B', 'C']]
+    # velocity_products = ['hourly_modeled', 'hourly_geostrophic', 'daily_modeled']
+    velocity_products = ['daily_modeled']
+    contour_names = [f'{letter}{number}' for number in range(2, 5) for letter in ['A', 'B', 'C']]
 
     start_time = datetime.datetime(2016, 9, 25, 1)
     period = datetime.timedelta(days=4)
@@ -88,7 +88,7 @@ if __name__ == '__main__':
                 values[contour_name][velocity_product] = pandas.DataFrame(
                     {'datetime': contour_datetimes, 'area': contour_areas, 'perimeter': contour_perimeters})
 
-    plotting_values = {'area': 'm^2', 'area_change': 'm^2/s', 'perimeter': 'm'}
+    plotting_values = {'area': 'm^2', 'perimeter': 'm'}
 
     print(f'[{datetime.datetime.now()}]: Plotting...')
 
@@ -130,16 +130,29 @@ if __name__ == '__main__':
     #         pyplot.clf()
 
     for velocity_product in velocity_products:
-        contour_values = functools.reduce(lambda left, right: pandas.merge(left, right, on='datetime'),
-                                          [contour_velocity_products[velocity_product] for contour_velocity_products
-                                           in values.values()])
+        contours_values = []
+
+        for contour_name, contour_velocity_products in values.items():
+            contour_velocity_products[velocity_product].insert(0, 'contour', contour_name)
+            contours_values.append(contour_velocity_products[velocity_product])
+
+        contours_values = pandas.concat(contours_values, ignore_index=True)
 
         for plotting_value, plotting_unit in plotting_values.items():
             figure = pyplot.figure()
             axis = figure.add_subplot(1, 1, 1)
+            axis.set_xlabel('contour')
             axis.set_ylabel(f'{plotting_value} ({plotting_unit})')
 
-            axis.boxplot(contour_values[plotting_value], labels=contour_names)
+            colors = pyplot.cm.viridis(numpy.linspace(0, 1, 4))
+            transects = dict(zip(('1', '2', '3', '4'), colors))
+
+            for color_index, (contour_name, contour_values) in enumerate(contours_values.groupby('contour')):
+                color = transects[contour_name[1]]
+                line, = axis.plot(contour_values['datetime'], contour_values[plotting_value], '-o', label=contour_name,
+                                  color=color)
+                axis.annotate(contour_name, xy=(1, line.get_ydata()[-1]), xytext=(6, 0), color=line.get_color(),
+                              xycoords=axis.get_yaxis_transform(), textcoords="offset points", size=8, va="center")
 
             if plotting_value == 'area':
                 starting_value = numpy.pi * contour_starting_radius ** 2
@@ -150,8 +163,7 @@ if __name__ == '__main__':
 
             axis.axhline(y=starting_value, linestyle=':', color='k', zorder=0)
 
-            figure.savefig(os.path.join(plot_dir, f'{velocity_product}_{plotting_value}_boxplot.pdf'),
+            figure.savefig(os.path.join(plot_dir, f'{velocity_product}_{plotting_value}.pdf'),
                            orientation='landscape', papertype='A4')
-            # pyplot.show()
 
     print('done')
