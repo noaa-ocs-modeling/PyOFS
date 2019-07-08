@@ -206,6 +206,9 @@ class VectorDataset(VectorField):
         self.dataset['x'] = x[0, :]
         self.dataset['y'] = y[:, 0]
 
+        self.delta_x = numpy.mean(numpy.diff(self.dataset['x']))
+        self.delta_y = numpy.mean(numpy.diff(self.dataset['y']))
+
         super().__init__(numpy.diff(self.dataset['time'].values))
 
     def _interpolate(self, variable: str, point: numpy.array, time: datetime.datetime) -> xarray.DataArray:
@@ -268,10 +271,10 @@ class ROMSGridVectorDataset(VectorField):
 
         :param u: u variable
         :param v: v variable
-        :param u_lon: u longitude coordinate
-        :param u_lat: u latitude coordinate
-        :param v_lon: v longitude coordinate
-        :param v_lat: v latitude coordinate
+        :param u_x: u longitude coordinate
+        :param u_y: u latitude coordinate
+        :param v_x: v longitude coordinate
+        :param v_y: v latitude coordinate
         :param times: time coordinate
         :param grid_angles: rotation angles from east at every grid cell
         """
@@ -287,6 +290,14 @@ class ROMSGridVectorDataset(VectorField):
 
         self.grid_angle_sines = numpy.sin(grid_angles)
         self.grid_angle_cosines = numpy.cos(grid_angles)
+
+        unrotated_coordinates = self.rotated_pole.unrotate_coordinates(
+            numpy.meshgrid(self.dataset['u_x'].values, self.dataset['u_y'].values))
+        cartesian_x, cartesian_y = pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, unrotated_coordinates[0],
+                                                    unrotated_coordinates[1])
+
+        self.delta_x = numpy.abs(numpy.mean(numpy.diff(cartesian_x)))
+        self.delta_y = numpy.abs(numpy.mean(numpy.diff(cartesian_y)))
 
         super().__init__(numpy.diff(self.dataset['time'].values), utilities.WEB_MERCATOR)
 
@@ -533,19 +544,20 @@ class ParticleContour:
     """
 
     def __init__(self, points: List[Tuple[float, float]], time: datetime.datetime, field: VectorField,
-                 max_interval: float = 500, projection: pyproj.Proj = None):
+                 interval: float = 500, projection: pyproj.Proj = None):
         """
         Create contour given list of points.
 
         :param points: list of (lon, lat) points
         :param time: starting time
         :param field: velocity field
+        :param interval: interval between points in meters
         :param projection: projection of input points
         """
 
         self.time = time
         self.field = field
-        self.max_interval = max_interval
+        self.interval = interval
 
         if projection is None:
             projection = utilities.WGS84
@@ -558,8 +570,7 @@ class ParticleContour:
         if projection != self.field.projection:
             points = numpy.array(pyproj.transform(projection, self.field.projection, points[0], points[1]))
 
-        self.vertices = points
-        self._fill_intervals()
+        self.vertices = interpolate_contour(points, interval=self.interval)
 
     def step(self, delta_t: datetime.timedelta = None, order: int = 1):
         """
@@ -600,8 +611,7 @@ class ParticleContour:
             delta_vector = numpy.array([0, 0])
 
         self.time += delta_t
-        self.vertices = self.vertices + delta_vector
-        self._fill_intervals()
+        self.vertices = interpolate_contour(self.vertices + delta_vector, interval=self.interval)
 
     def plot(self, axis: pyplot.Axes = None, **kwargs) -> pyplot.Line2D:
         """
@@ -629,42 +639,6 @@ class ParticleContour:
 
     def bounds(self) -> Tuple[float, float, float, float]:
         return self.geometry().bounds
-
-    def _fill_intervals(self):
-        centroid = self.geometry().centroid.xy
-        differences = self.vertices - centroid
-
-        original_angles = numpy.arctan2(differences[1], differences[0])
-        original_distances = numpy.sqrt(differences[0] ** 2 + differences[1] ** 2)
-        polar = scipy.interpolate.interp1d(original_angles, original_distances)
-        number_of_vertices = 2 * numpy.pi * numpy.max(original_distances) / self.max_interval
-        angles = numpy.linspace(numpy.min(original_angles), numpy.max(original_angles), number_of_vertices)
-        distances = polar(angles)
-
-        # pyplot.polar(original_angles, original_distances, 'bo')
-        # pyplot.polar(angles, distances, 'r-')
-        # pyplot.show()
-
-        self.vertices = centroid + numpy.stack((distances * numpy.cos(angles), distances * numpy.sin(angles)))
-
-        # differences = numpy.diff(
-        #     numpy.concatenate((self.vertices, numpy.expand_dims(self.vertices[:, 0], axis=1)), axis=1), axis=1)
-        # distances = numpy.sqrt(differences[0] ** 2 + differences[1] ** 2)
-        # small_distance_indices = numpy.where(distances < self.max_interval)[0]
-        #
-        # if len(small_distance_indices) > 0:
-        #     self.vertices = numpy.delete(self.vertices, small_distance_indices, axis=1)
-        #     print(f'Removed {len(small_distance_indices)} particles.')
-        #
-        # differences = numpy.diff(
-        #     numpy.concatenate((self.vertices, numpy.expand_dims(self.vertices[:, 0], axis=1)), axis=1), axis=1)
-        # distances = numpy.sqrt(differences[0] ** 2 + differences[1] ** 2)
-        # large_distance_indices = numpy.where(distances > self.max_interval)[0]
-        #
-        # if len(large_distance_indices) > 0:
-        #     new_particles = self.vertices[:, large_distance_indices] + (differences[:, large_distance_indices] / 2)
-        #     self.vertices = numpy.insert(self.vertices, large_distance_indices, new_particles, axis=1)
-        #     print(f'Added {len(large_distance_indices)} new particles.')
 
     def __str__(self) -> str:
         return f'contour with {self.vertices.shape[1]} vertices at time {self.time} with {self.area()} m^2 area and ' + \
@@ -775,27 +749,53 @@ def create_contour(contour_center: tuple, contour_radius: float, start_time: dat
         return Particle(contour_center, start_time, velocity_field)
 
 
-def track_contour(contour: ParticleContour, time_deltas: List[datetime.timedelta]) -> Dict[
+def track_contour(contour: ParticleContour, timestep: datetime.timedelta, steps: int,
+                  intermediate_timestep: datetime.timedelta = None) -> Dict[
     datetime.datetime, shapely.geometry.Polygon]:
-    print(f'[{datetime.datetime.now()}]: Advecting contour with {len(contour.vertices.T)} particles...')
+    polygons = {contour.time: contour.geometry()}
 
-    polygons = {}
-    polygons[contour.time] = contour.geometry()
+    if intermediate_timestep is None or intermediate_timestep > timestep:
+        intermediate_timestep = timestep
+        intermediate_steps = steps
+    else:
+        intermediate_steps = steps * int(timestep / intermediate_timestep)
 
-    for time_delta in time_deltas:
-        if type(time_delta) is numpy.timedelta64:
-            time_delta = time_delta.item()
+    for intermediate_step in range(1, intermediate_steps + 1):
+        contour.step(intermediate_timestep, order)
 
-        if type(time_delta) is int:
-            time_delta = datetime.timedelta(seconds=time_delta * 1e-9)
-
-        contour.step(time_delta, order)
-
-        polygons[contour.time] = contour.geometry()
-
-        print(f'[{datetime.datetime.now()}]: Tracked {contour}')
+        if intermediate_step % int(timestep / intermediate_timestep) == 0:
+            print(f'[{datetime.datetime.now()}]: Tracked {contour}')
+            polygons[contour.time] = contour.geometry()
 
     return polygons
+
+
+def interpolate_contour(points: numpy.array, interval: float, method: str = 'linear') -> numpy.array:
+    """
+    Interpolate along an arbitrary polygon to enforce a regular interval between points.
+
+    :param points: array of x and y values of starting polygon
+    :param interval: desired interval between points in the output polygon
+    :param method: interpolation method
+    :return: array of new x and y values
+    """
+
+    old_x = points[0]
+    old_y = points[1]
+
+    differences = numpy.diff(numpy.concatenate((points, numpy.expand_dims(points[:, 0], axis=1)), axis=1), axis=1)
+    distances = numpy.sqrt(differences[0] ** 2 + differences[1] ** 2)
+
+    old_perimeter_lengths = numpy.cumsum(distances)
+    new_perimeter_lengths = numpy.arange(old_perimeter_lengths[0], old_perimeter_lengths[-1], interval)
+
+    x_function = scipy.interpolate.interp1d(old_perimeter_lengths, old_x, kind=method)
+    y_function = scipy.interpolate.interp1d(old_perimeter_lengths, old_y, kind=method)
+
+    new_x = x_function(new_perimeter_lengths)
+    new_y = y_function(new_perimeter_lengths)
+
+    return numpy.stack((new_x, new_y))
 
 
 if __name__ == '__main__':
@@ -811,15 +811,13 @@ if __name__ == '__main__':
     contour_shape = 'circle'
     order = 4
 
-    contour_radius = 20000
+    contour_radius = 50000
 
     contour_centers = {}
     start_time = datetime.datetime(2016, 9, 25, 1)
 
-    period = datetime.timedelta(days=1)
-    time_delta = datetime.timedelta(hours=1)
-
-    time_deltas = [time_delta for index in range(int(period / time_delta))]
+    period = datetime.timedelta(days=4)
+    time_delta = datetime.timedelta(days=1)
 
     output_path = os.path.join(DATA_DIR, 'output', 'test', 'test_contours.gpkg')
     layer_name = f'{source}_{start_time.strftime("%Y%m%dT%H%M%S")}_{(start_time + period).strftime("%Y%m%dT%H%M%S")}_' + \
@@ -831,21 +829,22 @@ if __name__ == '__main__':
                     layer='study_points') as contour_centers_file:
         for point in contour_centers_file:
             contour_id = point['properties']['name']
-            contour_centers[contour_id] = point['geometry']['coordinates']
+
+            if '1' not in contour_id:
+                contour_centers[contour_id] = point['geometry']['coordinates']
 
     print(f'[{datetime.datetime.now()}]: Creating velocity field...')
     if source == 'rankine':
         vortex_radius = contour_radius * 5
-        vortex_center = utilities.translate_geographic_coordinates(next(iter(contour_centers.values())),
-                                                                   numpy.array(
-                                                                       [contour_radius * -2, contour_radius * -2]))
+        vortex_center = utilities.translate_geographic_coordinates(next(iter(contour_centers.values())), numpy.array(
+            [contour_radius * -2, contour_radius * -2]))
         vortex_period = datetime.timedelta(days=5)
-        velocity_field = RankineVortex(vortex_center, vortex_radius, vortex_period, time_deltas)
+        velocity_field = RankineVortex(vortex_center, vortex_radius, vortex_period,
+                                       [time_delta for index in range(int(period / time_delta))])
 
         radii = range(1, vortex_radius * 2, 50)
         points = [numpy.array(pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, *vortex_center)) + numpy.array(
-            [radius, 0]) for
-                  radius in radii]
+            [radius, 0]) for radius in radii]
         velocities = [velocity_field.velocity(point, start_time) for point in points]
     else:
         data_path = os.path.join(DATA_DIR, 'output', 'test', f'{source.lower()}_{start_time.strftime("%Y%m%d")}.nc')
@@ -982,37 +981,44 @@ if __name__ == '__main__':
 
     contours = {}
 
-    print(f'[{datetime.datetime.now()}]: Creating {len(contour_centers)} initial contours...')
-
-    with futures.ThreadPoolExecutor() as concurrency_pool:
-        running_futures = {
-            concurrency_pool.submit(create_contour, contour_center, contour_radius, start_time, velocity_field,
-                                    contour_shape): contour_id for contour_id, contour_center in
-            contour_centers.items()}
-
-        for completed_future in futures.as_completed(running_futures):
-            contour_id = running_futures[completed_future]
-            contour = completed_future.result()
-            contours[contour_id] = contour
-            print(f'[{datetime.datetime.now()}]: Contour {contour_id} created: {contour}')
+    # print(f'[{datetime.datetime.now()}]: Creating {len(contour_centers)} initial contours...')
+    # with futures.ThreadPoolExecutor() as concurrency_pool:
+    #     running_futures = {
+    #         concurrency_pool.submit(create_contour, contour_center, contour_radius, start_time, velocity_field,
+    #                                 contour_shape): contour_id for contour_id, contour_center in
+    #         contour_centers.items()}
+    #
+    #     for completed_future in futures.as_completed(running_futures):
+    #         contour_id = running_futures[completed_future]
+    #         contour = completed_future.result()
+    #         contours[contour_id] = contour
+    #         print(f'[{datetime.datetime.now()}]: Contour {contour_id} created: {contour}')
 
     # with fiona.open(r"C:\Data\develop\output\test\alex_contours.gpkg") as contour_file:
     #     contours['1'] = ParticleContour(next(iter(contour_file))['geometry']['coordinates'][0], start_time,
     #                                     velocity_field)
 
+    with fiona.open(r"C:\Data\develop\output\test\test_contours.gpkg", layer='test_points') as test_points_layer:
+        for record in test_points_layer:
+            contours[record['properties']['name']] = CircleContour(record['geometry']['coordinates'], contour_radius,
+                                                                   start_time, velocity_field)
+
     print(f'[{datetime.datetime.now()}]: Contours created.')
 
     # define schema
-    schema = {'geometry': 'Polygon', 'properties': {'contour': 'str', 'datetime': 'datetime'}}
+    schema = {'geometry': 'Polygon', 'properties': {'contour': 'str', 'datetime': 'datetime', 'vertices': 'int'}}
 
     # add value fields to schema
     schema['properties'].update({'area': 'float', 'perimeter': 'float'})
 
     records = []
 
+    maximum_timestep = datetime.timedelta(hours=4)
+
     with futures.ThreadPoolExecutor() as concurrency_pool:
-        running_futures = {concurrency_pool.submit(track_contour, contour, time_deltas): contour_id for
-                           contour_id, contour in contours.items()}
+        running_futures = {
+            concurrency_pool.submit(track_contour, contour, time_delta, int(period / time_delta),
+                                    maximum_timestep): contour_id for contour_id, contour in contours.items()}
 
         for completed_future in futures.as_completed(running_futures):
             contour_id = running_futures[completed_future]
@@ -1026,13 +1032,6 @@ if __name__ == '__main__':
                 print(f'[{datetime.datetime.now()}]: Finished tracking contour.')
 
         del running_futures
-
-    # for contour_id, contour in contours.items():
-    #     polygons = track_contour(contour, time_deltas)
-    #
-    #     records.append({'geometry': shapely.geometry.mapping(polygon),
-    #                     'properties': {'contour': contour_id, 'datetime': contour_time, 'area': polygon.area,
-    #                                    'perimeter': polygon.length}} for contour_time, polygon in polygons.items())
 
     with fiona.open(output_path, 'w', 'GPKG', schema, crs=fiona.crs.from_epsg(3857), layer=layer_name) as output_layer:
         output_layer.writerecords(records)
