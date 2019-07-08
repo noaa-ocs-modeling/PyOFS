@@ -53,6 +53,9 @@ if __name__ == '__main__':
     start_time = datetime.datetime(2016, 9, 25, 1)
     period = datetime.timedelta(days=4)
 
+    # whether to plot percentages of the starting value (instead of actual values)
+    plot_percentages = True
+
     values = {contour_name: {} for contour_name in contour_names}
 
     for velocity_product in velocity_products:
@@ -88,7 +91,7 @@ if __name__ == '__main__':
                 values[contour_name][velocity_product] = pandas.DataFrame(
                     {'datetime': contour_datetimes, 'area': contour_areas, 'perimeter': contour_perimeters})
 
-    plotting_values = {'area': 'm^2', 'perimeter': 'm'}
+    plotting_values = {'area': '%' if plot_percentages else 'm^2', 'perimeter': '%' if plot_percentages else 'm'}
 
     print(f'[{datetime.datetime.now()}]: Plotting...')
 
@@ -141,18 +144,11 @@ if __name__ == '__main__':
         for plotting_value, plotting_unit in plotting_values.items():
             figure = pyplot.figure()
             axis = figure.add_subplot(1, 1, 1)
-            axis.set_xlabel('contour')
+            axis.set_xlabel('time')
             axis.set_ylabel(f'{plotting_value} ({plotting_unit})')
 
             colors = pyplot.cm.viridis(numpy.linspace(0, 1, 4))
             transects = dict(zip(('1', '2', '3', '4'), colors))
-
-            for color_index, (contour_name, contour_values) in enumerate(contours_values.groupby('contour')):
-                color = transects[contour_name[1]]
-                line, = axis.plot(contour_values['datetime'], contour_values[plotting_value], '-o', label=contour_name,
-                                  color=color)
-                axis.annotate(contour_name, xy=(1, line.get_ydata()[-1]), xytext=(6, 0), color=line.get_color(),
-                              xycoords=axis.get_yaxis_transform(), textcoords="offset points", size=8, va="center")
 
             if plotting_value == 'area':
                 starting_value = numpy.pi * contour_starting_radius ** 2
@@ -161,9 +157,17 @@ if __name__ == '__main__':
             else:
                 starting_value = 0
 
-            axis.axhline(y=starting_value, linestyle=':', color='k', zorder=0)
+            for color_index, (contour_name, contour_values) in enumerate(contours_values.groupby('contour')):
+                color = transects[contour_name[1]]
+                y_values = contour_values[plotting_value] / starting_value if plot_percentages else 1
+                line, = axis.plot(contour_values['datetime'], y_values, '-o', label=contour_name, color=color)
+                axis.annotate(contour_name, xy=(1, line.get_ydata()[-1]), xytext=(6, 0), color=line.get_color(),
+                              xycoords=axis.get_yaxis_transform(), textcoords="offset points", size=8, va="center")
+
+            axis.axhline(y=1 if plot_percentages else starting_value, linestyle=':', color='k', zorder=0)
 
             figure.savefig(os.path.join(plot_dir, f'{velocity_product}_{plotting_value}.pdf'),
                            orientation='landscape', papertype='A4')
 
+    pyplot.show()
     print('done')
