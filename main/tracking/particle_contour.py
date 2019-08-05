@@ -641,8 +641,7 @@ class ParticleContour:
         return self.geometry().bounds
 
     def __str__(self) -> str:
-        return f'contour with {self.vertices.shape[1]} vertices at time {self.time} with {self.area()} m^2 area and ' + \
-               f'{self.perimeter()} m perimeter'
+        return f'contour with {self.vertices.shape[1]} vertices at time {self.time} with {self.area()} m^2 area and {self.perimeter()} m perimeter'
 
     def __repr__(self) -> str:
         return str(self)

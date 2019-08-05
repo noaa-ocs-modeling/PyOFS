@@ -159,8 +159,7 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
 
         for day_delta, daily_average_dir in output_dirs.items():
             if day_delta in MODEL_DAY_DELTAS['RTOFS']:
-                time_delta_string = f'{"f" if day_delta >= 0 else "n"}' + \
-                                    f'{abs(day_delta) + 1 if day_delta >= 0 else abs(day_delta):03}'
+                time_delta_string = f'{"f" if day_delta >= 0 else "n"}{abs(day_delta) + 1 if day_delta >= 0 else abs(day_delta):03}'
 
                 day_of_forecast = model_run_date + datetime.timedelta(days=day_delta)
 
@@ -253,8 +252,7 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
         for day_delta, daily_average_dir in output_dirs.items():
             if day_delta in MODEL_DAY_DELTAS['WCOFS']:
                 wcofs_direction = 'forecast' if day_delta >= 0 else 'nowcast'
-                time_delta_string = f'{wcofs_direction[0]}' + \
-                                    f'{abs(day_delta) + 1 if wcofs_direction == "forecast" else abs(day_delta):03}'
+                time_delta_string = f'{wcofs_direction[0]}{abs(day_delta) + 1 if wcofs_direction == "forecast" else abs(day_delta):03}'
 
                 wcofs_filename_suffix = time_delta_string
 

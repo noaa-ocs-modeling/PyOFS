@@ -82,8 +82,7 @@ class HFRadarRange:
         if self.source == 'NDBC':
             self.url = f'{SOURCE_URLS["NDBC"]}/hfradar_uswc_{self.resolution}km'
         elif self.source == 'UCSD':
-            self.url = f'{SOURCE_URLS["UCSD"]}/{self.resolution}km/hourly/RTV/' + \
-                       f'HFRADAR_US_West_Coast_{self.resolution}km_Resolution_Hourly_RTV_best.ncd'
+            self.url = f'{SOURCE_URLS["UCSD"]}/{self.resolution}km/hourly/RTV/HFRADAR_US_West_Coast_{self.resolution}km_Resolution_Hourly_RTV_best.ncd'
         else:
             self.url = self.source
 
