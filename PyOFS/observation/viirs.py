@@ -10,12 +10,12 @@ Created on Jun 13, 2018
 import datetime
 import ftplib
 import logging
-import math
 import os
 from collections import OrderedDict
 from concurrent import futures
 from typing import Collection
 
+import math
 import numpy
 import rasterio
 import rasterio.features
@@ -100,8 +100,7 @@ class VIIRSDataset:
         self.url = None
 
         month_dir = f'{self.data_time.year}/{self.data_time.timetuple().tm_yday:03}'
-        filename = f'{self.data_time.strftime("%Y%m%d%H%M%S")}-' + \
-                   f'{self.algorithm}-L3U_GHRSST-SSTsubskin-VIIRS_{self.satellite.upper()}-ACSPO_V{self.version}-v02.0-fv01.0.nc'
+        filename = f'{self.data_time.strftime("%Y%m%d%H%M%S")}-{self.algorithm}-L3U_GHRSST-SSTsubskin-VIIRS_{self.satellite.upper()}-ACSPO_V{self.version}-v02.0-fv01.0.nc'
 
         # TODO N20 does not yet have a reanalysis archive on NESDIS (as of March 8th, 2019)
         if self.satellite.upper() == 'N20' and not self.near_real_time:

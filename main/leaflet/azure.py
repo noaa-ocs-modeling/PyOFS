@@ -9,9 +9,8 @@ def upload_to_azure(local_path: str, remote_path: str, credentials: str, overwri
     os.environ['AZCOPY_CRED_TYPE'] = 'Anonymous'
     azcopy_dir, azcopy_filename = os.path.split(AZCOPY_PATH)
     os.chdir(azcopy_dir)
-    os.system(f'{azcopy_filename} copy "{local_path}" "{remote_path}?{credentials}" ' + \
-              f'--overwrite={str(overwrite).lower()} --follow-symlinks ' + \
-              f'--recursive --from-to=LocalBlob --blob-type=BlockBlob --put-md5')
+    os.system(
+        f'{azcopy_filename} copy "{local_path}" "{remote_path}?{credentials}" --overwrite={str(overwrite).lower()} --follow-symlinks --recursive --from-to=LocalBlob --blob-type=BlockBlob --put-md5')
 
 
 if __name__ == '__main__':

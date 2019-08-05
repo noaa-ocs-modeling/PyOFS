@@ -93,9 +93,7 @@ if __name__ == '__main__':
                     with open(output_path, 'wb') as output_file:
                         ftp_connection.retrbinary(f'RETR {input_path}', output_file.write)
                         logging.info(
-                            f'Copied "{input_path}" to "{output_path}" ' +
-                            f'({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s, ' +
-                            f'{os.stat(output_path).st_size / 1000} KB)')
+                            f'Copied "{input_path}" to "{output_path}" ({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s, {os.stat(output_path).st_size / 1000} KB)')
                         num_downloads += 1
                 else:
                     # only write 'file exists' message on the first run of the day

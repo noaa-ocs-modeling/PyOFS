@@ -153,8 +153,7 @@ class WCOFSDataset:
             else:
                 for hour in self.time_deltas:
                     model_type = 'n' if hour <= 0 else 'f'
-                    url = f'{source}/{month_string}/nos.{self.wcofs_string}.{self.source}.{model_type}' + \
-                          f'{abs(hour):03}.{date_string}.t{WCOFS_MODEL_RUN_HOUR:02}z.nc'
+                    url = f'{source}/{month_string}/nos.{self.wcofs_string}.{self.source}.{model_type}{abs(hour):03}.{date_string}.t{WCOFS_MODEL_RUN_HOUR:02}z.nc'
 
                     try:
                         self.datasets[hour] = xarray.open_dataset(url, decode_times=False)
