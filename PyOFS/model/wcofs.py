@@ -270,7 +270,7 @@ class WCOFSDataset:
         grid_name = self.variable_grids[variable]
         return self.grid_bounds[grid_name]
 
-    def data(self, variable: str, time_delta: int, native_grid: bool = False) -> numpy.ndarray:
+    def data(self, variable: str, time_delta: int, native_grid: bool = False) -> numpy.array:
         """
         Get data of specified variable at specified hour.
 
@@ -329,7 +329,7 @@ class WCOFSDataset:
 
         return output_data
 
-    def data_average(self, variable: str, time_deltas: list = None) -> numpy.ndarray:
+    def data_average(self, variable: str, time_deltas: list = None) -> numpy.array:
         """
         Gets average of data from given time deltas.
 
@@ -548,6 +548,9 @@ class WCOFSDataset:
                     masked_data, masked_transform = rasterio.mask.mask(memory_raster, [study_area_geojson])
 
             masked_data = masked_data[0, :, :]
+
+            if fill_value is not None:
+                masked_data.nan_to_num(copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
 
             if driver == 'AAIGrid':
                 file_extension = 'asc'
@@ -902,7 +905,7 @@ class WCOFSRange:
             raise utilities.NoDataError(
                 f'No WCOFS datasets found between {self.start_time} and {self.end_time}.')
 
-    def data(self, variable: str, model_time: datetime.datetime, time_delta: int) -> numpy.ndarray:
+    def data(self, variable: str, model_time: datetime.datetime, time_delta: int) -> numpy.array:
         """
         Return data from given model run at given variable and hour.
 
@@ -1233,6 +1236,9 @@ class WCOFSRange:
 
                     masked_data = masked_data[0, :, :]
 
+                    if fill_value is not None:
+                        masked_data.nan_to_num(copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
+
                     if driver == 'AAIGrid':
                         file_extension = 'asc'
                         gdal_args.update({'FORCE_CELLSIZE': 'YES'})
@@ -1449,8 +1455,8 @@ class WCOFSRange:
         return f'{self.__class__.__name__}({str(", ".join(used_params))})'
 
 
-def interpolate_grid(input_lon: numpy.ndarray, input_lat: numpy.ndarray, input_data: numpy.ndarray,
-                     output_lon: numpy.ndarray, output_lat: numpy.ndarray, method: str = 'nearest') -> numpy.ndarray:
+def interpolate_grid(input_lon: numpy.array, input_lat: numpy.array, input_data: numpy.array,
+                     output_lon: numpy.array, output_lat: numpy.array, method: str = 'nearest') -> numpy.array:
     """
     Interpolate the given data onto a coordinate grid.
 

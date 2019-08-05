@@ -224,7 +224,7 @@ def interpolate_grids(datasets: dict) -> dict:
     return data
 
 
-def rmse(x: numpy.ndarray, y: numpy.ndarray) -> float:
+def rmse(x: numpy.array, y: numpy.array) -> float:
     """
     Calculate root-mean-square error (RMSE) given observational data and model output.
     
@@ -237,7 +237,7 @@ def rmse(x: numpy.ndarray, y: numpy.ndarray) -> float:
     return numpy.sqrt(numpy.nanmean(squared_residuals))
 
 
-def r_squ(x: numpy.ndarray, y: numpy.ndarray) -> float:
+def r_squ(x: numpy.array, y: numpy.array) -> float:
     """
     Calculate determination coefficient (R^2) given observational data and model output.
     R^2 is a value from 0 to 1 of the amount of observational variance explained by the model.

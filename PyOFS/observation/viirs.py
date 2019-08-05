@@ -10,12 +10,12 @@ Created on Jun 13, 2018
 import datetime
 import ftplib
 import logging
+import math
 import os
 from collections import OrderedDict
 from concurrent import futures
 from typing import Collection
 
-import math
 import numpy
 import rasterio
 import rasterio.features
@@ -251,7 +251,7 @@ class VIIRSDataset:
 
         return self.dataset.geospatial_lon_resolution, self.dataset.geospatial_lat_resolution
 
-    def data(self, variable: str = 'sst', correct_sses=True) -> numpy.ndarray:
+    def data(self, variable: str = 'sst', correct_sses=True) -> numpy.array:
         """
         Retrieve data of given variable. Use 'sst_sses' to retrieve SST corrected with sensor-specific error statistic (SSES)
 
@@ -265,7 +265,7 @@ class VIIRSDataset:
         elif variable == 'sses':
             return self._sses()
 
-    def _sst(self, correct_sses: bool = False) -> numpy.ndarray:
+    def _sst(self, correct_sses: bool = False) -> numpy.array:
         """
         Return matrix of sea surface temperature.
 
@@ -302,7 +302,7 @@ class VIIRSDataset:
 
         return output_sst_data
 
-    def _sses(self) -> numpy.ndarray:
+    def _sses(self) -> numpy.array:
         """
         Return matrix of sensor-specific error statistics.
 
@@ -341,8 +341,8 @@ class VIIRSDataset:
                 fill_value = 0
 
             if input_data is not None and not numpy.isnan(input_data).all():
-                if fill_value is not -9999.0:
-                    input_data[numpy.isnan(input_data)] = fill_value
+                if fill_value is not None:
+                    input_data.nan_to_num(copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
 
                 gdal_args = {
                     'height': input_data.shape[0], 'width': input_data.shape[1], 'count': 1,
@@ -607,6 +607,9 @@ class VIIRSRange:
                 output_data[numpy.isnan(output_data)] = fill_value
 
                 raster_data = output_data.astype(rasterio.float32)
+
+                if fill_value is not None:
+                    raster_data.nan_to_num(copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
 
                 # define arguments to GDAL driver
                 gdal_args = {

@@ -256,6 +256,9 @@ class RTOFSDataset:
                 else:
                     transform = self.global_grid_transform
 
+                if fill_value is not None:
+                    variable_mean.nan_to_num(copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
+
                 gdal_args = {
                     'transform': transform, 'height': variable_mean.shape[0],
                     'width': variable_mean.shape[1], 'count': 1, 'dtype': rasterio.float32,

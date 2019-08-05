@@ -118,7 +118,7 @@ class HFRadarRange:
             # get rasterio geotransform of HFR observation (flipped latitude)
             self.grid_transform = rasterio.transform.from_origin(west, north, self.mean_x_size, self.mean_y_size)
 
-    def data(self, variable: str, time: datetime.datetime, dop_threshold: float = None) -> numpy.ndarray:
+    def data(self, variable: str, time: datetime.datetime, dop_threshold: float = None) -> numpy.array:
         """
         Get data for the specified variable at a single time.
 
@@ -138,7 +138,7 @@ class HFRadarRange:
         return output_data
 
     def data_average(self, variable: str, start_time: datetime.datetime = None,
-                     end_time: datetime.datetime = None, dop_threshold: float = None) -> numpy.ndarray:
+                     end_time: datetime.datetime = None, dop_threshold: float = None) -> numpy.array:
         """
         Get data for the specified variable at a single time.
 
@@ -419,6 +419,9 @@ class HFRadarRange:
                                                          raster_data.flatten(), (output_lon, output_lat),
                                                          method='nearest', fill_value=fill_value).astype(
                     raster_data.dtype)
+
+                if fill_value is not None:
+                    raster_data.nan_to_num(copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
 
                 gdal_args.update({
                     'height': raster_data.shape[0], 'width': raster_data.shape[1], 'FORCE_CELLSIZE': 'YES',

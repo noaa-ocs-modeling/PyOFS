@@ -175,7 +175,7 @@ def get_masked_data(masked_constant: numpy.ma.core.MaskedConstant) -> object:
         return masked_constant
 
 
-def write_gpkg_subdataset(input_data: numpy.ndarray, output_filename: str, layer_name: str, height: int, width: int,
+def write_gpkg_subdataset(input_data: numpy.array, output_filename: str, layer_name: str, height: int, width: int,
                           dtype: str, crs: rasterio.crs.CRS, transform: rasterio.Affine, nodata: float,
                           overwrite: bool = False, **kwargs):
     """

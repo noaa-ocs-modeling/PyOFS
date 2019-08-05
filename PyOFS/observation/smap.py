@@ -121,7 +121,7 @@ class SMAPDataset:
 
         return self.dataset.geospatial_lon_resolution, self.dataset.geospatial_lat_resolution
 
-    def data(self, data_time: datetime.datetime, variable: str = 'sss') -> numpy.ndarray:
+    def data(self, data_time: datetime.datetime, variable: str = 'sss') -> numpy.array:
         """
         Retrieve SMOS SSS data.
 
@@ -137,7 +137,7 @@ class SMAPDataset:
 
         return output_data
 
-    def _sss(self, data_time: datetime.datetime) -> numpy.ndarray:
+    def _sss(self, data_time: datetime.datetime) -> numpy.array:
         """
         Retrieve SMOS SSS data.
 
@@ -171,8 +171,8 @@ class SMAPDataset:
             input_data = self.data(data_time, variable)
 
             if input_data is not None and not numpy.isnan(input_data).all():
-                if fill_value is not -9999.0:
-                    input_data[numpy.isnan(input_data)] = fill_value
+                if fill_value is not None:
+                    input_data.nan_to_num(copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
 
                 gdal_args = {
                     'height': input_data.shape[0], 'width': input_data.shape[1], 'count': 1,
