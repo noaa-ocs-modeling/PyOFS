@@ -3,9 +3,10 @@ dependencies:
   - python=3.7
   - numpy
   - scipy
+  - shapely
+  - pyproj
   - gdal
   - fiona
   - rasterio
   - netCDF4
   - xarray
-  - pyproj
