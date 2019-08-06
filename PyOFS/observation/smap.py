@@ -172,7 +172,7 @@ class SMAPDataset:
 
             if input_data is not None and not numpy.isnan(input_data).all():
                 if fill_value is not None:
-                    numpy.nan_to_num(input_data, copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
+                    input_data[numpy.isnan(input_data)] = fill_value
 
                 gdal_args = {
                     'height': input_data.shape[0], 'width': input_data.shape[1], 'count': 1,
