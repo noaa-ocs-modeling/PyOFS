@@ -549,7 +549,7 @@ class WCOFSDataset:
             masked_data = masked_data[0, :, :]
 
             if fill_value is not None:
-                masked_data.nan_to_num(copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
+                numpy.nan_to_num(masked_data, copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
 
             if driver == 'AAIGrid':
                 file_extension = 'asc'
@@ -1236,7 +1236,7 @@ class WCOFSRange:
                     masked_data = masked_data[0, :, :]
 
                     if fill_value is not None:
-                        masked_data.nan_to_num(copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
+                        numpy.nan_to_num(masked_data, copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
 
                     if driver == 'AAIGrid':
                         file_extension = 'asc'

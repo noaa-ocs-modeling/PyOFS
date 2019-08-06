@@ -8,13 +8,13 @@ Created on Feb 27, 2019
 """
 
 import datetime
+import math
 import os
 from concurrent import futures
 from typing import List, Tuple, Union, Dict
 
 import cartopy.feature
 import fiona.crs
-import math
 import numpy
 import pyproj
 import scipy.interpolate
@@ -806,18 +806,18 @@ if __name__ == '__main__':
     from PyOFS.model import rtofs, wcofs
     from PyOFS.observation import hf_radar
 
-    source = 'wcofs_qck'
+    source = 'wcofs_qck_geostrophic'
     contour_shape = 'circle'
     order = 4
 
-    contour_radius = 25000
+    contour_radius = 50000
 
     contour_centers = {}
     start_time = datetime.datetime(2016, 9, 25, 1)
 
     period = datetime.timedelta(days=4)
-    time_delta = datetime.timedelta(days=1)
-    maximum_timestep = datetime.timedelta(hours=2)
+    time_delta = datetime.timedelta(hours=1)
+    maximum_timestep = datetime.timedelta(hours=4)
 
     output_path = os.path.join(DATA_DIR, 'output', 'test', 'contours.gpkg')
     layer_name = f'{source}_{start_time.strftime("%Y%m%dT%H%M%S")}_{(start_time + period).strftime("%Y%m%dT%H%M%S")}_' + \
@@ -825,8 +825,7 @@ if __name__ == '__main__':
 
     print(f'[{datetime.datetime.now()}]: Started processing...')
 
-    with fiona.open(os.path.join(DATA_DIR, 'output', 'test', 'test_contours.gpkg'),
-                    layer='test_points') as contour_centers_file:
+    with fiona.open(os.path.join(DATA_DIR, 'reference', 'study_points.gpkg')) as contour_centers_file:
         for point in contour_centers_file:
             contour_id = point['properties']['name']
             contour_centers[contour_id] = point['geometry']['coordinates']

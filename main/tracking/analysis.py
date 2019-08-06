@@ -48,7 +48,8 @@ if __name__ == '__main__':
 
     # velocity_products = ['hourly_modeled', 'hourly_geostrophic', 'daily_modeled']
     velocity_products = ['daily_modeled']
-    contour_names = [f'{letter}{number}' for number in range(2, 5) for letter in ['A', 'B', 'C']]
+    contour_names = [f'{letter}{number}' for number in range(1, 5) for letter in ['A', 'B', 'C']]
+    # contour_names = (str(item) for item in range(1, 8))
 
     start_time = datetime.datetime(2016, 9, 25, 1)
     period = datetime.timedelta(days=4)
@@ -145,8 +146,9 @@ if __name__ == '__main__':
             axis.set_xlabel('time')
             axis.set_ylabel(f'{plotting_value} ({plotting_unit})')
 
-            colors = pyplot.cm.viridis(numpy.linspace(0, 1, 4))
-            transects = dict(zip(('1', '2', '3', '4'), colors))
+            colors = dict(
+                zip((contour_name[1] for contour_name in contour_names), pyplot.cm.viridis(numpy.linspace(0, 1, 4))))
+            # colors = dict(zip(contour_names, pyplot.cm.viridis(numpy.linspace(0, 1, 4))))
 
             if plotting_value == 'area':
                 starting_value = numpy.pi * contour_starting_radius ** 2
@@ -156,7 +158,7 @@ if __name__ == '__main__':
                 starting_value = 0
 
             for color_index, (contour_name, contour_values) in enumerate(contours_values.groupby('contour')):
-                color = transects[contour_name[1]]
+                color = colors[contour_name[1]]
                 y_values = contour_values[plotting_value] / starting_value if plot_percentages else 1
                 line, = axis.plot(contour_values['datetime'], y_values, '-o', label=contour_name, color=color)
                 axis.annotate(contour_name, xy=(1, line.get_ydata()[-1]), xytext=(6, 0), color=line.get_color(),

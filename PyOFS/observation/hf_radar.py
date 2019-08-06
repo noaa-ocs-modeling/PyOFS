@@ -420,7 +420,7 @@ class HFRadarRange:
                     raster_data.dtype)
 
                 if fill_value is not None:
-                    raster_data.nan_to_num(copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
+                    numpy.nan_to_num(raster_data, copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
 
                 gdal_args.update({
                     'height': raster_data.shape[0], 'width': raster_data.shape[1], 'FORCE_CELLSIZE': 'YES',

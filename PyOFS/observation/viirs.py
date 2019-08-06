@@ -10,12 +10,12 @@ Created on Jun 13, 2018
 import datetime
 import ftplib
 import logging
+import math
 import os
 from collections import OrderedDict
 from concurrent import futures
 from typing import Collection
 
-import math
 import numpy
 import rasterio
 import rasterio.features
@@ -341,7 +341,7 @@ class VIIRSDataset:
 
             if input_data is not None and not numpy.isnan(input_data).all():
                 if fill_value is not None:
-                    input_data.nan_to_num(copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
+                    numpy.nan_to_num(input_data, copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
 
                 gdal_args = {
                     'height': input_data.shape[0], 'width': input_data.shape[1], 'count': 1,
@@ -608,7 +608,7 @@ class VIIRSRange:
                 raster_data = output_data.astype(rasterio.float32)
 
                 if fill_value is not None:
-                    raster_data.nan_to_num(copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
+                    numpy.nan_to_num(raster_data, copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
 
                 # define arguments to GDAL driver
                 gdal_args = {
