@@ -8,4 +8,4 @@ else:
     DATA_DIR = r"C:\data\OFS"
 
 # # for development branch
-# DATA_DIR = os.path.join(DATA_DIR, 'develop')
+DATA_DIR = os.path.join(DATA_DIR, 'develop')
