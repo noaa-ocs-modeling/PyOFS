@@ -257,7 +257,7 @@ class RTOFSDataset:
                     transform = self.global_grid_transform
 
                 if fill_value is not None:
-                    numpy.nan_to_num(variable_mean, copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
+                    variable_mean[numpy.isnan(variable_mean)] = fill_value
 
                 gdal_args = {
                     'transform': transform, 'height': variable_mean.shape[0],

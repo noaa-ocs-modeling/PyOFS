@@ -419,9 +419,6 @@ class HFRadarRange:
                                                          method='nearest', fill_value=fill_value).astype(
                     raster_data.dtype)
 
-                if fill_value is not None:
-                    numpy.nan_to_num(raster_data, copy=False, nan=fill_value, posinf=fill_value, neginf=fill_value)
-
                 gdal_args.update({
                     'height': raster_data.shape[0], 'width': raster_data.shape[1], 'FORCE_CELLSIZE': 'YES',
                     'transform': rasterio.transform.from_origin(numpy.min(output_lon), numpy.max(output_lat),
@@ -435,6 +432,9 @@ class HFRadarRange:
                 gdal_args.update({
                     'TILED': 'YES'
                 })
+
+            if fill_value is not None:
+                raster_data[numpy.isnan(raster_data)] = fill_value
 
             output_filename = os.path.join(output_dir,
                                            f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
