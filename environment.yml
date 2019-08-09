@@ -10,3 +10,4 @@ dependencies:
   - rasterio
   - netCDF4
   - xarray
+  - requests
