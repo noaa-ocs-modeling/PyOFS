@@ -1,11 +1,12 @@
 name: PyOFS
+channels:
+  - conda-forge
 dependencies:
-  - python=3.7
+  - python=3
   - numpy
   - scipy
   - shapely
   - pyproj
-  - gdal
   - fiona
   - rasterio
   - netCDF4
