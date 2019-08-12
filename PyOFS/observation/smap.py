@@ -21,9 +21,9 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-from PyOFS import CRS_EPSG, DATA_DIR, utilities, LEAFLET_NODATA_VALUE
+from PyOFS import CRS_EPSG, DATA_DIRECTORY, utilities, LEAFLET_NODATA_VALUE
 
-STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
+STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIRECTORY, r"reference\wcofs.gpkg:study_area")
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 
@@ -214,7 +214,7 @@ class SMAPDataset:
 
 
 if __name__ == '__main__':
-    output_dir = os.path.join(DATA_DIR, r'output\test')
+    output_dir = os.path.join(DATA_DIRECTORY, r'output\test')
 
     smap_dataset = SMAPDataset()
     smap_dataset.write_rasters(output_dir, datetime.datetime(2018, 12, 1))

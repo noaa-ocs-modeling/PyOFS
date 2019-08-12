@@ -41,7 +41,7 @@ if __name__ == '__main__':
 
     sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
-    from PyOFS import DATA_DIR
+    from PyOFS import DATA_DIRECTORY
 
     plot_dir = r"R:\documents\plots"
     contour_starting_radius = 50000
@@ -63,7 +63,7 @@ if __name__ == '__main__':
         time_delta = datetime.timedelta(hours=1) if 'hourly' in velocity_product else datetime.timedelta(days=1)
         source = 'wcofs_qck' if 'modeled' in velocity_product else 'wcofs_qck_geostrophic'
 
-        input_path = os.path.join(DATA_DIR, 'output', 'test', 'contours.gpkg')
+        input_path = os.path.join(DATA_DIRECTORY, 'output', 'test', 'contours.gpkg')
         layer_name = f'{source}_{start_time.strftime("%Y%m%dT%H%M%S")}_{(start_time + period).strftime("%Y%m%dT%H%M%S")}_{int(time_delta.total_seconds() / 3600)}h'
 
         print(f'[{datetime.datetime.now()}]: Reading {input_path}...')

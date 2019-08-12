@@ -15,13 +15,13 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
-from PyOFS import DATA_DIR
+from PyOFS import DATA_DIRECTORY
 
 TIDEPOOL_URL = 'tidepool.nos.noaa.gov'
 INPUT_DIR = '/pub/outgoing/CSDL'
 
-OUTPUT_DIR = os.path.join(DATA_DIR, 'input')
-LOG_DIR = os.path.join(DATA_DIR, 'log')
+OUTPUT_DIR = os.path.join(DATA_DIRECTORY, 'input')
+LOG_DIR = os.path.join(DATA_DIRECTORY, 'log')
 
 if __name__ == '__main__':
     start_time = datetime.datetime.now()

@@ -23,7 +23,7 @@ import rasterio.warp
 import xarray
 from shapely import geometry
 
-from PyOFS import CRS_EPSG, DATA_DIR, utilities, LEAFLET_NODATA_VALUE
+from PyOFS import CRS_EPSG, DATA_DIRECTORY, utilities, LEAFLET_NODATA_VALUE
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
@@ -57,7 +57,7 @@ DATA_VARIABLES = {
 
 TIME_DELTAS = {'daily': range(-3, 8 + 1)}
 
-STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
+STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIRECTORY, r"reference\wcofs.gpkg:study_area")
 
 SOURCE_URL = 'https://nomads.ncep.noaa.gov:9090/dods/rtofs'
 
@@ -411,7 +411,7 @@ class RTOFSDataset:
 
 
 if __name__ == '__main__':
-    output_dir = os.path.join(DATA_DIR, r'output\test')
+    output_dir = os.path.join(DATA_DIRECTORY, r'output\test')
 
     rtofs_dataset = RTOFSDataset(datetime.datetime.now())
     rtofs_dataset.write_raster(os.path.join(output_dir, 'rtofs_ssh.tiff'), 'ssh', datetime.datetime.now())

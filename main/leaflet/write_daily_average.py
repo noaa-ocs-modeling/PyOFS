@@ -18,13 +18,13 @@ from leaflet import azure, write_json
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
-from PyOFS import DATA_DIR, LEAFLET_NODATA_VALUE
+from PyOFS import DATA_DIRECTORY, LEAFLET_NODATA_VALUE
 from PyOFS.observation import hf_radar, viirs, smap, data_buoy
 from PyOFS.model import wcofs, rtofs
 
-LOG_DIR = os.path.join(DATA_DIR, 'log')
-OUTPUT_DIR = os.path.join(DATA_DIR, 'output')
-REFERENCE_DIR = os.path.join(DATA_DIR, 'reference')
+LOG_DIR = os.path.join(DATA_DIRECTORY, 'log')
+OUTPUT_DIR = os.path.join(DATA_DIRECTORY, 'output')
+REFERENCE_DIR = os.path.join(DATA_DIRECTORY, 'reference')
 
 # offset from study area to UTC
 STUDY_AREA_TIMEZONE = 'US/Pacific'
@@ -284,7 +284,7 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                     else:
                         wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg',
                                                            grid_filename=grid_filename,
-                                                           source_url=os.path.join(DATA_DIR, 'input/wcofs/avg'),
+                                                           source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'),
                                                            wcofs_string=wcofs_string)
 
                 scalar_variables_to_write = [variable for variable in scalar_variables if
@@ -390,7 +390,7 @@ if __name__ == '__main__':
 
     write_json.dir_structure_to_json(OUTPUT_DIR, files_json_filename)
 
-    azure_credential_files = [os.path.join(DATA_DIR, azure_credentials_filename) for azure_credentials_filename in
+    azure_credential_files = [os.path.join(DATA_DIRECTORY, azure_credentials_filename) for azure_credentials_filename in
                               ['azure_credentials.txt', 'azure_credentials_old.txt']]
 
     for azure_credential_file in azure_credential_files:

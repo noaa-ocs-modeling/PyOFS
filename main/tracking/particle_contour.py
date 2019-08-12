@@ -802,7 +802,7 @@ if __name__ == '__main__':
 
     sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
-    from PyOFS import DATA_DIR
+    from PyOFS import DATA_DIRECTORY
     from PyOFS.model import rtofs, wcofs
     from PyOFS.observation import hf_radar
 
@@ -819,13 +819,13 @@ if __name__ == '__main__':
     time_delta = datetime.timedelta(hours=1)
     maximum_timestep = datetime.timedelta(hours=4)
 
-    output_path = os.path.join(DATA_DIR, 'output', 'test', 'contours.gpkg')
+    output_path = os.path.join(DATA_DIRECTORY, 'output', 'test', 'contours.gpkg')
     layer_name = f'{source}_{start_time.strftime("%Y%m%dT%H%M%S")}_{(start_time + period).strftime("%Y%m%dT%H%M%S")}_' + \
                  f'{int(time_delta.total_seconds() / 3600)}h'
 
     print(f'[{datetime.datetime.now()}]: Started processing...')
 
-    with fiona.open(os.path.join(DATA_DIR, 'reference', 'study_points.gpkg')) as contour_centers_file:
+    with fiona.open(os.path.join(DATA_DIRECTORY, 'reference', 'study_points.gpkg')) as contour_centers_file:
         for point in contour_centers_file:
             contour_id = point['properties']['name']
             contour_centers[contour_id] = point['geometry']['coordinates']
@@ -844,7 +844,8 @@ if __name__ == '__main__':
             [radius, 0]) for radius in radii]
         velocities = [velocity_field.velocity(point, start_time) for point in points]
     else:
-        data_path = os.path.join(DATA_DIR, 'output', 'test', f'{source.lower()}_{start_time.strftime("%Y%m%d")}.nc')
+        data_path = os.path.join(DATA_DIRECTORY, 'output', 'test',
+                                 f'{source.lower()}_{start_time.strftime("%Y%m%d")}.nc')
 
         print(f'[{datetime.datetime.now()}]: Collecting data...')
 
@@ -864,7 +865,7 @@ if __name__ == '__main__':
             if 'WCOFS_QCK' in source.upper():
                 rotated_pole = utilities.RotatedPoleCoordinateSystem(wcofs.ROTATED_POLE)
 
-                qck_path = os.path.join(DATA_DIR, 'input', 'wcofs', 'qck')
+                qck_path = os.path.join(DATA_DIRECTORY, 'input', 'wcofs', 'qck')
                 input_filenames = os.listdir(qck_path)
 
                 combined_time = []

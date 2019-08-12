@@ -50,6 +50,7 @@ if __name__ == '__main__':
 
     sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
-    from PyOFS import DATA_DIR
+    from PyOFS import DATA_DIRECTORY
 
-    dir_structure_to_json(os.path.join(DATA_DIR, 'output'), os.path.join(DATA_DIR, 'reference', 'files.json'))
+    dir_structure_to_json(os.path.join(DATA_DIRECTORY, 'output'),
+                          os.path.join(DATA_DIRECTORY, 'reference', 'files.json'))

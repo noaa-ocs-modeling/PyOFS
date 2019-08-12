@@ -541,11 +541,11 @@ if __name__ == '__main__':
     from matplotlib import pyplot
     from pandas.plotting import register_matplotlib_converters
 
-    from PyOFS import DATA_DIR
+    from PyOFS import DATA_DIRECTORY
 
     register_matplotlib_converters()
 
-    output_dir = os.path.join(DATA_DIR, r'output\test')
+    output_dir = os.path.join(DATA_DIRECTORY, r'output\test')
 
     start_time = datetime.datetime(2019, 2, 6)
     end_time = start_time + datetime.timedelta(days=1)

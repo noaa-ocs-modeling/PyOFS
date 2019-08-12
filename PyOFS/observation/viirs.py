@@ -24,13 +24,13 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-from PyOFS import CRS_EPSG, DATA_DIR, utilities, LEAFLET_NODATA_VALUE
+from PyOFS import CRS_EPSG, DATA_DIRECTORY, utilities, LEAFLET_NODATA_VALUE
 
 VIIRS_START_TIME = datetime.datetime.strptime('2012-03-01 00:10:00', '%Y-%m-%d %H:%M:%S')
 VIIRS_PERIOD = datetime.timedelta(days=16)
 
-PASS_TIMES_FILENAME = os.path.join(DATA_DIR, r"reference\viirs_pass_times.txt")
-STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
+PASS_TIMES_FILENAME = os.path.join(DATA_DIRECTORY, r"reference\viirs_pass_times.txt")
+STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIRECTORY, r"reference\wcofs.gpkg:study_area")
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 
@@ -152,7 +152,7 @@ class VIIRSDataset:
                     with ftplib.FTP(host_url) as ftp_connection:
                         ftp_connection.login()
 
-                        output_dir = os.path.join(DATA_DIR, 'input', 'viirs')
+                        output_dir = os.path.join(DATA_DIRECTORY, 'input', 'viirs')
 
                         if not os.path.exists(output_dir):
                             os.mkdir(output_dir)
@@ -849,7 +849,7 @@ def get_pass_times(start_time: datetime.datetime, end_time: datetime.datetime,
 
 
 if __name__ == '__main__':
-    output_dir = os.path.join(DATA_DIR, r'output\test')
+    output_dir = os.path.join(DATA_DIRECTORY, r'output\test')
 
     start_time = datetime.datetime.utcnow() - datetime.timedelta(days=1)
     end_time = start_time + datetime.timedelta(days=1)

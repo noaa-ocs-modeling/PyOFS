@@ -23,7 +23,7 @@ import shapely
 import shapely.geometry
 import xarray
 
-from PyOFS import CRS_EPSG, DATA_DIR, utilities
+from PyOFS import CRS_EPSG, DATA_DIRECTORY, utilities
 
 MEASUREMENT_VARIABLES = ['water_temperature', 'conductivity', 'salinity', 'o2_saturation', 'dissolved_oxygen',
                          'chlorophyll_concentration', 'turbidity', 'water_ph', 'water_eh']
@@ -31,8 +31,8 @@ MEASUREMENT_VARIABLES = ['water_temperature', 'conductivity', 'salinity', 'o2_sa
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
-STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
-WCOFS_NDBC_STATIONS_FILENAME = os.path.join(DATA_DIR, r"reference\ndbc_stations.txt")
+STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIRECTORY, r"reference\wcofs.gpkg:study_area")
+WCOFS_NDBC_STATIONS_FILENAME = os.path.join(DATA_DIRECTORY, r"reference\ndbc_stations.txt")
 
 CATALOG_URL = 'https://dods.ndbc.noaa.gov/thredds/catalog/data/ocean/catalog.html'
 SOURCE_URL = 'https://dods.ndbc.noaa.gov/thredds/dodsC/data/ocean'
@@ -281,7 +281,7 @@ def check_station(dataset: xarray.Dataset, study_area_polygon_filename: str) -> 
 
 
 if __name__ == '__main__':
-    output_dir = os.path.join(DATA_DIR, r'output\test')
+    output_dir = os.path.join(DATA_DIRECTORY, r'output\test')
     wcofs_stations = list(numpy.genfromtxt(WCOFS_NDBC_STATIONS_FILENAME, dtype='str'))
 
     start_time = datetime.datetime(2018, 7, 14)

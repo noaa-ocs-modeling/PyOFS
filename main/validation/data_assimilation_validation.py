@@ -8,11 +8,11 @@ import xarray
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
-from PyOFS import DATA_DIR
+from PyOFS import DATA_DIRECTORY
 from PyOFS.observation import hf_radar, viirs
 from PyOFS.model import wcofs
 
-WORKSPACE_DIR = os.path.join(DATA_DIR, 'validation')
+WORKSPACE_DIR = os.path.join(DATA_DIRECTORY, 'validation')
 
 # UTC offset of study area
 UTC_OFFSET = 8
@@ -57,7 +57,7 @@ def to_netcdf(start_time: datetime.datetime, end_time: datetime.datetime, output
             nc_filenames['wcofs_v_noDA']) or not os.path.exists(nc_filenames['wcofs_sst_noDA']):
         wcofs_range_noDA = wcofs.WCOFSRange(start_time, end_time, source='avg',
                                             grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME,
-                                            source_url=os.path.join(DATA_DIR, 'input', 'wcofs', 'avg'),
+                                            source_url=os.path.join(DATA_DIRECTORY, 'input', 'wcofs', 'avg'),
                                             wcofs_string='wcofs4')
 
         # TODO find a way to combine WCOFS variables without raising MemoryError

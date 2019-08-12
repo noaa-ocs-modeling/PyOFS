@@ -68,8 +68,8 @@ def check_files(input_dir: str) -> dict:
 
 
 if __name__ == '__main__':
-    from PyOFS import DATA_DIR
+    from PyOFS import DATA_DIRECTORY
 
-    missing_files = check_files(os.path.join(DATA_DIR, 'output'))
+    missing_files = check_files(os.path.join(DATA_DIRECTORY, 'output'))
 
     print(missing_files)
