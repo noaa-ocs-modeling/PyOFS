@@ -13,12 +13,12 @@ import os
 import sys
 from typing import Collection, Union
 
-sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
-from main.leaflet import write_json, azure
-
 import pytz
+from leaflet import azure, write_json
 
-from PyOFS import DATA_DIR
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
+
+from PyOFS import DATA_DIR, LEAFLET_NODATA_VALUE
 from PyOFS.observation import hf_radar, viirs, smap, data_buoy
 from PyOFS.model import wcofs, rtofs
 
@@ -31,11 +31,8 @@ STUDY_AREA_TIMEZONE = 'US/Pacific'
 STUDY_AREA_TO_UTC = datetime.timedelta(
     hours=-datetime.datetime.now(pytz.timezone(STUDY_AREA_TIMEZONE)).utcoffset().total_seconds() / 3600)
 
-# default nodata value used by leaflet-geotiff renderer
-LEAFLET_NODATA_VALUE = -9999
-
 # range of day deltas that models reach
-MODEL_DAY_DELTAS = {'WCOFS': range(-1, 2 + 1), 'RTOFS': range(-3, 8 + 1)}
+MODEL_DAY_DELTAS = {'WCOFS': range(-1, 3), 'RTOFS': range(-3, 9)}
 
 
 def write_observation(output_dir: str, observation_date: Union[datetime.datetime, datetime.date],

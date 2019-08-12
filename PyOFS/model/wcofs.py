@@ -26,7 +26,7 @@ import xarray
 from rasterio.io import MemoryFile
 from scipy import interpolate
 
-from PyOFS import CRS_EPSG, DATA_DIR, utilities
+from PyOFS import CRS_EPSG, DATA_DIR, utilities, LEAFLET_NODATA_VALUE
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
@@ -363,7 +363,8 @@ class WCOFSDataset:
 
     def write_rasters(self, output_dir: str, variables: Collection[str] = None, filename_suffix: str = None,
                       time_deltas: list = None, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
-                      x_size: float = 0.04, y_size: float = 0.04, fill_value=-9999, driver: str = 'GTiff'):
+                      x_size: float = 0.04, y_size: float = 0.04, fill_value=LEAFLET_NODATA_VALUE,
+                      driver: str = 'GTiff'):
         """
         Write averaged raster data of given variables to given output directory.
 
@@ -1048,7 +1049,7 @@ class WCOFSRange:
     def write_rasters(self, output_dir: str, variables: Collection[str] = None, filename_suffix: str = None,
                       start_time: datetime.datetime = None, end_time: datetime.datetime = None,
                       study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, x_size: float = 0.04,
-                      y_size: float = 0.04, fill_value=-9999, driver: str = 'GTiff'):
+                      y_size: float = 0.04, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff'):
         """
         Write raster data of given variables to given output directory, averaged over given time interval.
 

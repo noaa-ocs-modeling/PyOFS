@@ -21,7 +21,7 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-from PyOFS import CRS_EPSG, DATA_DIR, utilities
+from PyOFS import CRS_EPSG, DATA_DIR, utilities, LEAFLET_NODATA_VALUE
 
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIR, r"reference\wcofs.gpkg:study_area")
 
@@ -153,9 +153,8 @@ class SMAPDataset:
         else:
             raise utilities.NoDataError(f'No data exists for {data_time.strftime("%Y%m%dT%H%M%S")}.')
 
-    def write_rasters(self, output_dir: str, data_time: datetime.datetime,
-                      variables: Collection[str] = tuple(['sss']),
-                      filename_prefix: str = 'smos', fill_value: float = -9999.0, driver: str = 'GTiff'):
+    def write_rasters(self, output_dir: str, data_time: datetime.datetime, variables: Collection[str] = tuple(['sss']),
+                      filename_prefix: str = 'smos', fill_value: float = LEAFLET_NODATA_VALUE, driver: str = 'GTiff'):
         """
         Write SMOS rasters to file using data from given variables.
 

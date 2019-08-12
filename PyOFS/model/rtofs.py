@@ -23,7 +23,7 @@ import rasterio.warp
 import xarray
 from shapely import geometry
 
-from PyOFS import CRS_EPSG, DATA_DIR, utilities
+from PyOFS import CRS_EPSG, DATA_DIR, utilities, LEAFLET_NODATA_VALUE
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
@@ -199,7 +199,8 @@ class RTOFSDataset:
             raise ValueError(f'Direction must be one of {list(DATASET_STRUCTURE[self.source].keys())}.')
 
     def write_rasters(self, output_dir: str, variables: list, time: datetime.datetime, filename_prefix: str = None,
-                      filename_suffix: str = None, fill_value=-9999, driver: str = 'GTiff', crop: bool = True):
+                      filename_suffix: str = None, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff',
+                      crop: bool = True):
         """
         Write averaged raster data of given variables to given output directory.
 
@@ -286,8 +287,8 @@ class RTOFSDataset:
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(variable_mean, 1)
 
-    def write_raster(self, output_filename: str, variable: str, time: datetime.datetime, fill_value=-9999,
-                     driver: str = 'GTiff', crop: bool = True):
+    def write_raster(self, output_filename: str, variable: str, time: datetime.datetime,
+                     fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff', crop: bool = True):
         """
         Writes interpolated raster of given variable to output path.
 

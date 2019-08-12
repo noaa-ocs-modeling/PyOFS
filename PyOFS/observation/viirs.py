@@ -10,12 +10,12 @@ Created on Jun 13, 2018
 import datetime
 import ftplib
 import logging
+import math
 import os
 from collections import OrderedDict
 from concurrent import futures
 from typing import Collection
 
-import math
 import numpy
 import rasterio
 import rasterio.features
@@ -24,7 +24,7 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-from PyOFS import CRS_EPSG, DATA_DIR, utilities
+from PyOFS import CRS_EPSG, DATA_DIR, utilities, LEAFLET_NODATA_VALUE
 
 VIIRS_START_TIME = datetime.datetime.strptime('2012-03-01 00:10:00', '%Y-%m-%d %H:%M:%S')
 VIIRS_PERIOD = datetime.timedelta(days=16)
@@ -320,8 +320,8 @@ class VIIRSDataset:
         return sses_data
 
     def write_rasters(self, output_dir: str, variables: Collection[str] = ('sst', 'sses'),
-                      filename_prefix: str = 'viirs',
-                      fill_value: float = -9999.0, driver: str = 'GTiff', correct_sses: bool = False):
+                      filename_prefix: str = 'viirs', fill_value: float = LEAFLET_NODATA_VALUE, driver: str = 'GTiff',
+                      correct_sses: bool = False):
         """
         Write VIIRS rasters to file using data from given variables.
 
@@ -573,9 +573,9 @@ class VIIRSRange:
                                             fill_value=fill_value, drivers=driver, correct_sses=correct_sses)
 
     def write_raster(self, output_dir: str, filename_prefix: str = None, filename_suffix: str = None,
-                     start_time: datetime.datetime = None, end_time: datetime.datetime = None,
-                     average: bool = False, fill_value: float = -9999, driver: str = 'GTiff',
-                     correct_sses: bool = False, variables: Collection[str] = tuple(['sst']), satellite: str = None):
+                     start_time: datetime.datetime = None, end_time: datetime.datetime = None, average: bool = False,
+                     fill_value: float = LEAFLET_NODATA_VALUE, driver: str = 'GTiff', correct_sses: bool = False,
+                     variables: Collection[str] = tuple(['sst']), satellite: str = None):
 
         """
         Write VIIRS raster of SST data (either overlapped or averaged) from the given time interval.

@@ -19,7 +19,7 @@ import rasterio
 import scipy.interpolate
 import xarray
 
-from PyOFS import CRS_EPSG, utilities
+from PyOFS import CRS_EPSG, utilities, LEAFLET_NODATA_VALUE
 
 DATA_VARIABLES = {'ssu': 'u', 'ssv': 'v', 'dopx': 'DOPx', 'dopy': 'DOPy'}
 
@@ -354,8 +354,8 @@ class HFRadarRange:
 
     def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = '',
                       variables: Collection[str] = None, start_time: datetime.datetime = None,
-                      end_time: datetime.datetime = None, fill_value: float = -9999, driver: str = 'GTiff',
-                      dop_threshold: float = None):
+                      end_time: datetime.datetime = None, fill_value: float = LEAFLET_NODATA_VALUE,
+                      driver: str = 'GTiff', dop_threshold: float = None):
         """
         Write average of HFR data for all hours in the given time interval to rasters.
 
