@@ -10,12 +10,13 @@ Created on Jun 13, 2018
 import datetime
 import ftplib
 import logging
-import math
 import os
+import sys
 from collections import OrderedDict
 from concurrent import futures
 from typing import Collection
 
+import math
 import numpy
 import rasterio
 import rasterio.features
@@ -790,9 +791,11 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
                 # if we get to here, break and continue to the next datetime
                 break
             except utilities.NoDataError as error:
-                print(error)
+                _, _, error_traceback = sys.exc_info()
+                logging.warning(
+                    f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
         else:
-            print(f'{current_time.strftime("%Y%m%dT%H%M%S")}: missing observation across all cycles')
+            logging.warning(f'{current_time.strftime("%Y%m%dT%H%M%S")}: missing observation across all cycles')
 
         # write lines to file
         with open(output_filename, 'w') as output_file:
