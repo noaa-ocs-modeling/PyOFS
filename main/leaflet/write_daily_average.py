@@ -172,19 +172,20 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                 scalar_variables_to_write = [variable for variable in scalar_variables if
                                              not any(variable in filename for filename in existing_files)]
 
-                if len(scalar_variables_to_write) > 0:
-                    rtofs_dataset.write_rasters(daily_average_dir, variables=scalar_variables_to_write,
-                                                time=day_of_forecast,
-                                                driver='GTiff')
-                else:
-                    logging.info(f'Skipping RTOFS day {day_delta} scalar variables')
+                if rtofs_dataset is not None:
+                    if len(scalar_variables_to_write) > 0:
+                        rtofs_dataset.write_rasters(daily_average_dir, variables=scalar_variables_to_write,
+                                                    time=day_of_forecast,
+                                                    driver='GTiff')
+                    else:
+                        logging.info(f'Skipping RTOFS day {day_delta} scalar variables')
 
-                if not all(any(vector_variable in filename for filename in existing_files) for vector_variable in
-                           vector_variables):
-                    rtofs_dataset.write_rasters(daily_average_dir, variables=vector_variables, time=day_of_forecast,
-                                                driver='AAIGrid')
-                else:
-                    logging.info(f'Skipping RTOFS day {day_delta} uv')
+                    if not all(any(vector_variable in filename for filename in existing_files) for vector_variable in
+                               vector_variables):
+                        rtofs_dataset.write_rasters(daily_average_dir, variables=vector_variables, time=day_of_forecast,
+                                                    driver='AAIGrid')
+                    else:
+                        logging.info(f'Skipping RTOFS day {day_delta} uv')
         del rtofs_dataset
     except Exception as error:
         error_type, exc_obj, error_traceback = sys.exc_info()
@@ -286,26 +287,26 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                                                            grid_filename=grid_filename,
                                                            source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'),
                                                            wcofs_string=wcofs_string)
+                if wcofs_dataset is not None:
+                    scalar_variables_to_write = [variable for variable in scalar_variables if
+                                                 not any(variable in filename for filename in existing_files)]
 
-                scalar_variables_to_write = [variable for variable in scalar_variables if
-                                             not any(variable in filename for filename in existing_files)]
+                    if len(scalar_variables_to_write) > 0:
+                        wcofs_dataset.write_rasters(daily_average_dir, scalar_variables_to_write,
+                                                    filename_suffix=wcofs_filename_suffix,
+                                                    time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
+                                                    driver='GTiff')
+                    else:
+                        logging.info(f'Skipping WCOFS day {day_delta} scalar variables')
 
-                if len(scalar_variables_to_write) > 0:
-                    wcofs_dataset.write_rasters(daily_average_dir, scalar_variables_to_write,
-                                                filename_suffix=wcofs_filename_suffix,
-                                                time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
-                                                driver='GTiff')
-                else:
-                    logging.info(f'Skipping WCOFS day {day_delta} scalar variables')
-
-                if not all(any(vector_variable in filename for filename in existing_files) for vector_variable in
-                           vector_variables):
-                    wcofs_dataset.write_rasters(daily_average_dir, vector_variables,
-                                                filename_suffix=wcofs_filename_suffix,
-                                                time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
-                                                driver='AAIGrid')
-                else:
-                    logging.info(f'Skipping WCOFS day {day_delta} uv')
+                    if not all(any(vector_variable in filename for filename in existing_files) for vector_variable in
+                               vector_variables):
+                        wcofs_dataset.write_rasters(daily_average_dir, vector_variables,
+                                                    filename_suffix=wcofs_filename_suffix,
+                                                    time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
+                                                    driver='AAIGrid')
+                    else:
+                        logging.info(f'Skipping WCOFS day {day_delta} uv')
         del wcofs_dataset
 
         if grid_size_km == 2:
