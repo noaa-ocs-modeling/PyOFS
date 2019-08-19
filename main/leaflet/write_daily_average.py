@@ -14,10 +14,10 @@ import sys
 from typing import Collection, Union
 
 import pytz
-from leaflet import azure, write_json
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
+from main.leaflet import write_azure, write_json
 from PyOFS import DATA_DIRECTORY, LEAFLET_NODATA_VALUE
 from PyOFS.observation import hf_radar, viirs, smap, data_buoy
 from PyOFS.model import wcofs, rtofs
@@ -115,9 +115,9 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
             data_buoy_range.write_vector(output_filename, day_start_ndbc, day_end_ndbc)
             del data_buoy_range
     except Exception as error:
-        error_type, exc_obj, error_traceback = sys.exc_info()
-        filename = os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]
-        logging.warning(f'{error} ({filename}:{error_traceback.tb_lineno})')
+        _, _, error_traceback = sys.exc_info()
+        logging.warning(
+            f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
 
 
 def write_rtofs(output_dir: str, model_run_date: Union[datetime.datetime, datetime.date],
@@ -188,9 +188,9 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                         logging.info(f'Skipping RTOFS day {day_delta} uv')
         del rtofs_dataset
     except Exception as error:
-        error_type, exc_obj, error_traceback = sys.exc_info()
-        filename = os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]
-        logging.warning(f'{error} ({filename}:{error_traceback.tb_lineno})')
+        _, _, error_traceback = sys.exc_info()
+        logging.warning(
+            f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
 
 
 def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, datetime.date, int, float],
@@ -312,9 +312,9 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
         if grid_size_km == 2:
             wcofs.reset_dataset_grid()
     except Exception as error:
-        error_type, exc_obj, error_traceback = sys.exc_info()
-        filename = os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]
-        logging.warning(f'{error} ({filename}:{error_traceback.tb_lineno})')
+        _, _, error_traceback = sys.exc_info()
+        logging.warning(
+            f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
 
 
 def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, datetime.date, int, float],
@@ -392,19 +392,19 @@ if __name__ == '__main__':
     write_json.dir_structure_to_json(OUTPUT_DIR, files_json_filename)
 
     azure_credential_files = [os.path.join(DATA_DIRECTORY, azure_credentials_filename) for azure_credentials_filename in
-                              ['azure_credentials.txt', 'azure_credentials_old.txt']]
+                              ['azure_credentials.txt']]
 
     for azure_credential_file in azure_credential_files:
         with open(azure_credential_file) as credentials_file:
             azure_blob_url, credentials = (line.strip('\n') for line in credentials_file.readlines())
 
-        azure.upload_to_azure(files_json_filename, f'{azure_blob_url}/reference/files.json', credentials,
-                              overwrite=True)
+        write_azure.upload_to_azure(files_json_filename, f'{azure_blob_url}/reference/files.json', credentials,
+                                    overwrite=True)
 
         for day_delta in day_deltas:
             day = model_run_date + datetime.timedelta(days=day_delta)
             daily_averages_dir = os.path.join(OUTPUT_DIR, 'daily_averages', day.strftime('%Y%m%d'))
-            azure.upload_to_azure(daily_averages_dir, f'{azure_blob_url}/output/daily_averages/', credentials,
-                                  overwrite=True)
+            write_azure.upload_to_azure(daily_averages_dir, f'{azure_blob_url}/output/daily_averages/', credentials,
+                                        overwrite=True)
 
     print('done')
