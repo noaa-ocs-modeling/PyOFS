@@ -97,8 +97,8 @@ class HFRadarRange:
 
         self.dataset = self.dataset.sel(time=slice(self.start_time, self.end_time))
 
-        logging.info(
-            f'Collecting HFR velocity from {self.source} between {str(self.dataset["time"].min().values)[:19]} and {str(self.dataset["time"].max().values)[:19]}...')
+        logging.info(f'Collecting HFR velocity between {str(self.dataset["time"].min().values)[:19]} and ' + \
+                     f'{str(self.dataset["time"].max().values)[:19]}...')
 
         if HFRadarRange.grid_transform is None:
             lon = self.dataset['lon'].values
