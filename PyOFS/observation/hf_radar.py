@@ -85,8 +85,7 @@ class HFRadarRange:
                 break
             except OSError as error:
                 logging.error(error)
-
-        if self.url is None:
+        else:
             raise utilities.NoDataError(f'No HFR observations found between {self.start_time} and {self.end_time}')
 
         raw_times = self.dataset['time']
