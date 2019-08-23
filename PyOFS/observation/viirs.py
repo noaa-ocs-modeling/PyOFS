@@ -10,13 +10,13 @@ Created on Jun 13, 2018
 import datetime
 import ftplib
 import logging
+import math
 import os
 import sys
 from collections import OrderedDict
 from concurrent import futures
 from typing import Collection
 
-import math
 import numpy
 import rasterio
 import rasterio.features
@@ -129,9 +129,6 @@ class VIIRSDataset:
                 break
             except Exception as error:
                 logging.error(error)
-
-            if self.url is not None:
-                break
 
         if self.url is None:
             logging.warning('Error collecting from OpenDAP; falling back to FTP...')

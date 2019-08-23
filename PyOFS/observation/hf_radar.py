@@ -28,6 +28,7 @@ FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
 NRT_DELAY = datetime.timedelta(hours=1)
 
+# either UCSD (University of California San Diego) or NDBC (National Data Buoy Center); NDBC has larger extent but only for the past 4 days
 SOURCE_URLS = {
     'NDBC': 'https://dods.ndbc.noaa.gov/thredds/dodsC',
     'UCSD': 'http://hfrnet-tds.ucsd.edu/thredds/dodsC/HFR/USWC'
@@ -42,15 +43,13 @@ class HFRadarRange:
     grid_transform = None
 
     def __init__(self, start_time: datetime.datetime = None, end_time: datetime.datetime = None,
-                 resolution: int = 6,
-                 source: str = None):
+                 resolution: int = 6):
         """
         Creates new observation object from source.
 
         :param start_time: beginning of time interval
         :param end_time: end of time interval
         :param resolution: desired observation resolution in kilometers
-        :param source: either UCSD (University of California San Diego) or NDBC (National Data Buoy Center); NDBC has larger extent but only for the past 4 days
         :raises NoDataError: if observation does not exist.
         """
 
@@ -70,26 +69,24 @@ class HFRadarRange:
 
         self.resolution = resolution
 
-        # get NDBC observation if input time is within 4 days, otherwise get UCSD observation
-        if source is not None:
-            self.source = source
-        elif (datetime.datetime.now() - self.start_time) < datetime.timedelta(days=4):
-            self.source = 'NDBC'
-        else:
-            self.source = 'UCSD'
+        # NDBC only keeps observations within the past 4 days
+        for source, source_url in SOURCE_URLS.items():
+            # get URL
+            if source == 'NDBC':
+                url = f'{source_url}/hfradar_uswc_{self.resolution}km'
+            elif source == 'UCSD':
+                url = f'{source_url}/{self.resolution}km/hourly/RTV/HFRADAR_US_West_Coast_{self.resolution}km_Resolution_Hourly_RTV_best.ncd'
+            else:
+                url = source
 
-        # get URL
-        if self.source == 'NDBC':
-            self.url = f'{SOURCE_URLS["NDBC"]}/hfradar_uswc_{self.resolution}km'
-        elif self.source == 'UCSD':
-            self.url = f'{SOURCE_URLS["UCSD"]}/{self.resolution}km/hourly/RTV/HFRADAR_US_West_Coast_{self.resolution}km_Resolution_Hourly_RTV_best.ncd'
+            try:
+                self.dataset = xarray.open_dataset(url)
+                self.url = url
+                break
+            except OSError as error:
+                logging.error(error)
         else:
-            self.url = self.source
-
-        try:
-            self.dataset = xarray.open_dataset(self.url)
-        except OSError:
-            raise utilities.NoDataError(f'No HFR observation found at {self.url}')
+            raise utilities.NoDataError(f'No HFR observations found between {self.start_time} and {self.end_time}')
 
         raw_times = self.dataset['time']
 
@@ -99,9 +96,8 @@ class HFRadarRange:
 
         self.dataset = self.dataset.sel(time=slice(self.start_time, self.end_time))
 
-        logging.info(f'Collecting HFR velocity from {self.source} between ' +
-                     f'{str(self.dataset["time"].min().values)[:19]}' +
-                     f' and {str(self.dataset["time"].max().values)[:19]}...')
+        logging.info(f'Collecting HFR velocity between {str(self.dataset["time"].min().values)[:19]} and ' + \
+                     f'{str(self.dataset["time"].max().values)[:19]}...')
 
         if HFRadarRange.grid_transform is None:
             lon = self.dataset['lon'].values
