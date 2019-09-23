@@ -52,5 +52,4 @@ if __name__ == '__main__':
 
     from PyOFS import DATA_DIRECTORY
 
-    dir_structure_to_json(os.path.join(DATA_DIRECTORY, 'output'),
-                          os.path.join(DATA_DIRECTORY, 'reference', 'files.json'))
+    dir_structure_to_json(os.path.join(DATA_DIRECTORY, 'output'), os.path.join(DATA_DIRECTORY, 'reference', 'files.json'))
