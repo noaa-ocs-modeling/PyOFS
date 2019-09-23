@@ -59,8 +59,7 @@ class VIIRSDataset:
     study_area_coordinates = None
 
     def __init__(self, data_time: datetime.datetime = None, satellite: str = 'NPP',
-                 study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, algorithm: str = 'OSPO',
-                 version: str = None):
+                 study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, algorithm: str = 'OSPO', version: str = None):
         """
         Retrieve VIIRS NetCDF observation from NOAA with given datetime.
 
@@ -155,8 +154,7 @@ class VIIRSDataset:
                         if not os.path.exists(output_dir):
                             os.mkdir(output_dir)
 
-                        output_filename = os.path.join(output_dir,
-                                                       f'viirs_{self.data_time.strftime("%Y%m%dT%H%M")}.nc')
+                        output_filename = os.path.join(output_dir, f'viirs_{self.data_time.strftime("%Y%m%dT%H%M")}.nc')
 
                         if os.path.exists(output_filename):
                             os.remove(output_filename)
@@ -195,11 +193,9 @@ class VIIRSDataset:
                     [(lon_min, lat_max), (lon_max, lat_max), (lon_max, lat_min), (lon_min, lat_min)])
             else:
                 # geospatial bounds cross the antimeridian, so we create a multipolygon
-                self.data_extent = shapely.geometry.MultiPolygon([
-                    shapely.geometry.Polygon(
-                        [(lon_min, lat_max), (180, lat_max), (180, lat_min), (lon_min, lat_min)]),
-                    shapely.geometry.Polygon(
-                        [(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
+                self.data_extent = shapely.geometry.MultiPolygon(
+                    [shapely.geometry.Polygon([(lon_min, lat_max), (180, lat_max), (180, lat_min), (lon_min, lat_min)]),
+                     shapely.geometry.Polygon([(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
         else:
             logging.warning(f'{self.data_time} UTC: Dataset has no stored bounds...')
 
@@ -210,24 +206,23 @@ class VIIRSDataset:
             logging.debug(f'Calculating indices and transform from granule at {self.data_time} UTC...')
 
             # get first record in layer
-            VIIRSDataset.study_area_extent = shapely.geometry.MultiPolygon(
-                [shapely.geometry.Polygon(polygon[0]) for polygon in
-                 utilities.get_first_record(self.study_area_polygon_filename)['geometry']['coordinates']])
+            VIIRSDataset.study_area_extent = shapely.geometry.MultiPolygon([shapely.geometry.Polygon(polygon[0]) for polygon in
+                                                                            utilities.get_first_record(self.study_area_polygon_filename)[
+                                                                                'geometry']['coordinates']])
 
             VIIRSDataset.study_area_bounds = VIIRSDataset.study_area_extent.bounds
             VIIRSDataset.study_area_transform = rasterio.transform.from_origin(VIIRSDataset.study_area_bounds[0],
-                                                                               VIIRSDataset.study_area_bounds[3],
-                                                                               lon_pixel_size, lat_pixel_size)
+                                                                               VIIRSDataset.study_area_bounds[3], lon_pixel_size,
+                                                                               lat_pixel_size)
 
         if VIIRSDataset.study_area_bounds is not None:
-            self.dataset = self.dataset.isel(time=0).sel(lon=slice(VIIRSDataset.study_area_bounds[0],
-                                                                   VIIRSDataset.study_area_bounds[2]),
-                                                         lat=slice(VIIRSDataset.study_area_bounds[3],
-                                                                   VIIRSDataset.study_area_bounds[1]))
+            self.dataset = self.dataset.isel(time=0).sel(lon=slice(VIIRSDataset.study_area_bounds[0], VIIRSDataset.study_area_bounds[2]),
+                                                         lat=slice(VIIRSDataset.study_area_bounds[3], VIIRSDataset.study_area_bounds[1]))
 
         if VIIRSDataset.study_area_coordinates is None:
             VIIRSDataset.study_area_coordinates = {
-                'lon': self.dataset['lon'], 'lat': self.dataset['lat']
+                'lon': self.dataset['lon'],
+                'lat': self.dataset['lat']
             }
 
     def bounds(self) -> tuple:
@@ -287,8 +282,7 @@ class VIIRSDataset:
                     mismatch_percentage = mismatched_records / total_records * 100
 
                     if mismatch_percentage > 0:
-                        logging.warning(
-                            f'{self.data_time} UTC: SSES extent mismatch at {mismatch_percentage:.1f}%')
+                        logging.warning(f'{self.data_time} UTC: SSES extent mismatch at {mismatch_percentage:.1f}%')
 
                     output_sst_data -= sses
 
@@ -317,9 +311,8 @@ class VIIRSDataset:
 
         return sses_data
 
-    def write_rasters(self, output_dir: str, variables: Collection[str] = ('sst', 'sses'),
-                      filename_prefix: str = 'viirs', fill_value: float = LEAFLET_NODATA_VALUE, driver: str = 'GTiff',
-                      correct_sses: bool = False):
+    def write_rasters(self, output_dir: str, variables: Collection[str] = ('sst', 'sses'), filename_prefix: str = 'viirs',
+                      fill_value: float = LEAFLET_NODATA_VALUE, driver: str = 'GTiff', correct_sses: bool = False):
         """
         Write VIIRS rasters to file using data from given variables.
 
@@ -342,9 +335,13 @@ class VIIRSDataset:
                     input_data[numpy.isnan(input_data)] = fill_value
 
                 gdal_args = {
-                    'height': input_data.shape[0], 'width': input_data.shape[1], 'count': 1,
+                    'height': input_data.shape[0],
+                    'width': input_data.shape[1],
+                    'count': 1,
                     'dtype': rasterio.float32,
-                    'crs': RASTERIO_CRS, 'transform': VIIRSDataset.study_area_transform, 'nodata': fill_value
+                    'crs': RASTERIO_CRS,
+                    'transform': VIIRSDataset.study_area_transform,
+                    'nodata': fill_value
                 }
 
                 if driver == 'AAIGrid':
@@ -367,8 +364,7 @@ class VIIRSDataset:
 
     def __repr__(self):
         used_params = [self.data_time.__repr__()]
-        optional_params = [self.satellite, self.study_area_polygon_filename, self.near_real_time, self.algorithm,
-                           self.version]
+        optional_params = [self.satellite, self.study_area_polygon_filename, self.near_real_time, self.algorithm, self.version]
 
         for param in optional_params:
             if param is not None:
@@ -390,10 +386,9 @@ class VIIRSRange:
     study_area_transform = None
     study_area_index_bounds = None
 
-    def __init__(self, start_time: datetime.datetime, end_time: datetime.datetime,
-                 satellites: list = ('NPP', 'N20'), study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
-                 pass_times_filename: str = PASS_TIMES_FILENAME, algorithm: str = 'OSPO',
-                 version: str = None):
+    def __init__(self, start_time: datetime.datetime, end_time: datetime.datetime, satellites: list = ('NPP', 'N20'),
+                 study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, pass_times_filename: str = PASS_TIMES_FILENAME,
+                 algorithm: str = 'OSPO', version: str = None):
         """
         Collect VIIRS datasets within time interval.
 
@@ -437,8 +432,7 @@ class VIIRSRange:
                     for pass_time in self.pass_times:
                         running_future = concurrency_pool.submit(VIIRSDataset, data_time=pass_time,
                                                                  study_area_polygon_filename=self.study_area_polygon_filename,
-                                                                 algorithm=self.algorithm, version=self.version,
-                                                                 satellite=satellite)
+                                                                 algorithm=self.algorithm, version=self.version, satellite=satellite)
                         running_futures[running_future] = pass_time
 
                     for completed_future in futures.as_completed(running_futures):
@@ -458,12 +452,10 @@ class VIIRSRange:
 
                 logging.debug(f'VIIRS data was found in {len(self.datasets)} passes.')
             else:
-                raise utilities.NoDataError(
-                    f'No VIIRS datasets found between {self.start_time} UTC and {self.end_time} UTC.')
+                raise utilities.NoDataError(f'No VIIRS datasets found between {self.start_time} UTC and {self.end_time} UTC.')
 
         else:
-            raise utilities.NoDataError(
-                f'There are no VIIRS passes between {self.start_time} UTC and {self.end_time} UTC.')
+            raise utilities.NoDataError(f'There are no VIIRS passes between {self.start_time} UTC and {self.end_time} UTC.')
 
     def cell_size(self) -> tuple:
         """
@@ -474,12 +466,10 @@ class VIIRSRange:
 
         sample_dataset = next(iter(self.datasets.values()))
 
-        return (sample_dataset.netcdf_dataset.geospatial_lon_resolution,
-                sample_dataset.netcdf_dataset.geospatial_lat_resolution)
+        return (sample_dataset.netcdf_dataset.geospatial_lon_resolution, sample_dataset.netcdf_dataset.geospatial_lat_resolution)
 
-    def data(self, start_time: datetime.datetime = None, end_time: datetime.datetime = None,
-             average: bool = False, correct_sses: bool = False, variables: Collection[str] = tuple('sst'),
-             satellite: str = None) -> dict:
+    def data(self, start_time: datetime.datetime = None, end_time: datetime.datetime = None, average: bool = False,
+             correct_sses: bool = False, variables: Collection[str] = tuple('sst'), satellite: str = None) -> dict:
         """
         Get VIIRS data (either overlapped or averaged) from the given time interval.
 
@@ -524,8 +514,7 @@ class VIIRSRange:
                         scenes_data.append(scene_data)
 
             variable_data = numpy.empty(
-                (VIIRSDataset.study_area_coordinates['lat'].shape[0],
-                 VIIRSDataset.study_area_coordinates['lon'].shape[0]))
+                (VIIRSDataset.study_area_coordinates['lat'].shape[0], VIIRSDataset.study_area_coordinates['lon'].shape[0]))
             variable_data[:] = numpy.nan
 
             if len(scenes_data) > 0:
@@ -543,10 +532,8 @@ class VIIRSRange:
 
         return variables_data
 
-    def write_rasters(self, output_dir: str, variables: Collection[str] = ('sst', 'sses'),
-                      filename_prefix: str = 'viirs',
-                      fill_value: float = None, driver: str = 'GTiff', correct_sses: bool = False,
-                      satellite: str = None):
+    def write_rasters(self, output_dir: str, variables: Collection[str] = ('sst', 'sses'), filename_prefix: str = 'viirs',
+                      fill_value: float = None, driver: str = 'GTiff', correct_sses: bool = False, satellite: str = None):
         """
         Write individual VIIRS rasters to directory.
 
@@ -565,15 +552,13 @@ class VIIRSRange:
                 if current_satellite is None or current_satellite == satellite:
                     dataset = self.datasets[dataset_time][current_satellite]
 
-                    concurrency_pool.submit(dataset.write_rasters, output_dir, variables=variables,
-                                            filename_prefix=f'{filename_prefix}_' +
-                                                            f'{dataset_time.strftime("%Y%m%d%H%M%S")}',
+                    concurrency_pool.submit(dataset.write_rasters, output_dir, variables=variables, filename_prefix=f'{filename_prefix}_' +
+                                                                                                                    f'{dataset_time.strftime("%Y%m%d%H%M%S")}',
                                             fill_value=fill_value, drivers=driver, correct_sses=correct_sses)
 
-    def write_raster(self, output_dir: str, filename_prefix: str = None, filename_suffix: str = None,
-                     start_time: datetime.datetime = None, end_time: datetime.datetime = None, average: bool = False,
-                     fill_value: float = LEAFLET_NODATA_VALUE, driver: str = 'GTiff', correct_sses: bool = False,
-                     variables: Collection[str] = tuple(['sst']), satellite: str = None):
+    def write_raster(self, output_dir: str, filename_prefix: str = None, filename_suffix: str = None, start_time: datetime.datetime = None,
+                     end_time: datetime.datetime = None, average: bool = False, fill_value: float = LEAFLET_NODATA_VALUE,
+                     driver: str = 'GTiff', correct_sses: bool = False, variables: Collection[str] = tuple(['sst']), satellite: str = None):
 
         """
         Write VIIRS raster of SST data (either overlapped or averaged) from the given time interval.
@@ -610,8 +595,11 @@ class VIIRSRange:
 
                 # define arguments to GDAL driver
                 gdal_args = {
-                    'height': raster_data.shape[0], 'width': raster_data.shape[1], 'count': 1,
-                    'crs': RASTERIO_CRS, 'dtype': raster_data.dtype,
+                    'height': raster_data.shape[0],
+                    'width': raster_data.shape[1],
+                    'count': 1,
+                    'crs': RASTERIO_CRS,
+                    'dtype': raster_data.dtype,
                     'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item(),
                     'transform': VIIRSRange.study_area_transform
                 }
@@ -646,8 +634,7 @@ class VIIRSRange:
                 else:
                     current_filename_suffix = filename_suffix
 
-                output_filename = os.path.join(output_dir,
-                                               f'{current_filename_prefix}_{current_filename_suffix}.{file_extension}')
+                output_filename = os.path.join(output_dir, f'{current_filename_prefix}_{current_filename_suffix}.{file_extension}')
 
                 logging.info(f'Writing {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
@@ -678,8 +665,8 @@ class VIIRSRange:
         if satellites is not None:
             coordinates['satellite'] = satellites
 
-            satellites_data = [self.data(average=mean, correct_sses=correct_sses,
-                                         variables=variables, satellite=satellite) for satellite in satellites]
+            satellites_data = [self.data(average=mean, correct_sses=correct_sses, variables=variables, satellite=satellite) for satellite in
+                               satellites]
 
             variables_data = {}
 
@@ -691,13 +678,12 @@ class VIIRSRange:
             variables_data = self.data(average=mean, correct_sses=correct_sses, variables=variables)
 
         for variable, variable_data in variables_data.items():
-            output_dataset.update(
-                {variable: xarray.DataArray(variable_data, coords=coordinates, dims=tuple(coordinates.keys()))})
+            output_dataset.update({variable: xarray.DataArray(variable_data, coords=coordinates, dims=tuple(coordinates.keys()))})
 
         return output_dataset
 
-    def to_netcdf(self, output_file: str, variables: Collection[str] = None, mean: bool = True,
-                  correct_sses: bool = False, satellites: list = None):
+    def to_netcdf(self, output_file: str, variables: Collection[str] = None, mean: bool = True, correct_sses: bool = False,
+                  satellites: list = None):
         """
         Writes to NetCDF file.
 
@@ -712,8 +698,7 @@ class VIIRSRange:
 
     def __repr__(self):
         used_params = [self.start_time.__repr__(), self.end_time.__repr__()]
-        optional_params = [self.satellites, self.study_area_polygon_filename, self.viirs_pass_times_filename,
-                           self.algorithm, self.version]
+        optional_params = [self.satellites, self.study_area_polygon_filename, self.viirs_pass_times_filename, self.algorithm, self.version]
 
         for param in optional_params:
             if param is not None:
@@ -728,9 +713,8 @@ class VIIRSRange:
 
 
 def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
-                           start_time: datetime.datetime = VIIRS_START_TIME,
-                           output_filename: str = PASS_TIMES_FILENAME, num_periods: int = 1,
-                           algorithm: str = 'STAR', version: str = '2.40'):
+                           start_time: datetime.datetime = VIIRS_START_TIME, output_filename: str = PASS_TIMES_FILENAME,
+                           num_periods: int = 1, algorithm: str = 'STAR', version: str = '2.40'):
     """
     Compute VIIRS pass times from the given start date along the number of periods specified.
 
@@ -746,15 +730,13 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
     start_time = utilities.round_to_ten_minutes(start_time)
     end_time = utilities.round_to_ten_minutes(start_time + (VIIRS_PERIOD * num_periods))
 
-    print(
-        f'Getting pass times between {start_time.strftime("%Y-%m-%d %H:%M:%S")} and ' +
-        f'{end_time.strftime("%Y-%m-%d %H:%M:%S")}')
+    print(f'Getting pass times between {start_time.strftime("%Y-%m-%d %H:%M:%S")} and ' +
+          f'{end_time.strftime("%Y-%m-%d %H:%M:%S")}')
 
     datetime_range = utilities.ten_minute_range(start_time, end_time)
 
     # construct polygon from the first record in layer
-    study_area_polygon = shapely.geometry.Polygon(
-        utilities.get_first_record(study_area_polygon_filename)['geometry']['coordinates'][0])
+    study_area_polygon = shapely.geometry.Polygon(utilities.get_first_record(study_area_polygon_filename)['geometry']['coordinates'][0])
 
     lines = []
 
@@ -780,17 +762,15 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
                         # get duration from current cycle start
                         cycle_duration = cycle_time - (start_time + cycle_offset)
 
-                        print(
-                            f'{cycle_time.strftime("%Y%m%dT%H%M%S")} {cycle_duration.total_seconds()}: ' +
-                            f'valid scene (checked {cycle_index + 1} cycle(s))')
+                        print(f'{cycle_time.strftime("%Y%m%dT%H%M%S")} {cycle_duration.total_seconds()}: ' +
+                              f'valid scene (checked {cycle_index + 1} cycle(s))')
                         lines.append(f'{cycle_time.strftime("%Y%m%dT%H%M%S")},{cycle_duration.total_seconds()}')
 
                 # if we get to here, break and continue to the next datetime
                 break
             except utilities.NoDataError as error:
                 _, _, error_traceback = sys.exc_info()
-                logging.warning(
-                    f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
+                logging.warning(f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
         else:
             logging.warning(f'{current_time.strftime("%Y%m%dT%H%M%S")}: missing observation across all cycles')
 
@@ -801,8 +781,7 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
         print('Wrote data to file')
 
 
-def get_pass_times(start_time: datetime.datetime, end_time: datetime.datetime,
-                   pass_times_filename: str = PASS_TIMES_FILENAME):
+def get_pass_times(start_time: datetime.datetime, end_time: datetime.datetime, pass_times_filename: str = PASS_TIMES_FILENAME):
     """
     Retreive array of datetimes of VIIRS passes within the given time interval, given initial period durations.
 
@@ -814,12 +793,10 @@ def get_pass_times(start_time: datetime.datetime, end_time: datetime.datetime,
 
     # get datetime of first pass in given file
     first_pass_row = numpy.genfromtxt(pass_times_filename, dtype=str, delimiter=',')[0, :]
-    viirs_start_time = datetime.datetime.strptime(first_pass_row[0], '%Y%m%dT%H%M%S') - datetime.timedelta(
-        seconds=float(first_pass_row[1]))
+    viirs_start_time = datetime.datetime.strptime(first_pass_row[0], '%Y%m%dT%H%M%S') - datetime.timedelta(seconds=float(first_pass_row[1]))
 
     # get starting datetime of the current VIIRS period
-    period_start_time = viirs_start_time + datetime.timedelta(
-        days=numpy.floor((start_time - viirs_start_time).days / 16) * 16)
+    period_start_time = viirs_start_time + datetime.timedelta(days=numpy.floor((start_time - viirs_start_time).days / 16) * 16)
 
     # get array of seconds since the start of the first 16-day VIIRS period
     pass_durations = numpy.genfromtxt(pass_times_filename, dtype=str, delimiter=',')[:, 1].T.astype(numpy.float32)

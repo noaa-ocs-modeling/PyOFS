@@ -28,15 +28,13 @@ REFERENCE_DIR = os.path.join(DATA_DIRECTORY, 'reference')
 
 # offset from study area to UTC
 STUDY_AREA_TIMEZONE = 'US/Pacific'
-STUDY_AREA_TO_UTC = datetime.timedelta(
-    hours=-datetime.datetime.now(pytz.timezone(STUDY_AREA_TIMEZONE)).utcoffset().total_seconds() / 3600)
+STUDY_AREA_TO_UTC = datetime.timedelta(hours=-datetime.datetime.now(pytz.timezone(STUDY_AREA_TIMEZONE)).utcoffset().total_seconds() / 3600)
 
 # range of day deltas that models reach
 MODEL_DAY_DELTAS = {'WCOFS': range(-1, 3), 'RTOFS': range(-3, 9)}
 
 
-def write_observation(output_dir: str, observation_date: Union[datetime.datetime, datetime.date],
-                      observation: str):
+def write_observation(output_dir: str, observation_date: Union[datetime.datetime, datetime.date], observation: str):
     """
     Writes daily average of observational data on given date.
 
@@ -84,46 +82,37 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
     try:
         if observation == 'hf_radar':
             hfr_range = hf_radar.HFRadarRange(day_start_ndbc, day_end_ndbc)
-            hfr_range.write_rasters(observation_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}',
-                                    variables=['dir', 'mag'], driver='AAIGrid', fill_value=LEAFLET_NODATA_VALUE,
-                                    dop_threshold=0.5)
+            hfr_range.write_rasters(observation_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}', variables=['dir', 'mag'],
+                                    driver='AAIGrid', fill_value=LEAFLET_NODATA_VALUE, dop_threshold=0.5)
             del hfr_range
         elif observation == 'viirs':
             viirs_range = viirs.VIIRSRange(day_start, day_end_utc)
             viirs_range.write_raster(observation_dir,
-                                     filename_suffix=day_start.strftime('%Y%m%d%H%M') + '_' + day_noon.strftime(
-                                         '%Y%m%d%H%M'),
-                                     start_time=day_start_utc, end_time=day_noon_utc,
-                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', correct_sses=False,
-                                     variables=['sst'])
+                                     filename_suffix=day_start.strftime('%Y%m%d%H%M') + '_' + day_noon.strftime('%Y%m%d%H%M'),
+                                     start_time=day_start_utc, end_time=day_noon_utc, fill_value=LEAFLET_NODATA_VALUE, driver='GTiff',
+                                     correct_sses=False, variables=['sst'])
             viirs_range.write_raster(observation_dir,
-                                     filename_suffix=day_noon.strftime('%Y%m%d%H%M') + '_' + day_end.strftime(
-                                         '%Y%m%d%H%M'),
-                                     start_time=day_noon_utc, end_time=day_end_utc,
-                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', correct_sses=False,
-                                     variables=['sst'])
+                                     filename_suffix=day_noon.strftime('%Y%m%d%H%M') + '_' + day_end.strftime('%Y%m%d%H%M'),
+                                     start_time=day_noon_utc, end_time=day_end_utc, fill_value=LEAFLET_NODATA_VALUE, driver='GTiff',
+                                     correct_sses=False, variables=['sst'])
             del viirs_range
         elif observation == 'smap':
             smap_dataset = smap.SMAPDataset()
-            smap_dataset.write_rasters(observation_dir, data_time=day_start_utc, fill_value=LEAFLET_NODATA_VALUE,
-                                       driver='GTiff', variables=['sss'])
+            smap_dataset.write_rasters(observation_dir, data_time=day_start_utc, fill_value=LEAFLET_NODATA_VALUE, driver='GTiff',
+                                       variables=['sss'])
             del smap_dataset
         elif observation == 'data_buoy':
             data_buoy_range = data_buoy.DataBuoyRange(data_buoy.WCOFS_NDBC_STATIONS_FILENAME)
-            output_filename = os.path.join(observation_dir,
-                                           f'ndbc_data_buoys_{observation_date.strftime("%Y%m%d")}.gpkg')
+            output_filename = os.path.join(observation_dir, f'ndbc_data_buoys_{observation_date.strftime("%Y%m%d")}.gpkg')
             data_buoy_range.write_vector(output_filename, day_start_ndbc, day_end_ndbc)
             del data_buoy_range
     except Exception as error:
         _, _, error_traceback = sys.exc_info()
-        logging.warning(
-            f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
+        logging.warning(f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
 
 
-def write_rtofs(output_dir: str, model_run_date: Union[datetime.datetime, datetime.date],
-                day_deltas: range = MODEL_DAY_DELTAS['RTOFS'],
-                scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
-                vector_variables: Collection[str] = ('dir', 'mag')):
+def write_rtofs(output_dir: str, model_run_date: Union[datetime.datetime, datetime.date], day_deltas: range = MODEL_DAY_DELTAS['RTOFS'],
+                scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'), vector_variables: Collection[str] = ('dir', 'mag')):
     """
     Writes daily average of RTOFS output on given date.
 
@@ -141,10 +130,8 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
     daily_dir = os.path.join(output_dir, 'daily_averages')
 
     # define directories to which output rasters will be written
-    output_dirs = {
-        day_delta: os.path.join(daily_dir, (model_run_date + datetime.timedelta(days=day_delta)).strftime("%Y%m%d")) for
-        day_delta in day_deltas
-    }
+    output_dirs = {day_delta: os.path.join(daily_dir, (model_run_date + datetime.timedelta(days=day_delta)).strftime("%Y%m%d")) for
+                   day_delta in day_deltas}
 
     for day_delta, daily_average_dir in output_dirs.items():
         # ensure output directory exists
@@ -164,9 +151,8 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                 existing_files = [filename for filename in existing_files if
                                   'rtofs' in filename and time_delta_string in filename]
 
-                if rtofs_dataset is None and not all(
-                        any(variable in filename for filename in existing_files) for variable in
-                        list(scalar_variables) + list(vector_variables)):
+                if rtofs_dataset is None and not all(any(variable in filename for filename in existing_files) for variable in
+                                                     list(scalar_variables) + list(vector_variables)):
                     rtofs_dataset = rtofs.RTOFSDataset(model_run_date, source='2ds', time_interval='daily')
 
                 scalar_variables_to_write = [variable for variable in scalar_variables if
@@ -174,30 +160,25 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
 
                 if rtofs_dataset is not None:
                     if len(scalar_variables_to_write) > 0:
-                        rtofs_dataset.write_rasters(daily_average_dir, variables=scalar_variables_to_write,
-                                                    time=day_of_forecast,
+                        rtofs_dataset.write_rasters(daily_average_dir, variables=scalar_variables_to_write, time=day_of_forecast,
                                                     driver='GTiff')
                     else:
                         logging.info(f'Skipping RTOFS day {day_delta} scalar variables')
 
                     if not all(any(vector_variable in filename for filename in existing_files) for vector_variable in
                                vector_variables):
-                        rtofs_dataset.write_rasters(daily_average_dir, variables=vector_variables, time=day_of_forecast,
-                                                    driver='AAIGrid')
+                        rtofs_dataset.write_rasters(daily_average_dir, variables=vector_variables, time=day_of_forecast, driver='AAIGrid')
                     else:
                         logging.info(f'Skipping RTOFS day {day_delta} uv')
         del rtofs_dataset
     except Exception as error:
         _, _, error_traceback = sys.exc_info()
-        logging.warning(
-            f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
+        logging.warning(f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
 
 
 def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, datetime.date, int, float],
-                day_deltas: range = MODEL_DAY_DELTAS['WCOFS'],
-                scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
-                vector_variables: Collection[str] = ('dir', 'mag'), data_assimilation: bool = True,
-                grid_size_km: int = 4):
+                day_deltas: range = MODEL_DAY_DELTAS['WCOFS'], scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
+                vector_variables: Collection[str] = ('dir', 'mag'), data_assimilation: bool = True, grid_size_km: int = 4):
     """
     Writes daily average of model output on given date.
 
@@ -217,10 +198,8 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
     daily_dir = os.path.join(output_dir, 'daily_averages')
 
     # define directories to which output rasters will be written
-    output_dirs = {
-        day_delta: os.path.join(daily_dir, (model_run_date + datetime.timedelta(days=day_delta)).strftime("%Y%m%d")) for
-        day_delta in day_deltas
-    }
+    output_dirs = {day_delta: os.path.join(daily_dir, (model_run_date + datetime.timedelta(days=day_delta)).strftime("%Y%m%d")) for
+                   day_delta in day_deltas}
 
     for day_delta, daily_average_dir in output_dirs.items():
         # ensure output directory exists
@@ -277,14 +256,12 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                         existing_files = [filename for filename in existing_files if
                                           'wcofs' in filename and time_delta_string in filename and 'noDA' in filename and f'{grid_size_km}km' in filename]
 
-                if wcofs_dataset is None and not all(
-                        any(variable in filename for filename in existing_files) for variable in
-                        list(scalar_variables) + list(vector_variables)):
+                if wcofs_dataset is None and not all(any(variable in filename for filename in existing_files) for variable in
+                                                     list(scalar_variables) + list(vector_variables)):
                     if grid_size_km == 4:
                         wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg', wcofs_string=wcofs_string)
                     else:
-                        wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg',
-                                                           grid_filename=grid_filename,
+                        wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg', grid_filename=grid_filename,
                                                            source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'),
                                                            wcofs_string=wcofs_string)
                 if wcofs_dataset is not None:
@@ -292,19 +269,15 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                                                  not any(variable in filename for filename in existing_files)]
 
                     if len(scalar_variables_to_write) > 0:
-                        wcofs_dataset.write_rasters(daily_average_dir, scalar_variables_to_write,
-                                                    filename_suffix=wcofs_filename_suffix,
-                                                    time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
-                                                    driver='GTiff')
+                        wcofs_dataset.write_rasters(daily_average_dir, scalar_variables_to_write, filename_suffix=wcofs_filename_suffix,
+                                                    time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE, driver='GTiff')
                     else:
                         logging.info(f'Skipping WCOFS day {day_delta} scalar variables')
 
                     if not all(any(vector_variable in filename for filename in existing_files) for vector_variable in
                                vector_variables):
-                        wcofs_dataset.write_rasters(daily_average_dir, vector_variables,
-                                                    filename_suffix=wcofs_filename_suffix,
-                                                    time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
-                                                    driver='AAIGrid')
+                        wcofs_dataset.write_rasters(daily_average_dir, vector_variables, filename_suffix=wcofs_filename_suffix,
+                                                    time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE, driver='AAIGrid')
                     else:
                         logging.info(f'Skipping WCOFS day {day_delta} uv')
         del wcofs_dataset
@@ -313,8 +286,7 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
             wcofs.reset_dataset_grid()
     except Exception as error:
         _, _, error_traceback = sys.exc_info()
-        logging.warning(
-            f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
+        logging.warning(f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
 
 
 def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, datetime.date, int, float],
@@ -363,8 +335,7 @@ if __name__ == '__main__':
 
     log_path = os.path.join(LOG_DIR, f'{start_time.strftime("%Y%m%d")}_conversion.log')
     if log_path is None:
-        logging.basicConfig(level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S',
-                            format='[%(asctime)s] %(levelname)s: %(message)s')
+        logging.basicConfig(level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S', format='[%(asctime)s] %(levelname)s: %(message)s')
     else:
         logging.basicConfig(filename=log_path, level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S',
                             format='[%(asctime)s] %(levelname)s: %(message)s')
@@ -393,13 +364,11 @@ if __name__ == '__main__':
     with open(os.path.join(DATA_DIRECTORY, 'azure_credentials.txt')) as credentials_file:
         azure_blob_url, credentials = (line.strip('\n') for line in credentials_file.readlines())
 
-    write_azure.upload_to_azure(files_json_filename, f'{azure_blob_url}/reference/files.json', credentials,
-                                overwrite=True)
+    write_azure.upload_to_azure(files_json_filename, f'{azure_blob_url}/reference/files.json', credentials, overwrite=True)
 
     for day_delta in day_deltas:
         day = model_run_date + datetime.timedelta(days=day_delta)
         daily_averages_dir = os.path.join(OUTPUT_DIR, 'daily_averages', day.strftime('%Y%m%d'))
-        write_azure.upload_to_azure(daily_averages_dir, f'{azure_blob_url}/output/daily_averages/', credentials,
-                                    overwrite=True)
+        write_azure.upload_to_azure(daily_averages_dir, f'{azure_blob_url}/output/daily_averages/', credentials, overwrite=True)
 
     print('done')

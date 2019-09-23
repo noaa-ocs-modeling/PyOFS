@@ -9,7 +9,6 @@ Created on Feb 27, 2019
 
 import datetime
 import os
-from typing import List
 
 import fiona
 import numpy
@@ -18,7 +17,7 @@ from matplotlib import pyplot
 from shapely import geometry
 
 
-def diffusion(polygons: List[geometry.Polygon]):
+def diffusion(polygons: [geometry.Polygon]):
     for polygon in polygons:
         centroid = polygon.centroid
 
@@ -76,8 +75,7 @@ if __name__ == '__main__':
                 contour_perimeters = []
 
                 contour_records = [record for record in
-                                   filter(lambda record: record['properties']['contour'] == contour_name,
-                                          contours_file)]
+                                   filter(lambda record: record['properties']['contour'] == contour_name, contours_file)]
 
                 for record in contour_records:
                     contour_datetime = datetime.datetime.strptime(record['properties']['datetime'], '%Y-%m-%dT%H:%M:%S')
@@ -124,9 +122,7 @@ if __name__ == '__main__':
     #         pyplot.xticks(rotation=-45, ha='left', rotation_mode='anchor')
     #         pyplot.tight_layout()
     #
-    #         figure.savefig(os.path.join(plot_dir, plotting_value,
-    #                                     f'{plotting_value}_{contour_name}.pdf'),
-    #                        orientation='landscape', papertype='A4')
+    #         figure.savefig(os.path.join(plot_dir, plotting_value,#                                     f'{plotting_value}_{contour_name}.pdf'),#                        orientation='landscape', papertype='A4')
     #
     #         # pyplot.show()
     #         pyplot.clf()
@@ -146,8 +142,7 @@ if __name__ == '__main__':
             axis.set_xlabel('time')
             axis.set_ylabel(f'{plotting_value} ({plotting_unit})')
 
-            colors = dict(
-                zip((contour_name[1] for contour_name in contour_names), pyplot.cm.viridis(numpy.linspace(0, 1, 4))))
+            colors = dict(zip((contour_name[1] for contour_name in contour_names), pyplot.cm.viridis(numpy.linspace(0, 1, 4))))
             # colors = dict(zip(contour_names, pyplot.cm.viridis(numpy.linspace(0, 1, 4))))
 
             if plotting_value == 'area':
@@ -166,8 +161,7 @@ if __name__ == '__main__':
 
             axis.axhline(y=1 if plot_percentages else starting_value, linestyle=':', color='k', zorder=0)
 
-            figure.savefig(os.path.join(plot_dir, f'{velocity_product}_{plotting_value}.pdf'),
-                           orientation='landscape', papertype='A4')
+            figure.savefig(os.path.join(plot_dir, f'{velocity_product}_{plotting_value}.pdf'), orientation='landscape', papertype='A4')
 
     pyplot.show()
     print('done')

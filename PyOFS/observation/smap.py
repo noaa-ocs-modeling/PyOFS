@@ -29,8 +29,7 @@ RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 
 SOURCE_URLS = OrderedDict({
     'OpenDAP': OrderedDict({
-        'JPL': 'https://thredds.jpl.nasa.gov/thredds/dodsC/ncml_aggregation/SalinityDensity/smap/aggregate__SMAP_JPL_L3_SSS_CAP_MONTHLY_V42.ncml',
-    })
+        'JPL': 'https://thredds.jpl.nasa.gov/thredds/dodsC/ncml_aggregation/SalinityDensity/smap/aggregate__SMAP_JPL_L3_SSS_CAP_MONTHLY_V42.ncml', })
 })
 
 
@@ -68,39 +67,35 @@ class SMAPDataset:
         lat_max = float(self.dataset.geospatial_lat_max)
 
         if lon_min < lon_max:
-            self.data_extent = shapely.geometry.Polygon(
-                [(lon_min, lat_max), (lon_max, lat_max), (lon_max, lat_min), (lon_min, lat_min)])
+            self.data_extent = shapely.geometry.Polygon([(lon_min, lat_max), (lon_max, lat_max), (lon_max, lat_min), (lon_min, lat_min)])
         else:
             # geospatial bounds cross the antimeridian, so we create a multipolygon
-            self.data_extent = shapely.geometry.MultiPolygon([
-                shapely.geometry.Polygon(
-                    [(lon_min, lat_max), (180, lat_max), (180, lat_min), (lon_min, lat_min)]),
-                shapely.geometry.Polygon(
-                    [(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
+            self.data_extent = shapely.geometry.MultiPolygon(
+                [shapely.geometry.Polygon([(lon_min, lat_max), (180, lat_max), (180, lat_min), (lon_min, lat_min)]),
+                 shapely.geometry.Polygon([(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
 
         lon_pixel_size = numpy.mean(numpy.diff(self.dataset['longitude'].values))
         lat_pixel_size = numpy.mean(numpy.diff(self.dataset['latitude'].values))
 
         if SMAPDataset.study_area_extent is None:
             # get first record in layer
-            SMAPDataset.study_area_extent = shapely.geometry.MultiPolygon(
-                [shapely.geometry.Polygon(polygon[0]) for polygon in
-                 utilities.get_first_record(self.study_area_polygon_filename)['geometry']['coordinates']])
+            SMAPDataset.study_area_extent = shapely.geometry.MultiPolygon([shapely.geometry.Polygon(polygon[0]) for polygon in
+                                                                           utilities.get_first_record(self.study_area_polygon_filename)[
+                                                                               'geometry']['coordinates']])
 
             SMAPDataset.study_area_bounds = SMAPDataset.study_area_extent.bounds
             SMAPDataset.study_area_transform = rasterio.transform.from_origin(SMAPDataset.study_area_bounds[0],
-                                                                              SMAPDataset.study_area_bounds[3],
-                                                                              lon_pixel_size, lat_pixel_size)
+                                                                              SMAPDataset.study_area_bounds[3], lon_pixel_size,
+                                                                              lat_pixel_size)
 
         if SMAPDataset.study_area_bounds is not None:
-            self.dataset = self.dataset.sel(longitude=slice(SMAPDataset.study_area_bounds[0],
-                                                            SMAPDataset.study_area_bounds[2]),
-                                            latitude=slice(SMAPDataset.study_area_bounds[3],
-                                                           SMAPDataset.study_area_bounds[1]))
+            self.dataset = self.dataset.sel(longitude=slice(SMAPDataset.study_area_bounds[0], SMAPDataset.study_area_bounds[2]),
+                                            latitude=slice(SMAPDataset.study_area_bounds[3], SMAPDataset.study_area_bounds[1]))
 
         if SMAPDataset.study_area_coordinates is None:
             SMAPDataset.study_area_coordinates = {
-                'lon': self.dataset['longitude'], 'lat': self.dataset['latitude']
+                'lon': self.dataset['longitude'],
+                'lat': self.dataset['latitude']
             }
 
     def bounds(self) -> tuple:
@@ -174,9 +169,13 @@ class SMAPDataset:
                     input_data[numpy.isnan(input_data)] = fill_value
 
                 gdal_args = {
-                    'height': input_data.shape[0], 'width': input_data.shape[1], 'count': 1,
+                    'height': input_data.shape[0],
+                    'width': input_data.shape[1],
+                    'count': 1,
                     'dtype': rasterio.float32,
-                    'crs': RASTERIO_CRS, 'transform': SMAPDataset.study_area_transform, 'nodata': fill_value
+                    'crs': RASTERIO_CRS,
+                    'transform': SMAPDataset.study_area_transform,
+                    'nodata': fill_value
                 }
 
                 if driver == 'AAIGrid':

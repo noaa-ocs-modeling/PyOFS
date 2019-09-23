@@ -12,7 +12,6 @@ import logging
 import os
 import re
 from concurrent import futures
-from typing import List, Dict
 
 import fiona
 import fiona.crs
@@ -25,8 +24,8 @@ import xarray
 
 from PyOFS import CRS_EPSG, DATA_DIRECTORY, utilities
 
-MEASUREMENT_VARIABLES = ['water_temperature', 'conductivity', 'salinity', 'o2_saturation', 'dissolved_oxygen',
-                         'chlorophyll_concentration', 'turbidity', 'water_ph', 'water_eh']
+MEASUREMENT_VARIABLES = ['water_temperature', 'conductivity', 'salinity', 'o2_saturation', 'dissolved_oxygen', 'chlorophyll_concentration',
+                         'turbidity', 'water_ph', 'water_eh']
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
@@ -91,7 +90,7 @@ class DataBuoyRange:
     Data from multiple NDBC buoys.
     """
 
-    def __init__(self, stations: List[str] = None):
+    def __init__(self, stations: [str] = None):
         """
         Collection of NDBC data buoys
 
@@ -128,8 +127,7 @@ class DataBuoyRange:
         if len(self.stations) == 0:
             raise utilities.NoDataError(f'No NDBC datasets found in {self.stations}')
 
-    def data(self, variables: List[str], start_time: datetime.datetime, end_time: datetime.datetime) -> Dict[
-        str, Dict[str, xarray.DataArray]]:
+    def data(self, variables: [str], start_time: datetime.datetime, end_time: datetime.datetime) -> {str: {str: xarray.DataArray}}:
         """
         Get data of given variables within given time interval.
 
@@ -149,8 +147,7 @@ class DataBuoyRange:
 
         return output_data
 
-    def data_average(self, variables: List[str], start_time: datetime.datetime, end_time: datetime.datetime) -> Dict[
-        str, Dict[str, float]]:
+    def data_average(self, variables: [str], start_time: datetime.datetime, end_time: datetime.datetime) -> {str: {str: float}}:
         """
         Get data of given variables within given time interval.
 
@@ -166,13 +163,11 @@ class DataBuoyRange:
             output_data[station_name] = {}
 
             for variable in variables:
-                output_data[station_name][variable] = float(
-                    station.data(variable, start_time, end_time).mean('time', skipna=True))
+                output_data[station_name][variable] = float(station.data(variable, start_time, end_time).mean('time', skipna=True))
 
         return output_data
 
-    def write_vector(self, output_filename: str, start_time: datetime.datetime, end_time: datetime.datetime,
-                     variables: List[str] = None):
+    def write_vector(self, output_filename: str, start_time: datetime.datetime, end_time: datetime.datetime, variables: [str] = None):
         """
         Write average of buoy data for all hours in the given time interval to a single layer of the provided output file.
 
@@ -195,9 +190,11 @@ class DataBuoyRange:
         # # concurrently populate dictionary with data for each station within given time interval
         # with futures.ThreadPoolExecutor() as concurrency_pool:
         #     running_futures = {
-        #         station_name: {variable: concurrency_pool.submit(station.data, variable, start_time, end_time) for
-        #                        variable in variables} for
-        #         station_name, station in self.stations.items()}
+        #         station_name: {
+        #             variable: concurrency_pool.submit(station.data, variable, start_time, end_time)
+        #             for variable in variables}
+        #         for station_name, station in self.stations.items()
+        #     }
         #
         #     for station_name, station_running_futures in running_futures:
         #         station_data[station_name] = {}
@@ -209,11 +206,20 @@ class DataBuoyRange:
         #                 station_data[station_name][station_running_futures[completed_future]] = result
 
         schema = {
-            'geometry': 'Point', 'properties': {
-                'name': 'str', 'longitude': 'float', 'latitude': 'float',
-                'water_temperature': 'float', 'conductivity': 'float', 'salinity': 'float',
-                'o2_saturation': 'float', 'dissolved_oxygen': 'float', 'chlorophyll_concentration': 'float',
-                'turbidity': 'float', 'water_ph': 'float', 'water_eh': 'float'
+            'geometry': 'Point',
+            'properties': {
+                'name': 'str',
+                'longitude': 'float',
+                'latitude': 'float',
+                'water_temperature': 'float',
+                'conductivity': 'float',
+                'salinity': 'float',
+                'o2_saturation': 'float',
+                'dissolved_oxygen': 'float',
+                'chlorophyll_concentration': 'float',
+                'turbidity': 'float',
+                'water_ph': 'float',
+                'water_eh': 'float'
             }
         }
 
@@ -225,14 +231,21 @@ class DataBuoyRange:
             station = self.stations[station_name]
 
             record = {
-                'geometry': {'type': 'Point', 'coordinates': (station.longitude, station.latitude)}, 'properties': {
-                    'name': station_name, 'longitude': station.longitude, 'latitude': station.latitude,
+                'geometry': {
+                    'type': 'Point',
+                    'coordinates': (station.longitude, station.latitude)},
+                'properties': {
+                    'name': station_name,
+                    'longitude': station.longitude,
+                    'latitude': station.latitude,
                     'water_temperature': station_data['water_temperature'],
-                    'conductivity': station_data['conductivity'], 'salinity': station_data['salinity'],
+                    'conductivity': station_data['conductivity'],
+                    'salinity': station_data['salinity'],
                     'o2_saturation': station_data['o2_saturation'],
                     'dissolved_oxygen': station_data['dissolved_oxygen'],
                     'chlorophyll_concentration': station_data['chlorophyll_concentration'],
-                    'turbidity': station_data['turbidity'], 'water_ph': station_data['water_ph'],
+                    'turbidity': station_data['turbidity'],
+                    'water_ph': station_data['water_ph'],
                     'water_eh': station_data['water_eh']
                 }
             }
@@ -269,8 +282,7 @@ def check_station(dataset: xarray.Dataset, study_area_polygon_filename: str) -> 
     """
 
     # construct polygon from the first record in the layer
-    study_area_polygon = shapely.geometry.Polygon(
-        utilities.get_first_record(study_area_polygon_filename)['geometry']['coordinates'][0])
+    study_area_polygon = shapely.geometry.Polygon(utilities.get_first_record(study_area_polygon_filename)['geometry']['coordinates'][0])
 
     lon = dataset['longitude'][:]
     lat = dataset['latitude'][:]
@@ -289,7 +301,6 @@ if __name__ == '__main__':
     date_interval_string = f'{start_time.strftime("%m%d%H")}_{end_time.strftime("%m%d%H")}'
 
     ndbc_range = DataBuoyRange(wcofs_stations)
-    ndbc_range.write_vector(os.path.join(output_dir, f'ndbc.gpkg:NDBC_{date_interval_string}'),
-                            start_time=start_time, end_time=end_time)
+    ndbc_range.write_vector(os.path.join(output_dir, f'ndbc.gpkg:NDBC_{date_interval_string}'), start_time=start_time, end_time=end_time)
 
     print('done')
