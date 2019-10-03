@@ -44,7 +44,7 @@ if __name__ == '__main__':
             os.mkdir(directory)
 
     # define log filename
-    log_path = os.path.join(LOG_DIR, f'{datetime.datetime.now().strftime("%Y%m%d")}_download.log')
+    log_path = os.path.join(LOG_DIR, f'{datetime.datetime.now():%Y%m%d}_download.log')
 
     # check whether logfile exists
     log_exists = os.path.exists(log_path)

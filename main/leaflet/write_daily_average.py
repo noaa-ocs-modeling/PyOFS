@@ -82,7 +82,7 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
     try:
         if observation == 'hf_radar':
             hfr_range = hf_radar.HFRadarRange(day_start_ndbc, day_end_ndbc)
-            hfr_range.write_rasters(observation_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}', variables=['dir', 'mag'],
+            hfr_range.write_rasters(observation_dir, filename_suffix=f'{observation_date:%Y%m%d}', variables=['dir', 'mag'],
                                     driver='AAIGrid', fill_value=LEAFLET_NODATA_VALUE, dop_threshold=0.5)
             del hfr_range
         elif observation == 'viirs':
@@ -103,7 +103,7 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
             del smap_dataset
         elif observation == 'data_buoy':
             data_buoy_range = data_buoy.DataBuoyRange(data_buoy.WCOFS_NDBC_STATIONS_FILENAME)
-            output_filename = os.path.join(observation_dir, f'ndbc_data_buoys_{observation_date.strftime("%Y%m%d")}.gpkg')
+            output_filename = os.path.join(observation_dir, f'ndbc_data_buoys_{observation_date:%Y%m%d}.gpkg')
             data_buoy_range.write_vector(output_filename, day_start_ndbc, day_end_ndbc)
             del data_buoy_range
     except Exception as error:
@@ -130,7 +130,7 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
     daily_dir = os.path.join(output_dir, 'daily_averages')
 
     # define directories to which output rasters will be written
-    output_dirs = {day_delta: os.path.join(daily_dir, (model_run_date + datetime.timedelta(days=day_delta)).strftime("%Y%m%d")) for
+    output_dirs = {day_delta: os.path.join(daily_dir, (model_run_date + datetime.timedelta(days=day_delta)).strftime('%Y%m%d')) for
                    day_delta in day_deltas}
 
     for day_delta, daily_average_dir in output_dirs.items():
@@ -198,7 +198,7 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
     daily_dir = os.path.join(output_dir, 'daily_averages')
 
     # define directories to which output rasters will be written
-    output_dirs = {day_delta: os.path.join(daily_dir, (model_run_date + datetime.timedelta(days=day_delta)).strftime("%Y%m%d")) for
+    output_dirs = {day_delta: os.path.join(daily_dir, (model_run_date + datetime.timedelta(days=day_delta)).strftime('%Y%m%d')) for
                    day_delta in day_deltas}
 
     for day_delta, daily_average_dir in output_dirs.items():
@@ -333,7 +333,7 @@ if __name__ == '__main__':
 
     start_time = datetime.datetime.now()
 
-    log_path = os.path.join(LOG_DIR, f'{start_time.strftime("%Y%m%d")}_conversion.log')
+    log_path = os.path.join(LOG_DIR, f'{start_time:%Y%m%d}_conversion.log')
     if log_path is None:
         logging.basicConfig(level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S', format='[%(asctime)s] %(levelname)s: %(message)s')
     else:

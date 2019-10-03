@@ -47,7 +47,7 @@ def check_files(input_dir: str) -> dict:
                 else:
                     day_delta = (int(time_delta[1:]) - 1) * -1
 
-                date = (datetime.datetime.strptime(day, '%Y%m%d') + datetime.timedelta(days=day_delta)).strftime("%Y%m%d")
+                date = (datetime.datetime.strptime(day, '%Y%m%d') + datetime.timedelta(days=day_delta)).strftime('%Y%m%d')
 
                 for variable in variables:
                     if variable in ['dir', 'mag']:

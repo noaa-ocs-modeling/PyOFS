@@ -298,7 +298,7 @@ if __name__ == '__main__':
 
     start_time = datetime.datetime(2018, 7, 14)
     end_time = datetime.datetime.now()
-    date_interval_string = f'{start_time.strftime("%m%d%H")}_{end_time.strftime("%m%d%H")}'
+    date_interval_string = f'{start_time:%m%d%H}_{end_time:%m%d%H}'
 
     ndbc_range = DataBuoyRange(wcofs_stations)
     ndbc_range.write_vector(os.path.join(output_dir, f'ndbc.gpkg:NDBC_{date_interval_string}'), start_time=start_time, end_time=end_time)

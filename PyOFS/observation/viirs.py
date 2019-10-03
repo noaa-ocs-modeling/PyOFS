@@ -100,7 +100,7 @@ class VIIRSDataset:
         self.url = None
 
         month_dir = f'{self.data_time.year}/{self.data_time.timetuple().tm_yday:03}'
-        filename = f'{self.data_time.strftime("%Y%m%d%H%M%S")}-{self.algorithm}-L3U_GHRSST-SSTsubskin-VIIRS_{self.satellite.upper()}-ACSPO_V{self.version}-v02.0-fv01.0.nc'
+        filename = f'{self.data_time:%Y%m%d%H%M%S}-{self.algorithm}-L3U_GHRSST-SSTsubskin-VIIRS_{self.satellite.upper()}-ACSPO_V{self.version}-v02.0-fv01.0.nc'
 
         # TODO N20 does not yet have a reanalysis archive on NESDIS (as of March 8th, 2019)
         if self.satellite.upper() == 'N20' and not self.near_real_time:
@@ -154,7 +154,7 @@ class VIIRSDataset:
                         if not os.path.exists(output_dir):
                             os.mkdir(output_dir)
 
-                        output_filename = os.path.join(output_dir, f'viirs_{self.data_time.strftime("%Y%m%dT%H%M")}.nc')
+                        output_filename = os.path.join(output_dir, f'viirs_{self.data_time:%Y%m%dT%H%M}.nc')
 
                         if os.path.exists(output_filename):
                             os.remove(output_filename)
@@ -552,9 +552,9 @@ class VIIRSRange:
                 if current_satellite is None or current_satellite == satellite:
                     dataset = self.datasets[dataset_time][current_satellite]
 
-                    concurrency_pool.submit(dataset.write_rasters, output_dir, variables=variables, filename_prefix=f'{filename_prefix}_' +
-                                                                                                                    f'{dataset_time.strftime("%Y%m%d%H%M%S")}',
-                                            fill_value=fill_value, drivers=driver, correct_sses=correct_sses)
+                    concurrency_pool.submit(dataset.write_rasters, output_dir, variables=variables,
+                                            filename_prefix=f'{filename_prefix}_{dataset_time:%Y%m%d%H%M%S}', fill_value=fill_value,
+                                            drivers=driver, correct_sses=correct_sses)
 
     def write_raster(self, output_dir: str, filename_prefix: str = None, filename_suffix: str = None, start_time: datetime.datetime = None,
                      end_time: datetime.datetime = None, average: bool = False, fill_value: float = LEAFLET_NODATA_VALUE,
@@ -623,12 +623,12 @@ class VIIRSRange:
                     current_filename_prefix = filename_prefix
 
                 if filename_suffix is None:
-                    start_time_string = start_time.strftime("%Y%m%d%H%M")
-                    end_time_string = end_time.strftime("%Y%m%d%H%M")
+                    start_time_string = start_time.strftime('%Y%m%d%H%M')
+                    end_time_string = end_time.strftime('%Y%m%d%H%M')
 
                     if '0000' in start_time_string and '0000' in end_time_string:
-                        start_time_string = start_time_string.replace("0000", "")
-                        end_time_string = end_time_string.replace("0000", "")
+                        start_time_string = start_time_string.replace('0000', '')
+                        end_time_string = end_time_string.replace('0000', '')
 
                     current_filename_suffix = f'{start_time_string}_{end_time_string}'
                 else:
@@ -730,8 +730,7 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
     start_time = utilities.round_to_ten_minutes(start_time)
     end_time = utilities.round_to_ten_minutes(start_time + (VIIRS_PERIOD * num_periods))
 
-    print(f'Getting pass times between {start_time.strftime("%Y-%m-%d %H:%M:%S")} and ' +
-          f'{end_time.strftime("%Y-%m-%d %H:%M:%S")}')
+    print(f'Getting pass times between {start_time:%Y-%m-%d %H:%M:%S} and {end_time:%Y-%m-%d %H:%M:%S}')
 
     datetime_range = utilities.ten_minute_range(start_time, end_time)
 
@@ -762,9 +761,9 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
                         # get duration from current cycle start
                         cycle_duration = cycle_time - (start_time + cycle_offset)
 
-                        print(f'{cycle_time.strftime("%Y%m%dT%H%M%S")} {cycle_duration.total_seconds()}: ' +
-                              f'valid scene (checked {cycle_index + 1} cycle(s))')
-                        lines.append(f'{cycle_time.strftime("%Y%m%dT%H%M%S")},{cycle_duration.total_seconds()}')
+                        print(
+                            f'{cycle_time:%Y%m%dT%H%M%S} {cycle_duration.total_seconds()}: valid scene (checked {cycle_index + 1} cycle(s))')
+                        lines.append(f'{cycle_time:%Y%m%dT%H%M%S},{cycle_duration.total_seconds()}')
 
                 # if we get to here, break and continue to the next datetime
                 break
@@ -772,7 +771,7 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
                 _, _, error_traceback = sys.exc_info()
                 logging.warning(f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
         else:
-            logging.warning(f'{current_time.strftime("%Y%m%dT%H%M%S")}: missing observation across all cycles')
+            logging.warning(f'{current_time:%Y%m%dT%H%M%S}: missing observation across all cycles')
 
         # write lines to file
         with open(output_filename, 'w') as output_file:

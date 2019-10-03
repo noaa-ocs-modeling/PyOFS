@@ -255,7 +255,7 @@ class HFRadarRange:
         for hfr_time in time_interval_selection['time']:
             hfr_time = datetime.datetime.utcfromtimestamp(
                 (hfr_time.values - numpy.datetime64('1970-01-01T00:00:00Z')) / numpy.timedelta64(1, 's'))
-            layer_name = f'{hfr_time.strftime("%Y%m%dT%H%M%S")}'
+            layer_name = f'{hfr_time:%Y%m%dT%H%M%S}'
 
             hfr_data = time_interval_selection.sel(time=hfr_time)
 

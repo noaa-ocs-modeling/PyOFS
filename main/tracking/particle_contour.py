@@ -806,8 +806,8 @@ if __name__ == '__main__':
     maximum_timestep = datetime.timedelta(hours=4)
 
     output_path = os.path.join(DATA_DIRECTORY, 'output', 'test', 'contours.gpkg')
-    layer_name = f'{source}_{start_time.strftime("%Y%m%dT%H%M%S")}_' + \
-                 f'{(start_time + period).strftime("%Y%m%dT%H%M%S")}_' + \
+    layer_name = f'{source}_{start_time:%Y%m%dT%H%M%S}_' + \
+                 f'{(start_time + period):%Y%m%dT%H%M%S}_' + \
                  f'{int(time_delta.total_seconds() / 3600)}h'
 
     print(f'[{datetime.datetime.now()}]: Started processing...')
@@ -831,7 +831,7 @@ if __name__ == '__main__':
                   radius in radii]
         velocities = [velocity_field.velocity(point, start_time) for point in points]
     else:
-        data_path = os.path.join(DATA_DIRECTORY, 'output', 'test', f'{source.lower()}_{start_time.strftime("%Y%m%d")}.nc')
+        data_path = os.path.join(DATA_DIRECTORY, 'output', 'test', f'{source.lower()}_{start_time:%Y%m%d}.nc')
 
         print(f'[{datetime.datetime.now()}]: Collecting data...')
 

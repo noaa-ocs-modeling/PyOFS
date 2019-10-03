@@ -550,8 +550,7 @@ class WCOFSDataset:
                     'TILED': 'YES'
                 })
 
-            output_filename = os.path.join(output_dir, f'wcofs_{variable}_{self.model_time.strftime("%Y%m%d")}' +
-                                           f'{filename_suffix}.{file_extension}')
+            output_filename = os.path.join(output_dir, f'wcofs_{variable}_{self.model_time:%Y%m%d}{filename_suffix}.{file_extension}')
 
             if os.path.isfile(output_filename):
                 os.remove(output_filename)
@@ -925,7 +924,7 @@ class WCOFSRange:
                     else:
                         time_delta_string = f'f{abs(time_delta) + 1:03}'
 
-                    running_futures[future] = f'{day.strftime("%Y%m%d")}_{time_delta_string}'
+                    running_futures[future] = f'{day:%Y%m%d}_{time_delta_string}'
 
             for completed_future in futures.as_completed(running_futures):
                 model_string = running_futures[completed_future]

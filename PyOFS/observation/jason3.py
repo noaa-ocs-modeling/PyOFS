@@ -146,7 +146,7 @@ class Jason3Dataset:
         if numpy.datetime64(data_time) in self.dataset['times'].values:
             return self.dataset['smap_sss'].sel(times=data_time).values
         else:
-            raise utilities.NoDataError(f'No data exists for {data_time.strftime("%Y%m%dT%H%M%S")}.')
+            raise utilities.NoDataError(f'No data exists for {data_time:%Y%m%dT%H%M%S}.')
 
     def write_rasters(self, output_dir: str, data_time: datetime.datetime, variables: Collection[str] = tuple(['sss']),
                       filename_prefix: str = 'smos', fill_value: float = LEAFLET_NODATA_VALUE, driver: str = 'GTiff'):

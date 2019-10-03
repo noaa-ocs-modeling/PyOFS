@@ -185,8 +185,7 @@ class RTOFSDataset:
                 else:
                     raise ValueError(f'Variable must be not one of {list(DATA_VARIABLES.keys())}.')
             else:
-                logging.warning(f'{direction} does not exist in ' +
-                                f'RTOFS observation for {self.model_time.strftime("%Y%m%d")}.')
+                logging.warning(f'{direction} does not exist in RTOFS observation for {self.model_time:%Y%m%d}.')
         else:
             raise ValueError(f'Direction must be one of {list(DATASET_STRUCTURE[self.source].keys())}.')
 
@@ -260,7 +259,7 @@ class RTOFSDataset:
                     'nodata': numpy.array([fill_value]).astype(variable_mean.dtype).item()
                 }
 
-                output_filename = f'{filename_prefix}_{variable}_{self.model_time.strftime("%Y%m%d")}_{time_delta_string}{filename_suffix}'
+                output_filename = f'{filename_prefix}_{variable}_{self.model_time:%Y%m%d}_{time_delta_string}{filename_suffix}'
                 output_filename = os.path.join(output_dir, output_filename)
 
                 if driver == 'AAIGrid':
