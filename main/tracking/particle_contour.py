@@ -11,7 +11,7 @@ import datetime
 import math
 import os
 from concurrent import futures
-from typing import List, Tuple, Union, Dict
+from typing import Union
 
 import cartopy.feature
 import fiona.crs
@@ -30,7 +30,7 @@ class VectorField:
     Vector field of (u, v) values.
     """
 
-    def __init__(self, time_deltas: List[datetime.timedelta], projection: pyproj.Proj = None):
+    def __init__(self, time_deltas: [datetime.timedelta], projection: pyproj.Proj = None):
         """
         Build vector field of (u, v) values.
 
@@ -104,7 +104,7 @@ class VectorField:
 
         pass
 
-    def __getitem__(self, position: Tuple[numpy.array, datetime.datetime]) -> numpy.array:
+    def __getitem__(self, position: (numpy.array, datetime.datetime)) -> numpy.array:
         """
         velocity vector (u, v) in m/s at coordinates
 
@@ -123,8 +123,7 @@ class VectorField:
 
 
 class RankineVortex(VectorField):
-    def __init__(self, center: Tuple[float, float], radius: float, period: datetime.timedelta,
-                 time_deltas: numpy.array):
+    def __init__(self, center: (float, float), radius: float, period: datetime.timedelta, time_deltas: numpy.array):
         """
         Construct a 2-dimensional solid rotating disk surrounded by inverse falloff of tangential velocity.
 
@@ -181,8 +180,8 @@ class VectorDataset(VectorField):
     Vector field with time component using xarray observation.
     """
 
-    def __init__(self, dataset: xarray.Dataset, u_name: str = 'u', v_name: str = 'v', x_name: str = 'lon',
-                 y_name: str = 'lat', t_name: str = 'time', coordinate_system: pyproj.Proj = None):
+    def __init__(self, dataset: xarray.Dataset, u_name: str = 'u', v_name: str = 'v', x_name: str = 'lon', y_name: str = 'lat',
+                 t_name: str = 'time', coordinate_system: pyproj.Proj = None):
         """
         Create new velocity field from given observation.
 
@@ -217,12 +216,10 @@ class VectorDataset(VectorField):
         x_name = f'{variable}_x'
         y_name = f'{variable}_y'
 
-        x_range = slice(
-            self.dataset[x_name].sel({x_name: numpy.min(transformed_point[0]) - 1}, method='bfill').values.item(),
-            self.dataset[x_name].sel({x_name: numpy.max(transformed_point[0]) + 1}, method='ffill').values.item())
-        y_range = slice(
-            self.dataset[y_name].sel({y_name: numpy.min(transformed_point[1]) - 1}, method='bfill').values.item(),
-            self.dataset[y_name].sel({y_name: numpy.max(transformed_point[1]) + 1}, method='ffill').values.item())
+        x_range = slice(self.dataset[x_name].sel({x_name: numpy.min(transformed_point[0]) - 1}, method='bfill').values.item(),
+                        self.dataset[x_name].sel({x_name: numpy.max(transformed_point[0]) + 1}, method='ffill').values.item())
+        y_range = slice(self.dataset[y_name].sel({y_name: numpy.min(transformed_point[1]) - 1}, method='bfill').values.item(),
+                        self.dataset[y_name].sel({y_name: numpy.max(transformed_point[1]) + 1}, method='ffill').values.item())
         time_range = slice(self.dataset['time'].sel(time=time, method='bfill').values,
                            self.dataset['time'].sel(time=time, method='ffill').values)
 
@@ -233,9 +230,7 @@ class VectorDataset(VectorField):
 
         if len(transformed_point.shape) > 1:
             cell = cell.interp({'time': time}) if 'time' in cell.dims else cell
-            return xarray.concat(
-                [cell.interp({x_name: location[0], y_name: location[1]}) for location in transformed_point.T],
-                dim='point')
+            return xarray.concat([cell.interp({x_name: location[0], y_name: location[1]}) for location in transformed_point.T], dim='point')
         else:
             cell = cell.interp({x_name: transformed_point[0], y_name: transformed_point[1]})
             return cell.interp({'time': time}) if 'time' in cell.dims else cell
@@ -264,8 +259,8 @@ class VectorDataset(VectorField):
 
 
 class ROMSGridVectorDataset(VectorField):
-    def __init__(self, u: numpy.array, v: numpy.array, u_x: numpy.array, u_y: numpy.array, v_x: numpy.array,
-                 v_y: numpy.array, times: numpy.array, grid_angles: xarray.DataArray):
+    def __init__(self, u: numpy.array, v: numpy.array, u_x: numpy.array, u_y: numpy.array, v_x: numpy.array, v_y: numpy.array,
+                 times: numpy.array, grid_angles: xarray.DataArray):
         """
         Create new velocity field from given observation.
 
@@ -305,12 +300,10 @@ class ROMSGridVectorDataset(VectorField):
         x_name = f'{variable}_x'
         y_name = f'{variable}_y'
 
-        x_range = slice(
-            self.dataset[x_name].sel({x_name: numpy.max(rotated_point[0]) + 1}, method='ffill').values.item(),
-            self.dataset[x_name].sel({x_name: numpy.min(rotated_point[0]) - 1}, method='bfill').values.item())
-        y_range = slice(
-            self.dataset[y_name].sel({y_name: numpy.min(rotated_point[1]) - 1}, method='bfill').values.item(),
-            self.dataset[y_name].sel({y_name: numpy.max(rotated_point[1]) + 1}, method='ffill').values.item())
+        x_range = slice(self.dataset[x_name].sel({x_name: numpy.max(rotated_point[0]) + 1}, method='ffill').values.item(),
+                        self.dataset[x_name].sel({x_name: numpy.min(rotated_point[0]) - 1}, method='bfill').values.item())
+        y_range = slice(self.dataset[y_name].sel({y_name: numpy.min(rotated_point[1]) - 1}, method='bfill').values.item(),
+                        self.dataset[y_name].sel({y_name: numpy.max(rotated_point[1]) + 1}, method='ffill').values.item())
         time_range = slice(self.dataset['time'].sel(time=time, method='bfill').values,
                            self.dataset['time'].sel(time=time, method='ffill').values)
 
@@ -323,8 +316,8 @@ class ROMSGridVectorDataset(VectorField):
 
         if len(rotated_point.shape) > 1:
             interpolated = cell.interp_like(
-                xarray.DataArray(numpy.empty((rotated_point.shape[1], rotated_point.shape[1]), dtype=float),
-                                 dims=('u_x', 'u_y'), coords={'u_x': rotated_point[0], 'u_y': rotated_point[1]}))
+                xarray.DataArray(numpy.empty((rotated_point.shape[1], rotated_point.shape[1]), dtype=float), dims=('u_x', 'u_y'),
+                                 coords={'u_x': rotated_point[0], 'u_y': rotated_point[1]}))
 
             interpolated = interpolated.interp({'time': time}) if 'time' in interpolated.dims else interpolated
 
@@ -351,7 +344,7 @@ class ROMSGridVectorDataset(VectorField):
         return self._interpolate('v', point, time)
         # / geodetic_radius(point[1]) * 180 / numpy.pi
 
-    def __getitem__(self, position: Tuple[numpy.array, datetime.datetime]) -> numpy.array:
+    def __getitem__(self, position: (numpy.array, datetime.datetime)) -> numpy.array:
         point, time = position
         rotated_point = numpy.array(self.rotated_pole.rotate_coordinates(point, self.projection))
         vector = numpy.array([self.u(rotated_point, time), self.v(rotated_point, time)])
@@ -363,17 +356,15 @@ class ROMSGridVectorDataset(VectorField):
         grid_angle_cosines = []
 
         for location in rotated_point.T:
-            grid_angle_sines.append(numpy.ravel(
-                self.grid_angle_sines.sel({angle_x_name: location[0], angle_y_name: location[1]}, method='nearest'))[0])
-            grid_angle_cosines.append(numpy.ravel(
-                self.grid_angle_cosines.sel({angle_x_name: location[0], angle_y_name: location[1]}, method='nearest'))[
-                                          0])
+            grid_angle_sines.append(
+                numpy.ravel(self.grid_angle_sines.sel({angle_x_name: location[0], angle_y_name: location[1]}, method='nearest'))[0])
+            grid_angle_cosines.append(
+                numpy.ravel(self.grid_angle_cosines.sel({angle_x_name: location[0], angle_y_name: location[1]}, method='nearest'))[0])
 
         grid_angle_sines = numpy.array(grid_angle_sines)
         grid_angle_cosines = numpy.array(grid_angle_cosines)
         vector = numpy.array(
-            (vector[0] * grid_angle_cosines - vector[1] * grid_angle_sines,
-             vector[0] * grid_angle_sines + vector[1] * grid_angle_cosines))
+            (vector[0] * grid_angle_cosines - vector[1] * grid_angle_sines, vector[0] * grid_angle_sines + vector[1] * grid_angle_cosines))
 
         return vector
 
@@ -384,8 +375,7 @@ class ROMSGridVectorDataset(VectorField):
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
-        lon, lat = self.rotated_pole.unrotate_coordinates(
-            numpy.meshgrid(self.dataset['u_x'].values, self.dataset['u_y'].values))
+        lon, lat = self.rotated_pole.unrotate_coordinates(numpy.meshgrid(self.dataset['u_x'].values, self.dataset['u_y'].values))
 
         u_shape = self.dataset['u'].shape
         v_shape = self.dataset['v'].shape
@@ -405,8 +395,8 @@ class Particle:
     Particle simulation.
     """
 
-    def __init__(self, point: Tuple[float, float], time: datetime.datetime, field: VectorField,
-                 vector: Tuple[float, float] = None, projection: pyproj.Proj = None):
+    def __init__(self, point: (float, float), time: datetime.datetime, field: VectorField, vector: (float, float) = None,
+                 projection: pyproj.Proj = None):
         """
         Create new particle within in the given velocity field.
 
@@ -519,12 +509,11 @@ class Particle:
         if axis is None:
             axis = pyplot.axes(projection=cartopy.crs.PlateCarree())
 
-        return axis.plot(*pyproj.transform(utilities.WEB_MERCATOR, utilities.WGS84, *zip(*self.locations[locations])),
-                         linestyle='--', marker='o', **kwargs)
+        return axis.plot(*pyproj.transform(utilities.WEB_MERCATOR, utilities.WGS84, *zip(*self.locations[locations])), linestyle='--',
+                         marker='o', **kwargs)
 
     def __add__(self, particle_delta: ParticleDelta):
-        new_particle = Particle(self.coordinates() + particle_delta.delta_vector, self.time + particle_delta.delta_t,
-                                self.field)
+        new_particle = Particle(self.coordinates() + particle_delta.delta_vector, self.time + particle_delta.delta_t, self.field)
         new_particle.locations = self.locations
         return new_particle
 
@@ -543,8 +532,8 @@ class ParticleContour:
     Contour of points within a velocity field.
     """
 
-    def __init__(self, points: List[Tuple[float, float]], time: datetime.datetime, field: VectorField,
-                 interval: float = 500, projection: pyproj.Proj = None):
+    def __init__(self, points: [(float, float)], time: datetime.datetime, field: VectorField, interval: float = 500,
+                 projection: pyproj.Proj = None):
         """
         Create contour given list of points.
 
@@ -624,9 +613,8 @@ class ParticleContour:
         if axis is None:
             axis = pyplot.axes()
 
-        return axis.plot(
-            *zip(*[pyproj.transform(utilities.WEB_MERCATOR, utilities.WGS84, *vertex) for vertex in
-                   list(self.vertices.T) + [self.vertices.T[0]]]), **kwargs)
+        return axis.plot(*zip(*[pyproj.transform(utilities.WEB_MERCATOR, utilities.WGS84, *vertex) for vertex in
+                                list(self.vertices.T) + [self.vertices.T[0]]]), **kwargs)
 
     def geometry(self) -> shapely.geometry.Polygon:
         return shapely.geometry.Polygon(self.vertices.T)
@@ -637,7 +625,7 @@ class ParticleContour:
     def perimeter(self) -> float:
         return self.geometry().length
 
-    def bounds(self) -> Tuple[float, float, float, float]:
+    def bounds(self) -> (float, float, float, float):
         return self.geometry().bounds
 
     def __str__(self) -> str:
@@ -648,8 +636,7 @@ class ParticleContour:
 
 
 class CircleContour(ParticleContour):
-    def __init__(self, center: tuple, radius: float, time: datetime.datetime, field: VectorField,
-                 interval: float = 500):
+    def __init__(self, center: tuple, radius: float, time: datetime.datetime, field: VectorField, interval: float = 500):
         """
         Create circle contour with given interval between points.
 
@@ -680,8 +667,8 @@ class CircleContour(ParticleContour):
 
 
 class RectangleContour(ParticleContour):
-    def __init__(self, west_lon: float, east_lon: float, south_lat: float, north_lat: float, time: datetime.datetime,
-                 field: VectorField, interval: float = 500):
+    def __init__(self, west_lon: float, east_lon: float, south_lat: float, north_lat: float, time: datetime.datetime, field: VectorField,
+                 interval: float = 500):
         """
         Create orthogonal square contour with given bounds.
 
@@ -735,22 +722,21 @@ class RectangleContour(ParticleContour):
         return f'rectangular {super().__str__()}'
 
 
-def create_contour(contour_center: tuple, contour_radius: float, start_time: datetime.datetime,
-                   velocity_field: VectorField, contour_shape: str) -> ParticleContour:
+def create_contour(contour_center: tuple, contour_radius: float, start_time: datetime.datetime, velocity_field: VectorField,
+                   contour_shape: str) -> ParticleContour:
     if contour_shape == 'circle':
         return CircleContour(contour_center, contour_radius, start_time, velocity_field)
     elif contour_shape == 'square':
         southwest_corner = utilities.translate_geographic_coordinates(contour_center, -contour_radius)
         northeast_corner = utilities.translate_geographic_coordinates(contour_center, contour_radius)
-        return RectangleContour(southwest_corner[0], northeast_corner[0], southwest_corner[1],
-                                northeast_corner[1], start_time, velocity_field)
+        return RectangleContour(southwest_corner[0], northeast_corner[0], southwest_corner[1], northeast_corner[1], start_time,
+                                velocity_field)
     else:
         return Particle(contour_center, start_time, velocity_field)
 
 
-def track_contour(contour: ParticleContour, timestep: datetime.timedelta, steps: int,
-                  intermediate_timestep: datetime.timedelta = None) -> Dict[
-    datetime.datetime, shapely.geometry.Polygon]:
+def track_contour(contour: ParticleContour, timestep: datetime.timedelta, steps: int, intermediate_timestep: datetime.timedelta = None) -> {
+    datetime.datetime: shapely.geometry.Polygon}:
     polygons = {contour.time: contour.geometry()}
 
     if intermediate_timestep is None or intermediate_timestep > timestep:
@@ -834,19 +820,18 @@ if __name__ == '__main__':
     print(f'[{datetime.datetime.now()}]: Creating velocity field...')
     if source == 'rankine':
         vortex_radius = contour_radius * 5
-        vortex_center = utilities.translate_geographic_coordinates(next(iter(contour_centers.values())), numpy.array(
-            [contour_radius * -2, contour_radius * -2]))
+        vortex_center = utilities.translate_geographic_coordinates(next(iter(contour_centers.values())),
+                                                                   numpy.array([contour_radius * -2, contour_radius * -2]))
         vortex_period = datetime.timedelta(days=5)
         velocity_field = RankineVortex(vortex_center, vortex_radius, vortex_period,
                                        [time_delta for index in range(int(period / time_delta))])
 
         radii = range(1, vortex_radius * 2, 50)
-        points = [numpy.array(pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, *vortex_center)) + numpy.array(
-            [radius, 0]) for radius in radii]
+        points = [numpy.array(pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, *vortex_center)) + numpy.array([radius, 0]) for
+                  radius in radii]
         velocities = [velocity_field.velocity(point, start_time) for point in points]
     else:
-        data_path = os.path.join(DATA_DIRECTORY, 'output', 'test',
-                                 f'{source.lower()}_{start_time.strftime("%Y%m%d")}.nc')
+        data_path = os.path.join(DATA_DIRECTORY, 'output', 'test', f'{source.lower()}_{start_time.strftime("%Y%m%d")}.nc')
 
         print(f'[{datetime.datetime.now()}]: Collecting data...')
 
@@ -895,8 +880,7 @@ if __name__ == '__main__':
                             rho_lon = u_lon = v_lon = input_dataset['lon_rho'].values
                             rho_lat = u_lat = v_lat = input_dataset['lat_rho'].values
 
-                        # coriolis_frequencies = 4 * math.pi / sidereal_rotation_period.total_seconds() * numpy.sin(
-                        #     input_dataset['lat_rho'].values * math.pi / 180)
+                        # coriolis_frequencies = 4 * math.pi / sidereal_rotation_period.total_seconds() * numpy.sin(#     input_dataset['lat_rho'].values * math.pi / 180)
 
                         coriolis_frequencies = input_dataset['f']
                         delta_x_reciprocal = input_dataset['pn']
@@ -950,11 +934,9 @@ if __name__ == '__main__':
                 u_x, u_y = rotated_pole.rotate_coordinates((u_lon, u_lat))
                 v_x, v_y = rotated_pole.rotate_coordinates((v_lon, v_lat))
 
-                ssu_dataarray = xarray.DataArray(combined_ssu,
-                                                 coords={'time': combined_time, 'u_x': u_x[:, 0], 'u_y': u_y[0, :]},
+                ssu_dataarray = xarray.DataArray(combined_ssu, coords={'time': combined_time, 'u_x': u_x[:, 0], 'u_y': u_y[0, :]},
                                                  dims=('time', 'u_x', 'u_y'))
-                ssv_dataarray = xarray.DataArray(combined_ssv,
-                                                 coords={'time': combined_time, 'v_x': v_x[:, 0], 'v_y': v_y[0, :]},
+                ssv_dataarray = xarray.DataArray(combined_ssv, coords={'time': combined_time, 'v_x': v_x[:, 0], 'v_y': v_y[0, :]},
                                                  dims=('time', 'v_x', 'v_y'))
                 angle_dataarray = xarray.DataArray(grid_angles, coords={'rho_x': rho_x[:, 0], 'rho_y': rho_y[0, :]},
                                                    dims=('rho_x', 'rho_y'))
@@ -971,9 +953,8 @@ if __name__ == '__main__':
                 vector_dataset = vector_dataset.resample(time='D').mean()
 
         if 'WCOFS' in source.upper():
-            velocity_field = ROMSGridVectorDataset(u=vector_dataset['ssu'], v=vector_dataset['ssv'],
-                                                   u_x=vector_dataset['u_x'], u_y=vector_dataset['u_y'],
-                                                   v_x=vector_dataset['v_x'], v_y=vector_dataset['v_y'],
+            velocity_field = ROMSGridVectorDataset(u=vector_dataset['ssu'], v=vector_dataset['ssv'], u_x=vector_dataset['u_x'],
+                                                   u_y=vector_dataset['u_y'], v_x=vector_dataset['v_x'], v_y=vector_dataset['v_y'],
                                                    times=vector_dataset['time'], grid_angles=vector_dataset['angle'])
         else:
             velocity_field = VectorDataset(vector_dataset, u_name='ssu', v_name='ssv')
@@ -983,9 +964,9 @@ if __name__ == '__main__':
     print(f'[{datetime.datetime.now()}]: Creating {len(contour_centers)} initial contours...')
     with futures.ThreadPoolExecutor() as concurrency_pool:
         running_futures = {
-            concurrency_pool.submit(create_contour, contour_center, contour_radius, start_time, velocity_field,
-                                    contour_shape): contour_id for contour_id, contour_center in
-            contour_centers.items()}
+            concurrency_pool.submit(create_contour, contour_center, contour_radius, start_time, velocity_field, contour_shape): contour_id
+            for contour_id, contour_center in contour_centers.items()
+        }
 
         for completed_future in futures.as_completed(running_futures):
             contour_id = running_futures[completed_future]
@@ -994,26 +975,24 @@ if __name__ == '__main__':
             print(f'[{datetime.datetime.now()}]: Contour {contour_id} created: {contour}')
 
     # with fiona.open(r"C:\Data\develop\output\test\alex_contours.gpkg") as contour_file:
-    #     contours['1'] = ParticleContour(next(iter(contour_file))['geometry']['coordinates'][0], start_time,
-    #                                     velocity_field)
+    #     contours['1'] = ParticleContour(next(iter(contour_file))['geometry']['coordinates'][0], start_time,#                                     velocity_field)
 
     # with fiona.open(r"C:\Data\develop\output\test\test_contours.gpkg", layer='test_points') as test_points_layer:
     #     for record in test_points_layer:
-    #         contours[record['properties']['name']] = CircleContour(record['geometry']['coordinates'], contour_radius,
-    #                                                                start_time, velocity_field)
+    #         contours[record['properties']['name']] = CircleContour(record['geometry']['coordinates'], contour_radius,#                                                                start_time, velocity_field)
 
     print(f'[{datetime.datetime.now()}]: Contours created.')
 
     # define schema
-    schema = {'geometry': 'Polygon',
-              'properties': {'contour': 'str', 'datetime': 'datetime', 'area': 'float', 'perimeter': 'float'}}
+    schema = {'geometry': 'Polygon', 'properties': {'contour': 'str', 'datetime': 'datetime', 'area': 'float', 'perimeter': 'float'}}
 
     records = []
 
     with futures.ThreadPoolExecutor() as concurrency_pool:
         running_futures = {
-            concurrency_pool.submit(track_contour, contour, time_delta, int(period / time_delta),
-                                    maximum_timestep): contour_id for contour_id, contour in contours.items()}
+            concurrency_pool.submit(track_contour, contour, time_delta, int(period / time_delta), maximum_timestep): contour_id
+            for contour_id, contour in contours.items()
+        }
 
         for completed_future in futures.as_completed(running_futures):
             contour_id = running_futures[completed_future]
