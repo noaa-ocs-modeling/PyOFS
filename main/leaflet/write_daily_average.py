@@ -15,9 +15,11 @@ from typing import Collection, Union
 
 import pytz
 
+from main.leaflet.write_azure import sync_with_azure
+
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
-from main.leaflet import write_azure, write_json
+from main.leaflet import write_json
 from PyOFS import DATA_DIRECTORY, LEAFLET_NODATA_VALUE
 from PyOFS.observation import hf_radar, viirs, smap, data_buoy
 from PyOFS.model import wcofs, rtofs
@@ -393,13 +395,7 @@ if __name__ == '__main__':
     with open(os.path.join(DATA_DIRECTORY, 'azure_credentials.txt')) as credentials_file:
         azure_blob_url, credentials = (line.strip('\n') for line in credentials_file.readlines())
 
-    write_azure.upload_to_azure(files_json_filename, f'{azure_blob_url}/reference/files.json', credentials,
-                                overwrite=True)
-
-    for day_delta in day_deltas:
-        day = model_run_date + datetime.timedelta(days=day_delta)
-        daily_averages_dir = os.path.join(OUTPUT_DIR, 'daily_averages', day.strftime('%Y%m%d'))
-        write_azure.upload_to_azure(daily_averages_dir, f'{azure_blob_url}/output/daily_averages/', credentials,
-                                    overwrite=True)
+    sync_with_azure(files_json_filename, f'{azure_blob_url}/reference/files.json', credentials)
+    sync_with_azure(os.path.join(OUTPUT_DIR, 'daily_averages'), f'{azure_blob_url}/output/daily_averages', credentials)
 
     print('done')
