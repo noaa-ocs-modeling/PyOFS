@@ -11,4 +11,4 @@ else:
 LEAFLET_NODATA_VALUE = -9999.0
 
 # # for development branch
-# DATA_DIRECTORY = os.path.join(DATA_DIRECTORY, 'develop')
+DATA_DIRECTORY = os.path.join(DATA_DIRECTORY, 'develop')
