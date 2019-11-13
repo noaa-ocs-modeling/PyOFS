@@ -388,7 +388,8 @@ if __name__ == '__main__':
     with open(os.path.join(DATA_DIRECTORY, 'azure_credentials.txt')) as credentials_file:
         azure_blob_url, credentials = (line.strip('\n') for line in credentials_file.readlines())
 
-    sync_with_azure(files_json_filename, f'{azure_blob_url}/reference', credentials)
-    sync_with_azure(OUTPUT_DIR, f'{azure_blob_url}/output', credentials)
+    sync_with_azure(files_json_filename, f'{azure_blob_url}/$web/data/reference/files.json', credentials)
+    sync_with_azure(OUTPUT_DIR, f'{azure_blob_url}/$web/data/output', credentials)
+    sync_with_azure(LOG_DIR, f'{azure_blob_url}/$logs', credentials)
 
     print('done')
