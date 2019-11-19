@@ -10,10 +10,10 @@ Created on Aug 21, 2018
 import datetime
 import logging
 import os
-import sys
 from typing import Collection, Union
 
 import pytz
+import sys
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
@@ -194,7 +194,7 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                 day_deltas: range = MODEL_DAY_DELTAS['WCOFS'],
                 scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
                 vector_variables: Collection[str] = ('dir', 'mag'), data_assimilation: bool = True,
-                grid_size_km: int = 4):
+                grid_size_km: int = 4, source_url: str = None):
     """
     Writes daily average of model output on given date.
 
@@ -205,6 +205,7 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
     :param vector_variables: list of vector variables to use
     :param data_assimilation: whether to retrieve model with data assimilation
     :param grid_size_km: cell size in km
+    :param source_url: URL of source
     :raise _utilities.NoDataError: if no data found
     """
 
@@ -277,11 +278,10 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                         any(variable in filename for filename in existing_files) for variable in
                         list(scalar_variables) + list(vector_variables)):
                     if grid_size_km == 4:
-                        wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg', wcofs_string=wcofs_string)
+                        wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg', wcofs_string=wcofs_string, source_url=source_url)
                     else:
                         wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg', grid_filename=grid_filename,
-                                                           source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'),
-                                                           wcofs_string=wcofs_string)
+                                                           source_url=source_url, wcofs_string=wcofs_string)
                 if wcofs_dataset is not None:
                     scalar_variables_to_write = [variable for variable in scalar_variables if
                                                  not any(variable in filename for filename in existing_files)]
@@ -339,9 +339,11 @@ def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, d
     logging.info('Processing RTOFS...')  # RTOFS forecast is uploaded at 1700 UTC
     write_rtofs(output_dir, output_date, day_deltas)
     logging.info('Processing WCOFS...')
-    write_wcofs(output_dir, output_date, day_deltas)
+    write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'))
+    logging.info('Processing WCOFS option...')
+    write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/option'))
     logging.info('Processing WCOFS noDA...')
-    write_wcofs(output_dir, output_date, day_deltas, data_assimilation=False)
+    write_wcofs(output_dir, output_date, day_deltas, data_assimilation=False, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'))
     logging.info(f'Wrote models to {output_dir}')
 
     logging.info(f'Finished writing files. Total time: ' +
