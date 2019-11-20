@@ -10,10 +10,10 @@ Created on Aug 21, 2018
 import datetime
 import logging
 import os
+import sys
 from typing import Collection, Union
 
 import pytz
-import sys
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
@@ -172,8 +172,7 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                 if rtofs_dataset is not None:
                     if len(scalar_variables_to_write) > 0:
                         rtofs_dataset.write_rasters(daily_average_dir, variables=scalar_variables_to_write,
-                                                    time=day_of_forecast,
-                                                    driver='GTiff')
+                                                    time=day_of_forecast, driver='GTiff')
                     else:
                         logging.info(f'Skipping RTOFS day {day_delta} scalar variables')
 
@@ -282,7 +281,8 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                         any(variable in filename for filename in existing_files) for variable in
                         list(scalar_variables) + list(vector_variables)):
                     if grid_size_km == 4:
-                        wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg', wcofs_string=wcofs_string, source_url=source_url)
+                        wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg', wcofs_string=wcofs_string,
+                                                           source_url=source_url)
                     else:
                         wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg', grid_filename=grid_filename,
                                                            source_url=source_url, wcofs_string=wcofs_string)
@@ -345,9 +345,11 @@ def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, d
     logging.info('Processing WCOFS...')
     write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'))
     logging.info('Processing WCOFS option...')
-    write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/option'), suffix='option')
+    write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/option'),
+                suffix='option')
     logging.info('Processing WCOFS noDA...')
-    write_wcofs(output_dir, output_date, day_deltas, data_assimilation=False, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'))
+    write_wcofs(output_dir, output_date, day_deltas, data_assimilation=False,
+                source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'))
     logging.info(f'Wrote models to {output_dir}')
 
     logging.info(f'Finished writing files. Total time: ' +
@@ -363,15 +365,15 @@ if __name__ == '__main__':
     start_time = datetime.datetime.now()
 
     log_path = os.path.join(LOG_DIR, f'{start_time.strftime("%Y%m%d")}_conversion.log')
+    log_format = '[%(asctime)s] %(levelname)-8s: %(message)s'
     if log_path is None:
-        logging.basicConfig(level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S',
-                            format='[%(asctime)s] %(levelname)s: %(message)s')
+        logging.basicConfig(level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S', format=log_format)
     else:
-        logging.basicConfig(filename=log_path, level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S',
-                            format='[%(asctime)s] %(levelname)s: %(message)s')
-        console = logging.StreamHandler()
-        console.setLevel(logging.DEBUG)
-        logging.getLogger('').addHandler(console)
+        logging.basicConfig(level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S', format=log_format)
+        log_file = logging.FileHandler(log_path)
+        log_file.setLevel(logging.INFO)
+        log_file.setFormatter(logging.Formatter(log_format))
+        logging.getLogger('').addHandler(log_file)
 
     # disable complaints from Fiona environment within conda
     logging.root.manager.loggerDict['fiona._env'].setLevel(logging.CRITICAL)

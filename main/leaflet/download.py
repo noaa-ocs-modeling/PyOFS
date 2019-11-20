@@ -42,7 +42,8 @@ if __name__ == '__main__':
     month_dir = os.path.join(avg_dir, datetime.datetime.now().strftime('%Y%m'))
 
     # create folders if they do not exist
-    for directory in [OUTPUT_DIR, LOG_DIR, wcofs_dir, rtofs_dir, avg_dir, fwd_dir, obs_dir, mod_dir, month_dir, option_dir]:
+    for directory in [OUTPUT_DIR, LOG_DIR, wcofs_dir, rtofs_dir, avg_dir, fwd_dir, obs_dir, mod_dir, month_dir,
+                      option_dir]:
         if not os.path.isdir(directory):
             os.mkdir(directory)
 
@@ -52,11 +53,12 @@ if __name__ == '__main__':
     # check whether logfile exists
     log_exists = os.path.exists(log_path)
 
-    logging.basicConfig(filename=log_path, level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S',
-                        format='[%(asctime)s] %(levelname)s: %(message)s')
-    console = logging.StreamHandler()
-    console.setLevel(logging.DEBUG)
-    logging.getLogger('').addHandler(console)
+    log_format = '[%(asctime)s] %(levelname)-8s: %(message)s'
+    logging.basicConfig(level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S', format=log_format)
+    log_file = logging.FileHandler(log_path)
+    log_file.setLevel(logging.INFO)
+    log_file.setFormatter(logging.Formatter(log_format))
+    logging.getLogger('').addHandler(log_file)
 
     # write initial message
     logging.info('Starting FTP transfer...')
@@ -66,27 +68,27 @@ if __name__ == '__main__':
         ftp_connection.login()
 
         path_map = {}
-        # for input_path in ftp_connection.nlst(INPUT_DIR):
-        #     filename = os.path.basename(input_path)
-        #
-        #     if 'rtofs' in filename:
-        #         output_path = os.path.join(rtofs_dir, filename)
-        #     elif 'wcofs' in filename:
-        #         if filename[-4:] == '.sur':
-        #             filename = filename[:-4]
-        #
-        #         if 'fwd' in filename:
-        #             output_path = os.path.join(fwd_dir, filename)
-        #         elif 'obs' in filename:
-        #             output_path = os.path.join(obs_dir, filename)
-        #         elif 'mod' in filename:
-        #             output_path = os.path.join(mod_dir, filename)
-        #         else:
-        #             output_path = os.path.join(month_dir, filename)
-        #     else:
-        #         output_path = os.path.join(OUTPUT_DIR, filename)
-        #
-        #     path_map[input_path] = output_path
+        for input_path in ftp_connection.nlst(INPUT_DIR):
+            filename = os.path.basename(input_path)
+
+            if 'rtofs' in filename:
+                output_path = os.path.join(rtofs_dir, filename)
+            elif 'wcofs' in filename:
+                if filename[-4:] == '.sur':
+                    filename = filename[:-4]
+
+                if 'fwd' in filename:
+                    output_path = os.path.join(fwd_dir, filename)
+                elif 'obs' in filename:
+                    output_path = os.path.join(obs_dir, filename)
+                elif 'mod' in filename:
+                    output_path = os.path.join(mod_dir, filename)
+                else:
+                    output_path = os.path.join(month_dir, filename)
+            else:
+                output_path = os.path.join(OUTPUT_DIR, filename)
+
+            path_map[input_path] = output_path
 
         for input_path in ftp_connection.nlst(WCOFS_OPTION_DIR):
             filename = os.path.basename(input_path)
@@ -118,9 +120,9 @@ if __name__ == '__main__':
                             logging.info(f'error with "{input_path}": {error.__class__.__name__} - {error}')
                 else:
                     # only write 'file exists' message on the first run of the day
-                    if not log_exists:
-                        logging.info('Destination file already exists: ' +
-                                     f'"{output_path}", {os.stat(output_path).st_size / 1000} KB')
+                    logging.log(logging.DEBUG if log_exists else logging.INFO,
+                                'Destination file already exists: ' + \
+                                f'"{output_path}", {os.stat(output_path).st_size / 1000} KB')
 
     logging.info(f'Downloaded {num_downloads} files. ' +
                  f'Total time: {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
