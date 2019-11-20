@@ -10,10 +10,10 @@ Created on Aug 21, 2018
 import datetime
 import logging
 import os
+import sys
 from typing import Collection, Union
 
 import pytz
-import sys
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
@@ -345,7 +345,7 @@ def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, d
     logging.info('Processing WCOFS...')
     write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'))
     logging.info('Processing WCOFS option...')
-    write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/option'), suffix='option')
+    write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/option'), suffix='exp')
     logging.info('Processing WCOFS noDA...')
     write_wcofs(output_dir, output_date, day_deltas, data_assimilation=False, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'))
     logging.info(f'Wrote models to {output_dir}')
