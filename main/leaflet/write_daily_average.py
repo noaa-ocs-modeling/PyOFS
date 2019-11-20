@@ -258,7 +258,7 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                     wcofs_filename_suffix = f'{wcofs_filename_suffix}_{grid_size_km}km'
 
                 if suffix is not None:
-                    wcofs_filename_suffix = f'{suffix}_{wcofs_filename_suffix}'
+                    wcofs_filename_suffix = f'{wcofs_filename_suffix}_{suffix}'
 
                 existing_files = os.listdir(daily_average_dir)
 
