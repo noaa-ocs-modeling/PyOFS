@@ -258,28 +258,31 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                     wcofs_filename_suffix = f'{wcofs_filename_suffix}_{grid_size_km}km'
 
                 if suffix is not None:
-                    wcofs_filename_suffix = f'{wcofs_filename_suffix}_{suffix}'
+                    wcofs_filename_suffix = f'{suffix}_{wcofs_filename_suffix}'
 
                 existing_files = os.listdir(daily_average_dir)
 
                 if data_assimilation:
                     if grid_size_km == 4:
                         existing_files = [filename for filename in existing_files if
-                                          'wcofs' in filename and time_delta_string in filename and 'noDA' not in filename]
+                                          'wcofs' in filename and time_delta_string in filename and 'noDA' not in filename
+                                          and (suffix in filename if suffix is not None else True)]
                     else:
                         existing_files = [filename for filename in existing_files if
-                                          'wcofs' in filename and time_delta_string in filename and 'noDA' not in filename and f'{grid_size_km}km' in filename]
+                                          'wcofs' in filename and time_delta_string in filename and 'noDA' not in filename and f'{grid_size_km}km' in filename
+                                          and (suffix in filename if suffix is not None else True)]
                 else:
                     if grid_size_km == 4:
                         existing_files = [filename for filename in existing_files if
-                                          'wcofs' in filename and time_delta_string in filename and 'noDA' in filename]
+                                          'wcofs' in filename and time_delta_string in filename and 'noDA' in filename
+                                          and (suffix in filename if suffix is not None else True)]
                     else:
                         existing_files = [filename for filename in existing_files if
-                                          'wcofs' in filename and time_delta_string in filename and 'noDA' in filename and f'{grid_size_km}km' in filename]
+                                          'wcofs' in filename and time_delta_string in filename and 'noDA' in filename and f'{grid_size_km}km' in filename
+                                          and (suffix in filename if suffix is not None else True)]
 
-                if wcofs_dataset is None and not all(
-                        any(variable in filename for filename in existing_files) for variable in
-                        list(scalar_variables) + list(vector_variables)):
+                if wcofs_dataset is None and not all(any(variable in filename for filename in existing_files)
+                                                     for variable in list(scalar_variables) + list(vector_variables)):
                     if grid_size_km == 4:
                         wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg', wcofs_string=wcofs_string,
                                                            source_url=source_url)
