@@ -194,7 +194,7 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                 day_deltas: range = MODEL_DAY_DELTAS['WCOFS'],
                 scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
                 vector_variables: Collection[str] = ('dir', 'mag'), data_assimilation: bool = True,
-                grid_size_km: int = 4, source_url: str = None):
+                grid_size_km: int = 4, source_url: str = None, suffix: str = None):
     """
     Writes daily average of model output on given date.
 
@@ -206,6 +206,7 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
     :param data_assimilation: whether to retrieve model with data assimilation
     :param grid_size_km: cell size in km
     :param source_url: URL of source
+    :param suffix: suffix to append to output filename
     :raise _utilities.NoDataError: if no data found
     """
 
@@ -256,6 +257,9 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
 
                 if not data_assimilation or grid_size_km == 2:
                     wcofs_filename_suffix = f'{wcofs_filename_suffix}_{grid_size_km}km'
+
+                if suffix is not None:
+                    wcofs_filename_suffix = f'{wcofs_filename_suffix}_{suffix}'
 
                 existing_files = os.listdir(daily_average_dir)
 
@@ -341,7 +345,7 @@ def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, d
     logging.info('Processing WCOFS...')
     write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'))
     logging.info('Processing WCOFS option...')
-    write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/option'))
+    write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/option'), suffix='option')
     logging.info('Processing WCOFS noDA...')
     write_wcofs(output_dir, output_date, day_deltas, data_assimilation=False, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'))
     logging.info(f'Wrote models to {output_dir}')
