@@ -281,6 +281,8 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                                           'wcofs' in filename and time_delta_string in filename and 'noDA' in filename and f'{grid_size_km}km' in filename
                                           and (suffix in filename if suffix is not None else True)]
 
+                existing_files = []
+
                 if wcofs_dataset is None and not all(any(variable in filename for filename in existing_files)
                                                      for variable in list(scalar_variables) + list(vector_variables)):
                     if grid_size_km == 4:
@@ -351,8 +353,8 @@ def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, d
     write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/option'),
                 suffix='exp')
     logging.info('Processing WCOFS noDA...')
-    write_wcofs(output_dir, output_date, day_deltas, data_assimilation=False,
-                source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'))
+    write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'),
+                data_assimilation=False)
     logging.info(f'Wrote models to {output_dir}')
 
     logging.info(f'Finished writing files. Total time: ' +
@@ -386,7 +388,7 @@ if __name__ == '__main__':
 
     # from PyOFS import utilities
     #
-    # model_run_dates = utilities.range_daily(datetime.datetime.now(), datetime.datetime(2019, 6, 14))
+    # model_run_dates = utilities.range_daily(datetime.datetime.now(), datetime.datetime(2019, 11, 2))
     # for model_run_date in model_run_dates:
     #     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas)
 

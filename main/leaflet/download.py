@@ -37,9 +37,9 @@ if __name__ == '__main__':
     fwd_dir = os.path.join(wcofs_dir, 'fwd')
     obs_dir = os.path.join(wcofs_dir, 'obs')
     mod_dir = os.path.join(wcofs_dir, 'mod')
-    option_dir = os.path.join(wcofs_dir, 'option')
+    option_dir = os.path.join(wcofs_dir, 'option', f'{datetime.datetime.now():%Y%m}')
 
-    month_dir = os.path.join(avg_dir, datetime.datetime.now().strftime('%Y%m'))
+    month_dir = os.path.join(avg_dir, f'{datetime.datetime.now():%Y%m}')
 
     # create folders if they do not exist
     for directory in [OUTPUT_DIR, LOG_DIR, wcofs_dir, rtofs_dir, avg_dir, fwd_dir, obs_dir, mod_dir, month_dir,
