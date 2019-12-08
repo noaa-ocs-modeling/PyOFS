@@ -30,5 +30,5 @@ if __name__ == '__main__':
     with open(r"D:\data\azure_credentials.txt") as credentials_file:
         azure_blob_url, credentials = (line.strip('\n') for line in credentials_file.readlines())
 
-    sync_with_azure(os.path.join(local_data_path, 'output'), f'{azure_blob_url}/output', credentials, deleteDestination=True)
+    sync_with_azure(os.path.join(local_data_path, 'output'), f'{azure_blob_url}/output', credentials)
     sync_with_azure(os.path.join(local_data_path, 'reference'), f'{azure_blob_url}/reference', credentials)
