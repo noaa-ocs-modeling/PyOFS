@@ -91,7 +91,7 @@ class RTOFSDataset:
         self.datasets = {}
         self.dataset_locks = {}
 
-        date_string = self.model_time.strftime('%Y%m%d')
+        date_string = f'{self.model_time:%Y%m%d}'
 
         if self.time_interval == 'daily':
             for forecast_direction, datasets in DATASET_STRUCTURE[self.source].items():

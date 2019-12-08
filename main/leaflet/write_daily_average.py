@@ -64,14 +64,14 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
         if not os.path.isdir(monthly_dir):
             os.mkdir(monthly_dir)
 
-        observation_dir = os.path.join(monthly_dir, observation_date.strftime('%Y%m'))
+        observation_dir = os.path.join(monthly_dir, f'{observation_date:%Y%m}')
     else:
         daily_dir = os.path.join(output_dir, 'daily_averages')
 
         if not os.path.isdir(daily_dir):
             os.mkdir(daily_dir)
 
-        observation_dir = os.path.join(daily_dir, observation_date.strftime('%Y%m%d'))
+        observation_dir = os.path.join(daily_dir, f'{observation_date:%Y%m%d}')
 
     if not os.path.isdir(observation_dir):
         os.mkdir(observation_dir)
@@ -86,22 +86,18 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
     try:
         if observation == 'hf_radar':
             hfr_range = hf_radar.HFRadarRange(day_start_ndbc, day_end_ndbc)
-            hfr_range.write_rasters(observation_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}',
+            hfr_range.write_rasters(observation_dir, filename_suffix=f'{observation_date:%Y%m%d}',
                                     variables=['dir', 'mag'], driver='AAIGrid', fill_value=LEAFLET_NODATA_VALUE,
                                     dop_threshold=0.5)
             del hfr_range
         elif observation == 'viirs':
             viirs_range = viirs.VIIRSRange(day_start, day_end_utc)
             viirs_range.write_raster(observation_dir,
-                                     filename_suffix=day_start.strftime('%Y%m%d%H%M') + '_' + day_noon.strftime(
-                                         '%Y%m%d%H%M'), start_time=day_start_utc, end_time=day_noon_utc,
-                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', correct_sses=False,
-                                     variables=['sst'])
+                                     filename_suffix=f'{day_start:%Y%m%d%H%M}_{day_noon:%Y%m%d%H%M}', start_time=day_start_utc, end_time=day_noon_utc,
+                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', correct_sses=False, variables=['sst'])
             viirs_range.write_raster(observation_dir,
-                                     filename_suffix=day_noon.strftime('%Y%m%d%H%M') + '_' + day_end.strftime(
-                                         '%Y%m%d%H%M'),
-                                     start_time=day_noon_utc, end_time=day_end_utc, fill_value=LEAFLET_NODATA_VALUE,
-                                     driver='GTiff', correct_sses=False, variables=['sst'])
+                                     filename_suffix=f'{day_noon:%Y%m%d%H%M}_{day_end:%Y%m%d%H%M}', start_time=day_noon_utc, end_time=day_end_utc,
+                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', correct_sses=False, variables=['sst'])
             del viirs_range
         elif observation == 'smap':
             smap_dataset = smap.SMAPDataset()

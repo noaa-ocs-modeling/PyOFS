@@ -122,8 +122,8 @@ class WCOFSDataset:
         self.grid_filename = grid_filename
         self.wcofs_string = wcofs_string
 
-        month_string = self.model_time.strftime('%Y%m')
-        date_string = self.model_time.strftime('%Y%m%d')
+        month_string = f'{self.model_time:%Y%m}'
+        date_string = f'{self.model_time:%Y%m%d}'
 
         self.datasets = {}
 

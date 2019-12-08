@@ -623,8 +623,8 @@ class VIIRSRange:
                     current_filename_prefix = filename_prefix
 
                 if filename_suffix is None:
-                    start_time_string = start_time.strftime('%Y%m%d%H%M')
-                    end_time_string = end_time.strftime('%Y%m%d%H%M')
+                    start_time_string = f'{start_time:%Y%m%d%H%M}'
+                    end_time_string = f'{end_time:%Y%m%d%H%M}'
 
                     if '0000' in start_time_string and '0000' in end_time_string:
                         start_time_string = start_time_string.replace('0000', '')
