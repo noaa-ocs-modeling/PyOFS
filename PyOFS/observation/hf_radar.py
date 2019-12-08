@@ -121,16 +121,15 @@ class HFRadarRange:
         :return: array of data.
         """
 
-        output_data = self.dataset[DATA_VARIABLES[variable]].sel(time).values
+        output_data = self.dataset[DATA_VARIABLES[variable]].sel(time)
 
         if dop_threshold is not None:
-            dop_mask = ((self.dataset['DOPx'].sel(time=time) <= dop_threshold) & (self.dataset['DOPy'].sel(time=time) <= dop_threshold))
-            output_data[~dop_mask] = numpy.nan
+            output_data[~self.dop_mask(dop_threshold)] = numpy.nan
 
-        return output_data
+        return output_data.values
 
     def data_average(self, variable: str, start_time: datetime.datetime = None, end_time: datetime.datetime = None,
-                     dop_threshold: float = None) -> numpy.array:
+                     dop_threshold: float = None, include_incomplete: bool = False) -> numpy.array:
         """
         Get data for the specified variable at a single time.
 
@@ -138,6 +137,7 @@ class HFRadarRange:
         :param start_time: start of time interval
         :param end_time: end of time interval
         :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
+        :param include_incomplete: whether to keep incomplete time series
         :return: array of data
         """
 
@@ -147,12 +147,15 @@ class HFRadarRange:
         if end_time is None:
             end_time = self.end_time
 
-        output_data = self.dataset[DATA_VARIABLES[variable]].sel(time=slice(start_time, end_time))
+        data_array = self.dataset[DATA_VARIABLES[variable]].sel(time=slice(start_time, end_time))
 
         if dop_threshold is not None:
-            output_data.values[~self.dop_mask(dop_threshold)] = numpy.nan
+            data_array.values[~self.dop_mask(dop_threshold)] = numpy.nan
 
-        output_data = numpy.nanmean(output_data, axis=0)
+        output_data = numpy.nanmean(data_array, axis=0)
+
+        if not include_incomplete:
+            output_data[numpy.isnan(data_array).any(axis=0)] = numpy.nan
 
         return output_data
 
@@ -560,6 +563,10 @@ class HFRadarRange:
                 used_params.append(param)
 
         return f'{self.__class__.__name__}({str(", ".join(used_params))})'
+
+
+def discard_incomplete_time_series(data: xarray.DataArray):
+    assert 'time' in data.coords
 
 
 if __name__ == '__main__':
