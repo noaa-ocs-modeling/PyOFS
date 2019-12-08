@@ -241,7 +241,7 @@ if __name__ == '__main__':
     start_time = datetime.datetime(2018, 11, 11)
     end_time = start_time + datetime.timedelta(days=1)
 
-    day_dir = os.path.join(WORKSPACE_DIR, start_time.strftime('%Y%m%d'))
+    day_dir = os.path.join(WORKSPACE_DIR, f'{start_time:%Y%m%d}')
     if not os.path.exists(day_dir):
         os.mkdir(day_dir)
 

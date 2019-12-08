@@ -64,14 +64,14 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
         if not os.path.isdir(monthly_dir):
             os.mkdir(monthly_dir)
 
-        observation_dir = os.path.join(monthly_dir, observation_date.strftime('%Y%m'))
+        observation_dir = os.path.join(monthly_dir, f'{observation_date:%Y%m}')
     else:
         daily_dir = os.path.join(output_dir, 'daily_averages')
 
         if not os.path.isdir(daily_dir):
             os.mkdir(daily_dir)
 
-        observation_dir = os.path.join(daily_dir, observation_date.strftime('%Y%m%d'))
+        observation_dir = os.path.join(daily_dir, f'{observation_date:%Y%m%d}')
 
     if not os.path.isdir(observation_dir):
         os.mkdir(observation_dir)
@@ -86,22 +86,18 @@ def write_observation(output_dir: str, observation_date: Union[datetime.datetime
     try:
         if observation == 'hf_radar':
             hfr_range = hf_radar.HFRadarRange(day_start_ndbc, day_end_ndbc)
-            hfr_range.write_rasters(observation_dir, filename_suffix=f'{observation_date.strftime("%Y%m%d")}',
+            hfr_range.write_rasters(observation_dir, filename_suffix=f'{observation_date:%Y%m%d}',
                                     variables=['dir', 'mag'], driver='AAIGrid', fill_value=LEAFLET_NODATA_VALUE,
                                     dop_threshold=0.5)
             del hfr_range
         elif observation == 'viirs':
             viirs_range = viirs.VIIRSRange(day_start, day_end_utc)
             viirs_range.write_raster(observation_dir,
-                                     filename_suffix=day_start.strftime('%Y%m%d%H%M') + '_' + day_noon.strftime(
-                                         '%Y%m%d%H%M'), start_time=day_start_utc, end_time=day_noon_utc,
-                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', correct_sses=False,
-                                     variables=['sst'])
+                                     filename_suffix=f'{day_start:%Y%m%d%H%M}_{day_noon:%Y%m%d%H%M}', start_time=day_start_utc, end_time=day_noon_utc,
+                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', correct_sses=False, variables=['sst'])
             viirs_range.write_raster(observation_dir,
-                                     filename_suffix=day_noon.strftime('%Y%m%d%H%M') + '_' + day_end.strftime(
-                                         '%Y%m%d%H%M'),
-                                     start_time=day_noon_utc, end_time=day_end_utc, fill_value=LEAFLET_NODATA_VALUE,
-                                     driver='GTiff', correct_sses=False, variables=['sst'])
+                                     filename_suffix=f'{day_noon:%Y%m%d%H%M}_{day_end:%Y%m%d%H%M}', start_time=day_noon_utc, end_time=day_end_utc,
+                                     fill_value=LEAFLET_NODATA_VALUE, driver='GTiff', correct_sses=False, variables=['sst'])
             del viirs_range
         elif observation == 'smap':
             smap_dataset = smap.SMAPDataset()
@@ -192,7 +188,7 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                 day_deltas: range = MODEL_DAY_DELTAS['WCOFS'],
                 scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
                 vector_variables: Collection[str] = ('dir', 'mag'), data_assimilation: bool = True,
-                grid_size_km: int = 4, source_url: str = None, suffix: str = None):
+                grid_size_km: int = 4, source_url: str = None, use_defaults: bool = True, suffix: str = None):
     """
     Writes daily average of model output on given date.
 
@@ -204,6 +200,7 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
     :param data_assimilation: whether to retrieve model with data assimilation
     :param grid_size_km: cell size in km
     :param source_url: URL of source
+    :param use_defaults: whether to fall back to default source URLs if the provided one does not exist
     :param suffix: suffix to append to output filename
     :raise _utilities.NoDataError: if no data found
     """
@@ -278,16 +275,14 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime.datetime, dateti
                                           'wcofs' in filename and time_delta_string in filename and 'noDA' in filename and f'{grid_size_km}km' in filename
                                           and (suffix in filename if suffix is not None else True)]
 
-                existing_files = []
-
                 if wcofs_dataset is None and not all(any(variable in filename for filename in existing_files)
                                                      for variable in list(scalar_variables) + list(vector_variables)):
                     if grid_size_km == 4:
-                        wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg', wcofs_string=wcofs_string,
-                                                           source_url=source_url)
+                        wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg', wcofs_string=wcofs_string, source_url=source_url,
+                                                           use_defaults=use_defaults)
                     else:
-                        wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg', grid_filename=grid_filename,
-                                                           source_url=source_url, wcofs_string=wcofs_string)
+                        wcofs_dataset = wcofs.WCOFSDataset(model_run_date, source='avg', grid_filename=grid_filename, source_url=source_url,
+                                                           use_defaults=use_defaults, wcofs_string=wcofs_string)
                 if wcofs_dataset is not None:
                     scalar_variables_to_write = [variable for variable in scalar_variables if
                                                  not any(variable in filename for filename in existing_files)]
@@ -347,8 +342,7 @@ def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, d
     logging.info('Processing WCOFS...')
     write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'))
     logging.info('Processing WCOFS experimental DA...')
-    write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/option'),
-                suffix='exp')
+    write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/option'), use_defaults=False, suffix='exp')
     logging.info('Processing WCOFS noDA...')
     write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'),
                 data_assimilation=False)
