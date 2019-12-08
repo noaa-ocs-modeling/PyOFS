@@ -71,9 +71,8 @@ class WCOFSDataset:
     masks = None
     angle = None
 
-    def __init__(self, model_date: datetime.datetime = None, source: str = None, time_deltas: list = None,
-                 x_size: float = None,
-                 y_size: float = None, grid_filename: str = None, source_url: str = None, wcofs_string: str = 'wcofs'):
+    def __init__(self, model_date: datetime.datetime = None, source: str = None, time_deltas: list = None, x_size: float = None, y_size: float = None,
+                 grid_filename: str = None, source_url: str = None, wcofs_string: str = 'wcofs'):
         """
         Creates new observation object from datetime and given model parameters.
 
