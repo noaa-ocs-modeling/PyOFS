@@ -15,6 +15,8 @@ from typing import Collection, Union
 
 import pytz
 
+from PyOFS.logging import create_logger
+
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
 from main.leaflet.write_azure import sync_with_azure
@@ -365,15 +367,7 @@ if __name__ == '__main__':
     start_time = datetime.datetime.now()
 
     log_path = os.path.join(LOG_DIR, f'{start_time:%Y%m%d}_conversion.log')
-    log_format = '[%(asctime)s] %(levelname)-8s: %(message)s'
-    if log_path is None:
-        logging.basicConfig(level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S', format=log_format)
-    else:
-        logging.basicConfig(level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S', format=log_format)
-        log_file = logging.FileHandler(log_path)
-        log_file.setLevel(logging.INFO)
-        log_file.setFormatter(logging.Formatter(log_format))
-        logging.getLogger('').addHandler(log_file)
+    logger = create_logger('', log_path, file_level=logging.INFO, console_level=logging.INFO, log_format='[%(asctime)s] %(levelname)-8s: %(message)s')
 
     # disable complaints from Fiona environment within conda
     logging.root.manager.loggerDict['fiona._env'].setLevel(logging.CRITICAL)
