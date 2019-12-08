@@ -72,7 +72,7 @@ class WCOFSDataset:
     angle = None
 
     def __init__(self, model_date: datetime.datetime = None, source: str = None, time_deltas: list = None, x_size: float = None, y_size: float = None,
-                 grid_filename: str = None, source_url: str = None, wcofs_string: str = 'wcofs'):
+                 grid_filename: str = None, source_url: str = None, wcofs_string: str = 'wcofs', use_defaults: bool = True):
         """
         Creates new observation object from datetime and given model parameters.
 
@@ -84,6 +84,7 @@ class WCOFSDataset:
         :param grid_filename: filename of NetCDF containing WCOFS grid coordinates
         :param source_url: directory containing NetCDF files
         :param wcofs_string: WCOFS string in filename
+        :param use_defaults: whether to fall back to default source URLs if the provided one does not exist
         :raises ValueError: if source is not valid
         :raises NoDataError: if no datasets exist for the given model run
         """
@@ -127,7 +128,13 @@ class WCOFSDataset:
 
         self.datasets = {}
 
-        source_urls = SOURCE_URLS.copy() if source_url is not None else [source_url]
+        source_urls = SOURCE_URLS.copy()
+
+        if source_url is not None:
+            if use_defaults:
+                source_urls.insert(0, source_url)
+            else:
+                source_urls = [source_url]
 
         for source_url in source_urls:
             if self.source == 'avg':
