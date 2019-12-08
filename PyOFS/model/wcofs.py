@@ -128,10 +128,7 @@ class WCOFSDataset:
 
         self.datasets = {}
 
-        source_urls = SOURCE_URLS.copy()
-
-        if source_url is not None:
-            source_urls.insert(0, source_url)
+        source_urls = SOURCE_URLS.copy() if source_url is not None else [source_url]
 
         for source_url in source_urls:
             if self.source == 'avg':
@@ -159,7 +156,6 @@ class WCOFSDataset:
                         self.source_url = source_url
                     except OSError as error:
                         logging.warning(error)
-
 
         if len(self.datasets) > 0:
             self.dataset_locks = {time_delta: threading.Lock() for time_delta in self.datasets.keys()}
