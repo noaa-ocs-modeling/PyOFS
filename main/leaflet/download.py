@@ -11,8 +11,9 @@ import datetime
 import ftplib
 import logging
 import os
-
 import sys
+
+from PyOFS.logging import create_logger
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
@@ -53,12 +54,8 @@ if __name__ == '__main__':
     # check whether logfile exists
     log_exists = os.path.exists(log_path)
 
-    log_format = '[%(asctime)s] %(levelname)-8s: %(message)s'
-    logging.basicConfig(level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S', format=log_format)
-    log_file = logging.FileHandler(log_path)
-    log_file.setLevel(logging.INFO)
-    log_file.setFormatter(logging.Formatter(log_format))
-    logging.getLogger('').addHandler(log_file)
+    create_logger('', log_path, file_level=logging.INFO, console_level=logging.DEBUG,
+                  log_format='[%(asctime)s] %(levelname)-8s: %(message)s')
 
     # write initial message
     logging.info('Starting FTP transfer...')
@@ -99,11 +96,13 @@ if __name__ == '__main__':
 
                 output_path = os.path.join(option_dir, filename)
             else:
-                raise NotImplementedError(f'no options set up for {input_path}')
+                logging.warning(f'no options set up for {input_path}')
 
             path_map[input_path] = output_path
 
         for input_path, output_path in path_map.items():
+            filename = os.path.basename(input_path)
+
             # filter for NetCDF and TAR archives
             if '.nc' in filename or '.tar' in filename:
                 current_start_time = datetime.datetime.now()
