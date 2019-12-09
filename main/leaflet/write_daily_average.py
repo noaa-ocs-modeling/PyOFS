@@ -363,9 +363,6 @@ def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, d
                 data_assimilation=False)
     logging.info(f'Wrote models to {output_dir}')
 
-    logging.info(f'Finished writing files. Total time: ' +
-                 f'{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
-
 
 if __name__ == '__main__':
     # create folders if they do not exist
@@ -394,6 +391,11 @@ if __name__ == '__main__':
     model_run_date = datetime.date.today()
     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas)
 
+    logging.info(f'Finished writing files. Total time: ' +
+                 f'{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+
+    start_time = datetime.datetime.now()
+
     files_json_filename = os.path.join(REFERENCE_DIR, 'files.json')
     write_json.dir_structure_to_json(OUTPUT_DIR, files_json_filename)
 
@@ -402,5 +404,8 @@ if __name__ == '__main__':
 
     sync_with_azure(files_json_filename, f'{azure_blob_url}/reference/files.json', credentials)
     sync_with_azure(OUTPUT_DIR, f'{azure_blob_url}/output', credentials)
+
+    logging.info(f'Finished uploading files. Total time: ' +
+                 f'{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
     print('done')
