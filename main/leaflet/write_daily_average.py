@@ -15,8 +15,6 @@ from typing import Collection, Union
 
 import pytz
 
-from PyOFS.logging import create_logger
-
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
 from main.leaflet.write_azure import sync_with_azure
@@ -24,6 +22,7 @@ from main.leaflet import write_json
 from PyOFS import DATA_DIRECTORY, LEAFLET_NODATA_VALUE
 from PyOFS.observation import hf_radar, viirs, smap, data_buoy
 from PyOFS.model import wcofs, rtofs
+from PyOFS.logging import create_logger
 
 LOG_DIR = os.path.join(DATA_DIRECTORY, 'log')
 OUTPUT_DIR = os.path.join(DATA_DIRECTORY, 'output')
