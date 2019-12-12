@@ -53,11 +53,11 @@ if __name__ == '__main__':
     # check whether logfile exists
     log_exists = os.path.exists(log_path)
 
-    create_logger('', log_path, file_level=logging.INFO, console_level=logging.DEBUG,
-                  log_format='[%(asctime)s] %(levelname)-8s: %(message)s')
+    logger = create_logger('download', log_path, file_level=logging.INFO, console_level=logging.DEBUG,
+                           log_format='[%(asctime)s] %(levelname)-8s: %(message)s')
 
     # write initial message
-    logging.info('Starting FTP transfer...')
+    logger.info('Starting FTP transfer...')
 
     # instantiate FTP connection
     with ftplib.FTP(TIDEPOOL_URL) as ftp_connection:
@@ -95,7 +95,7 @@ if __name__ == '__main__':
 
                 output_path = os.path.join(option_dir, filename)
             else:
-                logging.warning(f'no options set up for {input_path}')
+                logger.warning(f'no options set up for {input_path}')
 
             path_map[input_path] = output_path
 
@@ -111,19 +111,19 @@ if __name__ == '__main__':
                     with open(output_path, 'wb') as output_file:
                         try:
                             ftp_connection.retrbinary(f'RETR {input_path}', output_file.write)
-                            logging.info(f'Copied "{input_path}" to "{output_path}" ' +
-                                         f'({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s, {os.stat(output_path).st_size / 1000} KB)')
+                            logger.info(f'Copied "{input_path}" to "{output_path}" ' +
+                                        f'({(datetime.datetime.now() - current_start_time).total_seconds():.2f}s, {os.stat(output_path).st_size / 1000} KB)')
                             num_downloads += 1
                         except Exception as error:
-                            logging.info(f'error with "{input_path}": {error.__class__.__name__} - {error}')
+                            logger.info(f'error with "{input_path}": {error.__class__.__name__} - {error}')
                 else:
                     # only write 'file exists' message on the first run of the day
-                    logging.log(logging.DEBUG if log_exists else logging.INFO,
-                                'Destination file already exists: ' + \
-                                f'"{output_path}", {os.stat(output_path).st_size / 1000} KB')
+                    logger.log(logging.DEBUG if log_exists else logging.INFO,
+                               'Destination file already exists: ' + \
+                               f'"{output_path}", {os.stat(output_path).st_size / 1000} KB')
 
-    logging.info(f'Downloaded {num_downloads} files. ' +
-                 f'Total time: {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+    logger.info(f'Downloaded {num_downloads} files. ' +
+                f'Total time: {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
 
     print('done')
 
