@@ -110,8 +110,8 @@ class RTOFSDataset:
                         dataset = xarray.open_dataset(url)
                         self.datasets[forecast_direction][dataset_name] = dataset
                         self.dataset_locks[forecast_direction][dataset_name] = threading.Lock()
-                    except OSError:
-                        logging.exception(f'error reading from {url}')
+                    except OSError as error:
+                        logging.error(f'error "{error}" reading from {url}')
 
         if (len(self.datasets['nowcast']) + len(self.datasets['forecast'])) > 0:
             if len(self.datasets['nowcast']) > 0:

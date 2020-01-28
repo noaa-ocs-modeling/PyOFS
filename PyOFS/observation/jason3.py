@@ -57,8 +57,8 @@ class Jason3Dataset:
             try:
                 self.dataset = xarray.open_dataset(source_url)
                 break
-            except Exception:
-                logging.exception(f'error reading from {source}')
+            except Exception as error:
+                logging.error(f'error "{error}" reading from {source}')
 
         # construct rectangular polygon of granule extent
         lon_min = float(self.dataset.geospatial_lon_min)

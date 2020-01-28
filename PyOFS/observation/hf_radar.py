@@ -82,8 +82,8 @@ class HFRadarRange:
                 self.dataset = xarray.open_dataset(url)
                 self.url = url
                 break
-            except OSError:
-                logging.exception(f'error reading dataset from {url}')
+            except OSError as error:
+                logging.error(f'error "{error}" reading dataset from {url}')
         else:
             raise utilities.NoDataError(f'No HFR observations found between {self.start_time} and {self.end_time}')
 

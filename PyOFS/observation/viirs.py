@@ -127,8 +127,8 @@ class VIIRSDataset:
                 self.dataset = xarray.open_dataset(url)
                 self.url = url
                 break
-            except Exception:
-                logging.exception(f'error reading from {url}')
+            except Exception as error:
+                logging.error(f'error "{error}" reading from {url}')
 
         if self.url is None:
             logging.warning('Error collecting from OpenDAP; falling back to FTP...')
@@ -171,8 +171,8 @@ class VIIRSDataset:
 
                     self.url = url
                     break
-                except Exception:
-                    logging.exception(f'error reading from {url}')
+                except Exception as error:
+                    logging.error(f'error "{error}" reading from {url}')
 
                 if self.url is not None:
                     break
