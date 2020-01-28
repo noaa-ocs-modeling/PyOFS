@@ -57,8 +57,8 @@ class Jason3Dataset:
             try:
                 self.dataset = xarray.open_dataset(source_url)
                 break
-            except Exception as error:
-                logging.error(f'Error collecting observation from {source}: {error}')
+            except Exception:
+                logging.exception(f'error reading from {source}')
 
         # construct rectangular polygon of granule extent
         lon_min = float(self.dataset.geospatial_lon_min)
@@ -67,7 +67,8 @@ class Jason3Dataset:
         lat_max = float(self.dataset.geospatial_lat_max)
 
         if lon_min < lon_max:
-            self.data_extent = shapely.geometry.Polygon([(lon_min, lat_max), (lon_max, lat_max), (lon_max, lat_min), (lon_min, lat_min)])
+            self.data_extent = shapely.geometry.Polygon(
+                [(lon_min, lat_max), (lon_max, lat_max), (lon_max, lat_min), (lon_min, lat_min)])
         else:
             # geospatial bounds cross the antimeridian, so we create a multipolygon
             self.data_extent = shapely.geometry.MultiPolygon(
@@ -79,18 +80,21 @@ class Jason3Dataset:
 
         if Jason3Dataset.study_area_extent is None:
             # get first record in layer
-            Jason3Dataset.study_area_extent = shapely.geometry.MultiPolygon([shapely.geometry.Polygon(polygon[0]) for polygon in
-                                                                             utilities.get_first_record(self.study_area_polygon_filename)[
-                                                                                 'geometry']['coordinates']])
+            Jason3Dataset.study_area_extent = shapely.geometry.MultiPolygon(
+                [shapely.geometry.Polygon(polygon[0]) for polygon in
+                 utilities.get_first_record(self.study_area_polygon_filename)[
+                     'geometry']['coordinates']])
 
             Jason3Dataset.study_area_bounds = Jason3Dataset.study_area_extent.bounds
             Jason3Dataset.study_area_transform = rasterio.transform.from_origin(Jason3Dataset.study_area_bounds[0],
-                                                                                Jason3Dataset.study_area_bounds[3], lon_pixel_size,
+                                                                                Jason3Dataset.study_area_bounds[3],
+                                                                                lon_pixel_size,
                                                                                 lat_pixel_size)
 
         if Jason3Dataset.study_area_bounds is not None:
-            self.dataset = self.dataset.sel(longitude=slice(Jason3Dataset.study_area_bounds[0], Jason3Dataset.study_area_bounds[2]),
-                                            latitude=slice(Jason3Dataset.study_area_bounds[3], Jason3Dataset.study_area_bounds[1]))
+            self.dataset = self.dataset.sel(
+                longitude=slice(Jason3Dataset.study_area_bounds[0], Jason3Dataset.study_area_bounds[2]),
+                latitude=slice(Jason3Dataset.study_area_bounds[3], Jason3Dataset.study_area_bounds[1]))
 
         if Jason3Dataset.study_area_coordinates is None:
             Jason3Dataset.study_area_coordinates = {

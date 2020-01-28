@@ -82,14 +82,15 @@ class HFRadarRange:
                 self.dataset = xarray.open_dataset(url)
                 self.url = url
                 break
-            except OSError as error:
-                logging.error(error)
+            except OSError:
+                logging.exception(f'error reading dataset from {url}')
         else:
             raise utilities.NoDataError(f'No HFR observations found between {self.start_time} and {self.end_time}')
 
         raw_times = self.dataset['time']
 
-        self.dataset['time'] = xarray.DataArray(numpy.array(raw_times.values, dtype='datetime64[h]'), coords=raw_times.coords,
+        self.dataset['time'] = xarray.DataArray(numpy.array(raw_times.values, dtype='datetime64[h]'),
+                                                coords=raw_times.coords,
                                                 dims=raw_times.dims, attrs=raw_times.attrs)
 
         self.dataset = self.dataset.sel(time=slice(self.start_time, self.end_time))
@@ -223,7 +224,8 @@ class HFRadarRange:
         with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_CRS) as layer:
             layer.writerecords(layer_records)
 
-    def write_vectors(self, output_filename: str, variables: Collection[str] = None, start_time: datetime.datetime = None,
+    def write_vectors(self, output_filename: str, variables: Collection[str] = None,
+                      start_time: datetime.datetime = None,
                       end_time: datetime.datetime = None, dop_threshold: float = 0.5):
         """
         Write HFR data to a layer of the provided output file for every hour in the given time interval.
@@ -313,7 +315,8 @@ class HFRadarRange:
                 layer.writerecords(layer_records)
 
     def write_vector(self, output_filename: str, layer_name: str = 'ssuv', variables: Collection[str] = None,
-                     start_time: datetime.datetime = None, end_time: datetime.datetime = None, dop_threshold: float = 0.5):
+                     start_time: datetime.datetime = None, end_time: datetime.datetime = None,
+                     dop_threshold: float = 0.5):
         """
         Write average of HFR data for all hours in the given time interval to a single layer of the provided output file.
 
@@ -378,8 +381,10 @@ class HFRadarRange:
         with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_CRS) as layer:
             layer.writerecords(layer_records)
 
-    def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = '', variables: Collection[str] = None,
-                      start_time: datetime.datetime = None, end_time: datetime.datetime = None, fill_value: float = LEAFLET_NODATA_VALUE,
+    def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = '',
+                      variables: Collection[str] = None,
+                      start_time: datetime.datetime = None, end_time: datetime.datetime = None,
+                      fill_value: float = LEAFLET_NODATA_VALUE,
                       driver: str = 'GTiff', dop_threshold: float = None):
         """
         Write average of HFR data for all hours in the given time interval to rasters.
@@ -443,8 +448,10 @@ class HFRadarRange:
                 output_lon = numpy.arange(west, east, mean_cell_length)[None, :]
                 output_lat = numpy.arange(south, north, mean_cell_length)[:, None]
 
-                raster_data = scipy.interpolate.griddata((input_lon.flatten(), input_lat.flatten()), raster_data.flatten(),
-                                                         (output_lon, output_lat), method='nearest', fill_value=fill_value).astype(
+                raster_data = scipy.interpolate.griddata((input_lon.flatten(), input_lat.flatten()),
+                                                         raster_data.flatten(),
+                                                         (output_lon, output_lat), method='nearest',
+                                                         fill_value=fill_value).astype(
                     raster_data.dtype)
 
                 gdal_args.update({
@@ -467,7 +474,8 @@ class HFRadarRange:
             if fill_value is not None:
                 raster_data[numpy.isnan(raster_data)] = fill_value
 
-            output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
+            output_filename = os.path.join(output_dir,
+                                           f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
 
             logging.info(f'Writing {output_filename}')
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
@@ -493,7 +501,8 @@ class HFRadarRange:
         dop_y = self.dataset['DOPy'].sel(time=slice(start_time, end_time))
         return ((dop_x <= threshold) & (dop_y <= threshold)).values
 
-    def to_xarray(self, variables: Collection[str] = None, start_time: datetime.datetime = None, end_time: datetime.datetime = None,
+    def to_xarray(self, variables: Collection[str] = None, start_time: datetime.datetime = None,
+                  end_time: datetime.datetime = None,
                   mean: bool = True, dop_threshold: float = 0.5) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
@@ -519,10 +528,12 @@ class HFRadarRange:
 
         if mean:
             for variable in variables:
-                output_data = self.data_average(variable, start_time=start_time, end_time=end_time, dop_threshold=dop_threshold)
+                output_data = self.data_average(variable, start_time=start_time, end_time=end_time,
+                                                dop_threshold=dop_threshold)
 
                 output_dataset.update({variable: xarray.DataArray(output_data,
-                                                                  coords={'lat': self.dataset['lat'], 'lon': self.dataset['lon']},
+                                                                  coords={'lat': self.dataset['lat'],
+                                                                          'lon': self.dataset['lon']},
                                                                   dims=('lat', 'lon'))})
         else:
             for variable in variables:
