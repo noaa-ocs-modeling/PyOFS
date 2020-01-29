@@ -21,7 +21,7 @@ import xarray
 
 from PyOFS import CRS_EPSG, utilities, LEAFLET_NODATA_VALUE
 
-DATA_VARIABLES = {'ssu': 'u', 'ssv': 'v', 'dopx': 'DOPx', 'dopy': 'DOPy'}
+DATA_VARIABLES = {'ssu': 'u', 'ssv': 'v', 'dopx': 'dopx', 'dopy': 'dopy'}
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
@@ -249,8 +249,8 @@ class HFRadarRange:
         time_interval_selection = self.dataset.sel(time=slice(start_time, end_time))
 
         if dop_threshold is not None:
-            dop_mask = ((self.dataset['DOPx'].sel(time=slice(start_time, end_time)) <= dop_threshold) & (
-                    self.dataset['DOPy'].sel(time=slice(start_time, end_time)) <= dop_threshold)).values
+            dop_mask = ((self.dataset['dopx'].sel(time=slice(start_time, end_time)) <= dop_threshold) & (
+                    self.dataset['dopy'].sel(time=slice(start_time, end_time)) <= dop_threshold)).values
             time_interval_selection[~dop_mask] = numpy.nan
 
         # create dict to store features
@@ -497,8 +497,8 @@ class HFRadarRange:
         if end_time is None:
             end_time = self.end_time
 
-        dop_x = self.dataset['DOPx'].sel(time=slice(start_time, end_time))
-        dop_y = self.dataset['DOPy'].sel(time=slice(start_time, end_time))
+        dop_x = self.dataset['dopx'].sel(time=slice(start_time, end_time))
+        dop_y = self.dataset['dopy'].sel(time=slice(start_time, end_time))
         return ((dop_x <= threshold) & (dop_y <= threshold)).values
 
     def to_xarray(self, variables: Collection[str] = None, start_time: datetime.datetime = None,
@@ -601,8 +601,8 @@ if __name__ == '__main__':
 
     axes[0].plot(cell['time'], cell['u'])
     axes[0].plot(cell['time'], cell['v'])
-    axes[1].plot(cell['time'], cell['DOPx'])
-    axes[1].plot(cell['time'], cell['DOPy'])
+    axes[1].plot(cell['time'], cell['dopx'])
+    axes[1].plot(cell['time'], cell['dopy'])
 
     for axis in axes:
         axis.legend()
