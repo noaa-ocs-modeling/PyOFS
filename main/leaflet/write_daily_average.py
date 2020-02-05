@@ -354,9 +354,9 @@ def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, d
     write_rtofs(output_dir, output_date, day_deltas)
     logging.info('Processing WCOFS...')
     write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'))
-    logging.info('Processing WCOFS experimental DA...')
-    write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/option'),
-                use_defaults=False, suffix='exp')
+    # logging.info('Processing WCOFS experimental DA...')
+    # write_wcofs(output_dir, output_date, day_deltas,
+    #             source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/experimental'), use_defaults=False, suffix='exp')
     logging.info('Processing WCOFS noDA...')
     write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'),
                 data_assimilation=False)

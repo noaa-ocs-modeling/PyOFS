@@ -20,7 +20,7 @@ from PyOFS import DATA_DIRECTORY
 
 TIDEPOOL_URL = 'tidepool.nos.noaa.gov'
 INPUT_DIR = '/pub/outgoing/CSDL'
-WCOFS_OPTION_DIR = '/pub/outgoing/CSDL/testssh'
+# WCOFS_EXPERIMENTAL_DIR = '/pub/outgoing/CSDL/testssh'
 
 OUTPUT_DIR = os.path.join(DATA_DIRECTORY, 'input')
 LOG_DIR = os.path.join(DATA_DIRECTORY, 'log')
@@ -37,13 +37,13 @@ if __name__ == '__main__':
     fwd_dir = os.path.join(wcofs_dir, 'fwd')
     obs_dir = os.path.join(wcofs_dir, 'obs')
     mod_dir = os.path.join(wcofs_dir, 'mod')
-    option_dir = os.path.join(wcofs_dir, 'option', f'{datetime.datetime.now():%Y%m}')
+    # experimental_dir = os.path.join(wcofs_dir, 'option', f'{datetime.datetime.now():%Y%m}')
 
     month_dir = os.path.join(avg_dir, f'{datetime.datetime.now():%Y%m}')
 
     # create folders if they do not exist
-    for directory in [OUTPUT_DIR, LOG_DIR, wcofs_dir, rtofs_dir, avg_dir, fwd_dir, obs_dir, mod_dir, month_dir,
-                      option_dir]:
+    for directory in [OUTPUT_DIR, LOG_DIR, wcofs_dir, rtofs_dir, avg_dir, fwd_dir, obs_dir, mod_dir,
+                      month_dir]:  # experimental_dir]:
         if not os.path.isdir(directory):
             os.mkdir(directory)
 
@@ -86,18 +86,18 @@ if __name__ == '__main__':
 
             path_map[input_path] = output_path
 
-        for input_path in ftp_connection.nlst(WCOFS_OPTION_DIR):
-            filename = os.path.basename(input_path)
-
-            if 'wcofs' in filename:
-                if filename[-4:] == '.sur':
-                    filename = filename[:-4]
-
-                output_path = os.path.join(option_dir, filename)
-            else:
-                logger.warning(f'no options set up for {input_path}')
-
-            path_map[input_path] = output_path
+        # for input_path in ftp_connection.nlst(WCOFS_EXPERIMENTAL_DIR):
+        #     filename = os.path.basename(input_path)
+        #
+        #     if 'wcofs' in filename:
+        #         if filename[-4:] == '.sur':
+        #             filename = filename[:-4]
+        #
+        #         output_path = os.path.join(experimental_dir, filename)
+        #     else:
+        #         logger.warning(f'no options set up for {input_path}')
+        #
+        #     path_map[input_path] = output_path
 
         for input_path, output_path in path_map.items():
             filename = os.path.basename(input_path)
