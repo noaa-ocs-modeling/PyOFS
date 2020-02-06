@@ -37,7 +37,7 @@ if __name__ == '__main__':
     fwd_dir = os.path.join(wcofs_dir, 'fwd')
     obs_dir = os.path.join(wcofs_dir, 'obs')
     mod_dir = os.path.join(wcofs_dir, 'mod')
-    # experimental_dir = os.path.join(wcofs_dir, 'option', f'{datetime.datetime.now():%Y%m}')
+    # experimental_dir = os.path.join(wcofs_dir, 'exp', f'{datetime.datetime.now():%Y%m}')
 
     month_dir = os.path.join(avg_dir, f'{datetime.datetime.now():%Y%m}')
 

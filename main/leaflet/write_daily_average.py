@@ -352,11 +352,11 @@ def write_daily_average(output_dir: str, output_date: Union[datetime.datetime, d
 
     logging.info('Processing RTOFS...')  # RTOFS forecast is uploaded at 1700 UTC
     write_rtofs(output_dir, output_date, day_deltas)
-    logging.info('Processing WCOFS...')
+    logging.info('Processing WCOFS DA...')
     write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'))
-    # logging.info('Processing WCOFS experimental DA...')
-    # write_wcofs(output_dir, output_date, day_deltas,
-    #             source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/experimental'), use_defaults=False, suffix='exp')
+    logging.info('Processing WCOFS DA noSSH...')
+    write_wcofs(output_dir, output_date, day_deltas,
+                source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/noSSH'), use_defaults=False, suffix='noSSH')
     logging.info('Processing WCOFS noDA...')
     write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'),
                 data_assimilation=False)
@@ -383,7 +383,7 @@ if __name__ == '__main__':
 
     # from PyOFS import utilities
     #
-    # model_run_dates = utilities.range_daily(datetime.datetime.now(), datetime.datetime(2019, 12, 4))
+    # model_run_dates = utilities.range_daily(datetime.datetime.now(), datetime.datetime(2019, 11, 1))
     # for model_run_date in model_run_dates:
     #     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas)
 
