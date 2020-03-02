@@ -7,20 +7,20 @@ Created on Feb 27, 2019
 @author: zachary.burnett
 """
 
+from concurrent import futures
 import datetime
 import math
 import os
-from concurrent import futures
 from typing import Union
 
 import cartopy.feature
 import fiona.crs
+from matplotlib import pyplot, quiver
 import numpy
 import pyproj
 import scipy.interpolate
 import shapely.geometry
 import xarray
-from matplotlib import pyplot, quiver
 
 from PyOFS import utilities
 
@@ -277,8 +277,10 @@ class ROMSGridVectorDataset(VectorField):
         self.rotated_pole = utilities.RotatedPoleCoordinateSystem(wcofs.ROTATED_POLE)
 
         self.dataset = xarray.Dataset(
-            {'u': xarray.DataArray(u, coords={'time': times, 'u_x': u_x, 'u_y': u_y}, dims=('time', 'u_x', 'u_y')),
-             'v': xarray.DataArray(v, coords={'time': times, 'v_x': v_x, 'v_y': v_y}, dims=('time', 'v_x', 'v_y'))})
+            {
+                'u': xarray.DataArray(u, coords={'time': times, 'u_x': u_x, 'u_y': u_y}, dims=('time', 'u_x', 'u_y')),
+                'v': xarray.DataArray(v, coords={'time': times, 'v_x': v_x, 'v_y': v_y}, dims=('time', 'v_x', 'v_y'))
+            })
 
         if len(grid_angles.shape) > 2:
             grid_angles = grid_angles.isel(time=0)
@@ -681,10 +683,12 @@ class RectangleContour(ParticleContour):
         :param interval: interval between points in meters
         """
 
-        corners = {'sw': pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, west_lon, south_lat),
-                   'nw': pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, west_lon, north_lat),
-                   'ne': pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, east_lon, north_lat),
-                   'se': pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, east_lon, south_lat)}
+        corners = {
+            'sw': pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, west_lon, south_lat),
+            'nw': pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, west_lon, north_lat),
+            'ne': pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, east_lon, north_lat),
+            'se': pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, east_lon, south_lat)
+        }
         points = []
 
         for corner_name, corner in corners.items():
@@ -736,7 +740,8 @@ def create_contour(contour_center: tuple, contour_radius: float, start_time: dat
 
 
 def track_contour(contour: ParticleContour, timestep: datetime.timedelta, steps: int, intermediate_timestep: datetime.timedelta = None) -> {
-    datetime.datetime: shapely.geometry.Polygon}:
+    datetime.datetime: shapely.geometry.Polygon
+}:
     polygons = {contour.time: contour.geometry()}
 
     if intermediate_timestep is None or intermediate_timestep > timestep:
@@ -999,9 +1004,13 @@ if __name__ == '__main__':
             polygons = completed_future.result()
 
             if polygons is not None:
-                records.extend({'geometry': shapely.geometry.mapping(polygon),
-                                'properties': {'contour': contour_id, 'datetime': contour_time, 'area': polygon.area,
-                                               'perimeter': polygon.length}} for contour_time, polygon in
+                records.extend({
+                                   'geometry': shapely.geometry.mapping(polygon),
+                                   'properties': {
+                                       'contour': contour_id, 'datetime': contour_time, 'area': polygon.area,
+                                       'perimeter': polygon.length
+                                   }
+                               } for contour_time, polygon in
                                polygons.items())
                 print(f'[{datetime.datetime.now()}]: Finished tracking contour.')
 

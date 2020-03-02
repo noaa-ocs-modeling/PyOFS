@@ -7,11 +7,11 @@ Created on Jun 25, 2018
 @author: zachary.burnett
 """
 
+from concurrent import futures
 import datetime
 import logging
 import os
 import threading
-from concurrent import futures
 from typing import Collection
 
 import fiona
@@ -19,14 +19,14 @@ import fiona.crs
 import numpy
 import pyproj
 import rasterio.control
+from rasterio.io import MemoryFile
 import rasterio.mask
 import rasterio.warp
+from scipy import interpolate
 import shapely.geometry
 import xarray
-from rasterio.io import MemoryFile
-from scipy import interpolate
 
-from PyOFS import CRS_EPSG, DATA_DIRECTORY, utilities, LEAFLET_NODATA_VALUE
+from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, utilities
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
@@ -667,8 +667,10 @@ class WCOFSDataset:
         rho_lon = WCOFSDataset.data_coordinates['rho']['lon'][row, col]
         rho_lat = WCOFSDataset.data_coordinates['rho']['lat'][row, col]
 
-        record = {'id': feature_index, 'geometry': {'type': 'Point', 'coordinates': (float(rho_lon), float(rho_lat))},
-                  'properties': {'row': row, 'col': col, 'rho_lon': float(rho_lon), 'rho_lat': float(rho_lat)}}
+        record = {
+            'id': feature_index, 'geometry': {'type': 'Point', 'coordinates': (float(rho_lon), float(rho_lat))},
+            'properties': {'row': row, 'col': col, 'rho_lon': float(rho_lon), 'rho_lat': float(rho_lat)}
+        }
 
         for variable in variable_means.keys():
             record['properties'][variable] = float(variable_means[variable][row, col])
@@ -708,8 +710,10 @@ class WCOFSDataset:
                 native_lon = native_lon[:, 0]
                 native_lat = native_lat[0, :]
 
-                data_array = xarray.DataArray(data_stack, coords={'time': times, f'{grid}_lon': native_lon,
-                                                                  f'{grid}_lat': native_lat},
+                data_array = xarray.DataArray(data_stack, coords={
+                    'time': times, f'{grid}_lon': native_lon,
+                    f'{grid}_lat': native_lat
+                },
                                               dims=('time', f'{grid}_lon', f'{grid}_lat'))
             else:
                 data_array = xarray.DataArray(data_stack, coords={

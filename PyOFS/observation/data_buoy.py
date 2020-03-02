@@ -7,11 +7,11 @@ Created on Aug 1, 2018
 @author: zachary.burnett
 """
 
+from concurrent import futures
 import datetime
 import logging
 import os
 import re
-from concurrent import futures
 
 import fiona
 import fiona.crs
@@ -233,7 +233,8 @@ class DataBuoyRange:
             record = {
                 'geometry': {
                     'type': 'Point',
-                    'coordinates': (station.longitude, station.latitude)},
+                    'coordinates': (station.longitude, station.latitude)
+                },
                 'properties': {
                     'name': station_name,
                     'longitude': station.longitude,

@@ -19,7 +19,7 @@ import rasterio
 import scipy.interpolate
 import xarray
 
-from PyOFS import CRS_EPSG, utilities, LEAFLET_NODATA_VALUE
+from PyOFS import CRS_EPSG, LEAFLET_NODATA_VALUE, utilities
 
 DATA_VARIABLES = {'ssu': 'u', 'ssv': 'v', 'dopx': 'dopx', 'dopy': 'dopy'}
 
@@ -200,7 +200,8 @@ class HFRadarRange:
                 'id': site_index + 1,
                 'geometry': {
                     'type': 'Point',
-                    'coordinates': (lon, lat)},
+                    'coordinates': (lon, lat)
+                },
                 'properties': {
                     'code': site_code,
                     'net_code': site_network_code,
@@ -531,10 +532,14 @@ class HFRadarRange:
                 output_data = self.data_average(variable, start_time=start_time, end_time=end_time,
                                                 dop_threshold=dop_threshold)
 
-                output_dataset.update({variable: xarray.DataArray(output_data,
-                                                                  coords={'lat': self.dataset['lat'],
-                                                                          'lon': self.dataset['lon']},
-                                                                  dims=('lat', 'lon'))})
+                output_dataset.update({
+                    variable: xarray.DataArray(output_data,
+                                               coords={
+                                                   'lat': self.dataset['lat'],
+                                                   'lon': self.dataset['lon']
+                                               },
+                                               dims=('lat', 'lon'))
+                })
         else:
             for variable in variables:
                 output_data = self.dataset[DATA_VARIABLES[variable]].sel(time=slice(start_time, end_time))

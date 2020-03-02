@@ -7,14 +7,14 @@ Created on Jun 13, 2018
 @author: zachary.burnett
 """
 
+from collections import OrderedDict
+from concurrent import futures
 import datetime
 import ftplib
 import logging
 import math
 import os
 import sys
-from collections import OrderedDict
-from concurrent import futures
 from typing import Collection
 
 import numpy
@@ -25,7 +25,7 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-from PyOFS import CRS_EPSG, DATA_DIRECTORY, utilities, LEAFLET_NODATA_VALUE
+from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, utilities
 
 VIIRS_START_TIME = datetime.datetime.strptime('2012-03-01 00:10:00', '%Y-%m-%d %H:%M:%S')
 VIIRS_PERIOD = datetime.timedelta(days=16)

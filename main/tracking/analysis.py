@@ -11,9 +11,9 @@ import datetime
 import os
 
 import fiona
+from matplotlib import pyplot
 import numpy
 import pandas
-from matplotlib import pyplot
 from shapely import geometry
 
 

@@ -7,11 +7,11 @@ Created on Jun 25, 2018
 @author: zachary.burnett
 """
 
+from collections import OrderedDict
 import datetime
 import logging
 import os
 import threading
-from collections import OrderedDict
 from typing import Collection
 
 import fiona.crs
@@ -20,10 +20,10 @@ import rasterio.control
 import rasterio.features
 import rasterio.mask
 import rasterio.warp
-import xarray
 from shapely import geometry
+import xarray
 
-from PyOFS import CRS_EPSG, DATA_DIRECTORY, utilities, LEAFLET_NODATA_VALUE
+from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, utilities
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)

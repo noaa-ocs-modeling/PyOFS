@@ -7,10 +7,10 @@ Created on Feb 6, 2019
 @author: zachary.burnett
 """
 
+from collections import OrderedDict
 import datetime
 import logging
 import os
-from collections import OrderedDict
 from typing import Collection
 
 import numpy
@@ -21,7 +21,7 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-from PyOFS import CRS_EPSG, DATA_DIRECTORY, utilities, LEAFLET_NODATA_VALUE
+from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, utilities
 
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIRECTORY, r"reference\wcofs.gpkg:study_area")
 
@@ -29,7 +29,8 @@ RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 
 SOURCE_URLS = OrderedDict({
     'OpenDAP': OrderedDict({
-        'JPL': 'https://thredds.jpl.nasa.gov/thredds/dodsC/ncml_aggregation/SalinityDensity/smap/aggregate__SMAP_JPL_L3_SSS_CAP_MONTHLY_V42.ncml', })
+        'JPL': 'https://thredds.jpl.nasa.gov/thredds/dodsC/ncml_aggregation/SalinityDensity/smap/aggregate__SMAP_JPL_L3_SSS_CAP_MONTHLY_V42.ncml',
+    })
 })
 
 

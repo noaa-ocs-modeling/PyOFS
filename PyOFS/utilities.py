@@ -8,8 +8,8 @@ Created on Jun 13, 2018
 """
 
 import datetime
-import os
 from functools import partial
+import os
 
 import fiona
 import fiona.crs
@@ -17,9 +17,9 @@ import numpy
 import pyproj
 import rasterio
 import shapely
-import xarray
 from shapely.geometry import shape
 from shapely.ops import transform
+import xarray
 
 WGS84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
 WEB_MERCATOR = pyproj.Proj(
@@ -377,10 +377,14 @@ def xarray_to_geopackage(input_path: str, output_path: str, epsg: int = 4326):
     # add value fields to schema
     schema['properties'].update({'area': 'float', 'perimeter': 'float'})
 
-    records = [{'geometry': shapely.geometry.mapping(polygon), 'properties': {'datetime': contour_time, 'area': transform(
-        partial(pyproj.transform, pyproj.Proj(init=f'epsg:{epsg}'), pyproj.Proj(init='epsg:3857')), polygon).area,
-                                                                              'perimeter': polygon.length}} for
-               contour_time, polygon in polygons.items()]
+    records = [{
+        'geometry': shapely.geometry.mapping(polygon),
+        'properties': {
+            'datetime': contour_time,
+            'area': transform(partial(pyproj.transform, pyproj.Proj(init=f'epsg:{epsg}'), pyproj.Proj(init='epsg:3857')), polygon).area,
+            'perimeter': polygon.length
+        }
+    } for contour_time, polygon in polygons.items()]
 
     with fiona.open(output_path, 'w', 'GPKG', schema=schema, crs=fiona.crs.from_epsg(epsg)) as output_file:
         output_file.writerecords(records)
