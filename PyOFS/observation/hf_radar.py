@@ -76,7 +76,7 @@ class HFRadarRange:
             elif source == 'UCSD':
                 url = f'{source_url}/{self.resolution}km/hourly/RTV/HFRADAR_US_West_Coast_{self.resolution}km_Resolution_Hourly_RTV_best.ncd'
             else:
-                url = source
+                url = source_url
 
             try:
                 self.dataset = xarray.open_dataset(url)

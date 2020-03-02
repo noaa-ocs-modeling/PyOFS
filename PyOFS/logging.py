@@ -12,10 +12,7 @@ def get_logger(name: str) -> logging.Logger:
     if logger.level == logging.NOTSET and len(logger.handlers) == 0:
         # check if logger has a parent
         if '.' in name:
-            parent_logger = logging.getLogger(name.rsplit('.', 1)[0])
-            logger.setLevel(parent_logger.level)
-            for handler in parent_logger.handlers:
-                logger.addHandler(handler)
+            logger.parent = get_logger(name.rsplit('.', 1)[0])
         else:
             logger = create_logger(name)
 
