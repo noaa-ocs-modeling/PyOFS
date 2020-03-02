@@ -44,8 +44,10 @@ DATASET_STRUCTURE = {
 }
 
 DATA_VARIABLES = {
-    'sst': {'2ds': {'prog': 'sst'}, '3dz': {'temp': 'temperature'}}, 'sss': {'2ds': {'prog': 'sss'}, '3dz': {'salt': 'salinity'}},
-    'ssu': {'2ds': {'prog': 'u_velocity'}, '3dz': {'uvel': 'u'}}, 'ssv': {'2ds': {'prog': 'v_velocity'}, '3dz': {'vvel': 'v'}},
+    'sst': {'2ds': {'prog': 'sst'}, '3dz': {'temp': 'temperature'}},
+    'sss': {'2ds': {'prog': 'sss'}, '3dz': {'salt': 'salinity'}},
+    'ssu': {'2ds': {'prog': 'u_velocity'}, '3dz': {'uvel': 'u'}},
+    'ssv': {'2ds': {'prog': 'v_velocity'}, '3dz': {'vvel': 'v'}},
     'ssh': {'2ds': {'diag': 'ssh'}}
 }
 
@@ -106,11 +108,10 @@ class RTOFSDataset:
 
                     try:
                         dataset = xarray.open_dataset(url)
-
                         self.datasets[forecast_direction][dataset_name] = dataset
                         self.dataset_locks[forecast_direction][dataset_name] = threading.Lock()
                     except OSError as error:
-                        logging.error(f'Error collecting RTOFS: {error}')
+                        logging.error(f'error "{error}" reading from {url}')
 
         if (len(self.datasets['nowcast']) + len(self.datasets['forecast'])) > 0:
             if len(self.datasets['nowcast']) > 0:
@@ -129,12 +130,14 @@ class RTOFSDataset:
             self.global_west = numpy.min(self.lon)
             self.global_north = numpy.max(self.lat)
 
-            self.global_grid_transform = rasterio.transform.from_origin(self.global_west, self.global_north, lon_pixel_size, lat_pixel_size)
+            self.global_grid_transform = rasterio.transform.from_origin(self.global_west, self.global_north,
+                                                                        lon_pixel_size, lat_pixel_size)
 
             self.study_area_west, self.study_area_south, self.study_area_east, self.study_area_north = geometry.shape(
                 self.study_area_geojson).bounds
 
-            self.study_area_transform = rasterio.transform.from_origin(self.study_area_west, self.study_area_north, lon_pixel_size,
+            self.study_area_transform = rasterio.transform.from_origin(self.study_area_west, self.study_area_north,
+                                                                       lon_pixel_size,
                                                                        lat_pixel_size)
         else:
             raise utilities.NoDataError(f'No RTOFS datasets found for {self.model_time}.')
@@ -164,7 +167,8 @@ class RTOFSDataset:
                     dataset_name, variable_name = next(iter(datasets.items()))
 
                     with self.dataset_locks[direction][dataset_name]:
-                        data_variable = self.datasets[direction][dataset_name][DATA_VARIABLES[variable][self.source][dataset_name]]
+                        data_variable = self.datasets[direction][dataset_name][
+                            DATA_VARIABLES[variable][self.source][dataset_name]]
 
                         # TODO study areas that cross over longitude +74.16 may have problems here
                         if crop:
@@ -172,12 +176,14 @@ class RTOFSDataset:
                                 lon=slice(self.study_area_west + 360, self.study_area_east + 360),
                                 lat=slice(self.study_area_south, self.study_area_north))
                         else:
-                            western_selection = data_variable.sel(time=time, method='nearest').sel(lon=slice(180, numpy.max(self.raw_lon)),
-                                                                                                   lat=slice(numpy.min(self.lat),
-                                                                                                             numpy.max(self.lat)))
-                            eastern_selection = data_variable.sel(time=time, method='nearest').sel(lon=slice(numpy.min(self.raw_lon), 180),
-                                                                                                   lat=slice(numpy.min(self.lat),
-                                                                                                             numpy.max(self.lat)))
+                            western_selection = data_variable.sel(time=time, method='nearest').sel(
+                                lon=slice(180, numpy.max(self.raw_lon)),
+                                lat=slice(numpy.min(self.lat),
+                                          numpy.max(self.lat)))
+                            eastern_selection = data_variable.sel(time=time, method='nearest').sel(
+                                lon=slice(numpy.min(self.raw_lon), 180),
+                                lat=slice(numpy.min(self.lat),
+                                          numpy.max(self.lat)))
                             selection = numpy.concatenate((western_selection, eastern_selection), axis=1)
 
                         selection = numpy.flip(selection.squeeze(), axis=0)
@@ -190,7 +196,8 @@ class RTOFSDataset:
             raise ValueError(f'Direction must be one of {list(DATASET_STRUCTURE[self.source].keys())}.')
 
     def write_rasters(self, output_dir: str, variables: list, time: datetime.datetime, filename_prefix: str = None,
-                      filename_suffix: str = None, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff', crop: bool = True):
+                      filename_suffix: str = None, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff',
+                      crop: bool = True):
         """
         Write averaged raster data of given variables to given output directory.
 
@@ -279,7 +286,8 @@ class RTOFSDataset:
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(variable_mean, 1)
 
-    def write_raster(self, output_filename: str, variable: str, time: datetime.datetime, fill_value=LEAFLET_NODATA_VALUE,
+    def write_raster(self, output_filename: str, variable: str, time: datetime.datetime,
+                     fill_value=LEAFLET_NODATA_VALUE,
                      driver: str = 'GTiff', crop: bool = True):
         """
         Writes interpolated raster of given variable to output path.
@@ -373,8 +381,9 @@ class RTOFSDataset:
             variables_data[variable] = variable_data
 
         for variable, variable_data in variables_data.items():
-            output_dataset.update({variable: xarray.DataArray(variable_data, coords=coordinates, dims=tuple(coordinates.keys()))},
-                                  inplace=True)
+            output_dataset.update(
+                {variable: xarray.DataArray(variable_data, coords=coordinates, dims=tuple(coordinates.keys()))},
+                inplace=True)
 
         return output_dataset
 
