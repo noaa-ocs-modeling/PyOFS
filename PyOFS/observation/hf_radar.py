@@ -8,7 +8,6 @@ Created on Jun 13, 2018
 """
 
 from datetime import datetime, timedelta
-import logging
 import os
 from typing import Collection
 
@@ -82,7 +81,7 @@ class HFRadarRange:
                 self.url = url
                 break
             except OSError as error:
-                logging.error(f'error "{error}" reading dataset from {url}')
+                LOGGER.error(f'error "{error}" reading dataset from {url}')
         else:
             raise utilities.NoDataError(f'No HFR observations found between {self.start_time} and {self.end_time}')
 
@@ -92,7 +91,7 @@ class HFRadarRange:
 
         self.dataset = self.dataset.sel(time=slice(self.start_time, self.end_time))
 
-        logging.info(f'Collecting HFR velocity between {str(self.dataset["time"].min().values)[:19]} and ' + f'{str(self.dataset["time"].max().values)[:19]}...')
+        LOGGER.info(f'Collecting HFR velocity between {str(self.dataset["time"].min().values)[:19]} and ' + f'{str(self.dataset["time"].max().values)[:19]}...')
 
         if HFRadarRange.grid_transform is None:
             lon = self.dataset['lon'].values
@@ -338,7 +337,7 @@ class HFRadarRange:
                     feature_index += 1
 
         # write queued features to layer
-        logging.info(f'Writing {output_filename}')
+        LOGGER.info(f'Writing {output_filename}')
         with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=OUTPUT_CRS.to_dict()) as layer:
             layer.writerecords(layer_records)
 
@@ -427,7 +426,7 @@ class HFRadarRange:
 
             output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
 
-            logging.info(f'Writing {output_filename}')
+            LOGGER.info(f'Writing {output_filename}')
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(numpy.flipud(raster_data), 1)
 

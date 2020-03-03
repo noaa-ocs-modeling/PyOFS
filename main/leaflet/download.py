@@ -15,7 +15,7 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
-from PyOFS.logging import create_logger
+from PyOFS.utilities import create_logger
 from PyOFS import DATA_DIRECTORY
 
 TIDEPOOL_URL = 'tidepool.nos.noaa.gov'
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     # check whether logfile exists
     log_exists = os.path.exists(log_path)
 
-    logger = create_logger('download', log_path, file_level=logging.INFO, console_level=logging.DEBUG, log_format='[%(asctime)s] %(levelname)-8s: %(message)s')
+    logger = create_logger('download', log_path, file_level=logging.INFO, console_level=logging.DEBUG)
 
     # write initial message
     logger.info('Starting FTP transfer...')

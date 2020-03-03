@@ -13,7 +13,10 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
+from PyOFS.utilities import get_logger
 from main.leaflet import write_json
+
+LOGGER = get_logger('PyOFS.check')
 
 observations = {'hfr': ['dir', 'mag'], 'viirs': ['sst']}
 models = {'wcofs': ['dir', 'mag', 'sst', 'ssh', 'sss'], 'rtofs': ['dir', 'mag', 'sst', 'ssh', 'sss']}

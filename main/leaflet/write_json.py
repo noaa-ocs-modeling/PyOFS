@@ -10,6 +10,14 @@ Created on Aug 30, 2018
 import functools
 import json
 import os
+import sys
+
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
+
+from PyOFS import DATA_DIRECTORY
+from PyOFS.utilities import get_logger
+
+LOGGER = get_logger('PyOFS.JSON')
 
 
 def get_directory_structure(root_dir: str) -> dict:
@@ -46,10 +54,4 @@ def dir_structure_to_json(input_dir: str, json_path: str):
 
 
 if __name__ == '__main__':
-    import sys
-
-    sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
-
-    from PyOFS import DATA_DIRECTORY
-
     dir_structure_to_json(os.path.join(DATA_DIRECTORY, 'output'), os.path.join(DATA_DIRECTORY, 'reference', 'files.json'))

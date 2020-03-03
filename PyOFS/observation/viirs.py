@@ -11,7 +11,6 @@ from collections import OrderedDict
 from concurrent import futures
 from datetime import datetime, timedelta
 import ftplib
-import logging
 import math
 import os
 import sys
@@ -28,6 +27,9 @@ import shapely.wkt
 import xarray
 
 from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, utilities
+from PyOFS.utilities import get_logger
+
+LOGGER = get_logger('PyOFS.VIIRS')
 
 VIIRS_START_TIME = datetime.strptime('2012-03-01 00:10:00', '%Y-%m-%d %H:%M:%S')
 VIIRS_PERIOD = timedelta(days=16)
@@ -121,17 +123,17 @@ class VIIRSDataset:
                 if source == 'NESDIS':
                     url = f'{source_url}/grid{"" if self.near_real_time else "S"}{self.satellite.upper()}VIIRSSCIENCEL3UWW00/{month_dir}/{filename}'
                 else:
-                    logging.warning(f'{source} does not have a reanalysis archive')
+                    LOGGER.warning(f'{source} does not have a reanalysis archive')
 
             try:
                 self.dataset = xarray.open_dataset(url)
                 self.url = url
                 break
             except Exception as error:
-                logging.error(f'error "{error}" reading from {url}')
+                LOGGER.error(f'error "{error}" reading from {url}')
 
         if self.url is None:
-            logging.warning('Error collecting from OpenDAP; falling back to FTP...')
+            LOGGER.warning('Error collecting from OpenDAP; falling back to FTP...')
 
             for source, source_url in SOURCE_URLS['FTP'].items():
                 host_url, ftp_input_dir = source_url.split('/', 1)
@@ -172,7 +174,7 @@ class VIIRSDataset:
                     self.url = url
                     break
                 except Exception as error:
-                    logging.error(f'error "{error}" reading from {url}')
+                    LOGGER.error(f'error "{error}" reading from {url}')
 
                 if self.url is not None:
                     break
@@ -196,13 +198,13 @@ class VIIRSDataset:
                 self.data_extent = shapely.geometry.MultiPolygon([shapely.geometry.Polygon([(lon_min, lat_max), (180, lat_max), (180, lat_min), (lon_min, lat_min)]),
                                                                   shapely.geometry.Polygon([(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
         else:
-            logging.warning(f'{self.data_time} UTC: Dataset has no stored bounds...')
+            LOGGER.warning(f'{self.data_time} UTC: Dataset has no stored bounds...')
 
         lon_pixel_size = self.dataset.geospatial_lon_resolution
         lat_pixel_size = self.dataset.geospatial_lat_resolution
 
         if VIIRSDataset.study_area_extent is None:
-            logging.debug(f'Calculating indices and transform from granule at {self.data_time} UTC...')
+            LOGGER.debug(f'Calculating indices and transform from granule at {self.data_time} UTC...')
 
             # get first record in layer
             VIIRSDataset.study_area_extent = shapely.geometry.MultiPolygon(
@@ -277,7 +279,7 @@ class VIIRSDataset:
                     mismatch_percentage = mismatched_records / total_records * 100
 
                     if mismatch_percentage > 0:
-                        logging.warning(f'{self.data_time} UTC: SSES extent mismatch at {mismatch_percentage:.1f}%')
+                        LOGGER.warning(f'{self.data_time} UTC: SSES extent mismatch at {mismatch_percentage:.1f}%')
 
                     output_sst_data -= sses
 
@@ -353,7 +355,7 @@ class VIIRSDataset:
                 output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
 
                 # use rasterio to write to raster with GDAL args
-                logging.info(f'Writing to {output_filename}')
+                LOGGER.info(f'Writing to {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(input_data, 1)
 
@@ -413,7 +415,7 @@ class VIIRSRange:
         self.pass_times = get_pass_times(self.start_time, self.end_time, self.viirs_pass_times_filename)
 
         if len(self.pass_times) > 0:
-            logging.info(f'Collecting VIIRS data from {len(self.pass_times)} passes between ' + f'{numpy.min(self.pass_times)} UTC and {numpy.max(self.pass_times)} UTC...')
+            LOGGER.info(f'Collecting VIIRS data from {len(self.pass_times)} passes between ' + f'{numpy.min(self.pass_times)} UTC and {numpy.max(self.pass_times)} UTC...')
 
             # create dictionary to store scenes
             self.datasets = {pass_time: {} for pass_time in self.pass_times}
@@ -433,7 +435,7 @@ class VIIRSRange:
                             viirs_dataset = completed_future.result()
                             self.datasets[pass_time][satellite] = viirs_dataset
                         else:
-                            logging.warning(f'Dataset creation error: {completed_future.exception()}')
+                            LOGGER.warning(f'Dataset creation error: {completed_future.exception()}')
 
                     del running_futures
 
@@ -442,7 +444,7 @@ class VIIRSRange:
                 VIIRSRange.study_area_extent = VIIRSDataset.study_area_extent
                 VIIRSRange.study_area_bounds = VIIRSDataset.study_area_bounds
 
-                logging.debug(f'VIIRS data was found in {len(self.datasets)} passes.')
+                LOGGER.debug(f'VIIRS data was found in {len(self.datasets)} passes.')
             else:
                 raise utilities.NoDataError(f'No VIIRS datasets found between {self.start_time} UTC and {self.end_time} UTC.')
 
@@ -623,11 +625,11 @@ class VIIRSRange:
 
                 output_filename = os.path.join(output_dir, f'{current_filename_prefix}_{current_filename_suffix}.{file_extension}')
 
-                logging.info(f'Writing {output_filename}')
+                LOGGER.info(f'Writing {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(raster_data, 1)
             else:
-                logging.warning(f'No {"VIIRS" if satellite is None else "VIIRS " + satellite} {variable} found between {start_time} and {end_time}.')
+                LOGGER.warning(f'No {"VIIRS" if satellite is None else "VIIRS " + satellite} {variable} found between {start_time} and {end_time}.')
 
     def to_xarray(self, variables: Collection[str] = ('sst', 'sses'), mean: bool = True, correct_sses: bool = False, satellites: list = None) -> xarray.Dataset:
         """
@@ -710,7 +712,7 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
     start_time = utilities.round_to_ten_minutes(start_time)
     end_time = utilities.round_to_ten_minutes(start_time + (VIIRS_PERIOD * num_periods))
 
-    print(f'Getting pass times between {start_time:%Y-%m-%d %H:%M:%S} and {end_time:%Y-%m-%d %H:%M:%S}')
+    LOGGER.info(f'Getting pass times between {start_time:%Y-%m-%d %H:%M:%S} and {end_time:%Y-%m-%d %H:%M:%S}')
 
     datetime_range = utilities.ten_minute_range(start_time, end_time)
 
@@ -741,22 +743,22 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
                         # get duration from current cycle start
                         cycle_duration = cycle_time - (start_time + cycle_offset)
 
-                        print(f'{cycle_time:%Y%m%dT%H%M%S} {cycle_duration.total_seconds()}: valid scene (checked {cycle_index + 1} cycle(s))')
+                        LOGGER.info(f'{cycle_time:%Y%m%dT%H%M%S} {cycle_duration.total_seconds()}: valid scene (checked {cycle_index + 1} cycle(s))')
                         lines.append(f'{cycle_time:%Y%m%dT%H%M%S},{cycle_duration.total_seconds()}')
 
                 # if we get to here, break and continue to the next datetime
                 break
             except utilities.NoDataError as error:
                 _, _, error_traceback = sys.exc_info()
-                logging.warning(f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
+                LOGGER.warning(f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
         else:
-            logging.warning(f'{current_time:%Y%m%dT%H%M%S}: missing observation across all cycles')
+            LOGGER.warning(f'{current_time:%Y%m%dT%H%M%S}: missing observation across all cycles')
 
         # write lines to file
         with open(output_filename, 'w') as output_file:
             output_file.write('\n'.join(lines))
 
-        print('Wrote data to file')
+        LOGGER.info('Wrote data to file')
 
 
 def get_pass_times(start_time: datetime, end_time: datetime, pass_times_filename: str = PASS_TIMES_FILENAME):

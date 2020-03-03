@@ -9,7 +9,6 @@ Created on Feb 6, 2019
 
 from collections import OrderedDict
 from datetime import datetime
-import logging
 import os
 from typing import Collection
 
@@ -24,6 +23,9 @@ import shapely.wkt
 import xarray
 
 from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, utilities
+from PyOFS.utilities import get_logger
+
+LOGGER = get_logger('PyOFS.SMAP')
 
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIRECTORY, r"reference\wcofs.gpkg:study_area")
 
@@ -61,7 +63,7 @@ class SMAPDataset:
                 self.dataset = xarray.open_dataset(source_url)
                 break
             except Exception as error:
-                logging.error(f'error "{error}" reading from {source}')
+                LOGGER.error(f'error "{error}" reading from {source}')
 
         # construct rectangular polygon of granule extent
         lon_min = float(self.dataset.geospatial_lon_min)
@@ -190,7 +192,7 @@ class SMAPDataset:
                 output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
 
                 # use rasterio to write to raster with GDAL args
-                logging.info(f'Writing to {output_filename}')
+                LOGGER.info(f'Writing to {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(input_data, 1)
 

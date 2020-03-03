@@ -1,10 +1,14 @@
 import os
 
+from PyOFS.utilities import get_logger
+
+LOGGER = get_logger('PyOFS.azure')
+
 AZCOPY_PATH = r"C:\Working\azcopy.exe"
 
 
 def upload_to_azure(local_path: str, remote_path: str, credentials: str, overwrite: bool = False, **kwargs):
-    print(f'Uploading {local_path} to {remote_path}')
+    LOGGER.info(f'Uploading {local_path} to {remote_path}')
 
     os.environ['AZCOPY_CRED_TYPE'] = 'Anonymous'
     azcopy_dir, azcopy_filename = os.path.split(AZCOPY_PATH)
@@ -15,7 +19,7 @@ def upload_to_azure(local_path: str, remote_path: str, credentials: str, overwri
 
 
 def sync_with_azure(local_path: str, remote_path: str, credentials: str, **kwargs):
-    print(f'Synchronizing {local_path} with {remote_path}')
+    LOGGER.info(f'Synchronizing {local_path} with {remote_path}')
 
     os.environ['AZCOPY_CRED_TYPE'] = 'Anonymous'
     azcopy_dir, azcopy_filename = os.path.split(AZCOPY_PATH)

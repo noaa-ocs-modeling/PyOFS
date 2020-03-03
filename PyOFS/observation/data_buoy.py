@@ -9,7 +9,6 @@ Created on Aug 1, 2018
 
 from concurrent import futures
 from datetime import datetime
-import logging
 import os
 import re
 
@@ -22,6 +21,9 @@ import shapely.geometry
 import xarray
 
 from PyOFS import CRS_EPSG, DATA_DIRECTORY, utilities
+from PyOFS.utilities import get_logger
+
+LOGGER = get_logger('PyOFS.NDBC')
 
 MEASUREMENT_VARIABLES = ['water_temperature', 'conductivity', 'salinity', 'o2_saturation', 'dissolved_oxygen', 'chlorophyll_concentration', 'turbidity', 'water_ph', 'water_eh']
 
@@ -105,7 +107,7 @@ class DataBuoyRange:
 
         self.stations = {}
 
-        logging.debug(f'Collecting NDBC data from {len(self.station_names)} station...')
+        LOGGER.debug(f'Collecting NDBC data from {len(self.station_names)} station...')
 
         # concurrently populate dictionary with datasets for each station
         with futures.ThreadPoolExecutor() as concurrency_pool:
@@ -218,7 +220,7 @@ class DataBuoyRange:
             }
         }
 
-        logging.debug('Creating features...')
+        LOGGER.debug('Creating features...')
 
         layer_records = []
 
@@ -246,7 +248,7 @@ class DataBuoyRange:
 
             layer_records.append(record)
 
-        logging.info(f'Writing to {output_filename}{":" + layer_name if layer_name is not None else ""}')
+        LOGGER.info(f'Writing to {output_filename}{":" + layer_name if layer_name is not None else ""}')
         with fiona.open(output_filename, 'w', 'GPKG', schema, OUTPUT_CRS, layer=layer_name) as output_layer:
             output_layer.writerecords(layer_records)
 

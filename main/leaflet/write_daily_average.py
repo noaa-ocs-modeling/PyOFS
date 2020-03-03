@@ -22,10 +22,14 @@ from main.leaflet import write_json
 from PyOFS import DATA_DIRECTORY, LEAFLET_NODATA_VALUE
 from PyOFS.observation import hf_radar, viirs, smap, data_buoy
 from PyOFS.model import wcofs, rtofs
-from PyOFS.logging import create_logger
+from PyOFS.utilities import create_logger
 
-LOG_DIR = os.path.join(DATA_DIRECTORY, 'log')
-OUTPUT_DIR = os.path.join(DATA_DIRECTORY, 'output')
+# disable complaints from Fiona environment within conda
+logging.root.manager.loggerDict['fiona._env'].setLevel(logging.CRITICAL)
+
+LOG_DIRECTORY = os.path.join(DATA_DIRECTORY, 'log')
+LOG_FILENAME = os.path.join(LOG_DIRECTORY, f'{datetime.now():%Y%m%d}_conversion.log')
+OUTPUT_DIRECTORY = os.path.join(DATA_DIRECTORY, 'output')
 REFERENCE_DIR = os.path.join(DATA_DIRECTORY, 'reference')
 
 # offset from study area to UTC
@@ -34,6 +38,8 @@ STUDY_AREA_TO_UTC = timedelta(hours=-datetime.now(pytz.timezone(STUDY_AREA_TIMEZ
 
 # range of day deltas that models reach
 MODEL_DAY_DELTAS = {'WCOFS': range(-1, 3), 'RTOFS': range(-3, 9)}
+
+LOGGER = create_logger('PyOFS', LOG_FILENAME, file_level=logging.INFO, console_level=logging.INFO)
 
 
 def write_observation(output_dir: str, observation_date: Union[datetime, date], observation: str):
@@ -104,7 +110,7 @@ def write_observation(output_dir: str, observation_date: Union[datetime, date], 
             del data_buoy_range
     except Exception as error:
         _, _, error_traceback = sys.exc_info()
-        logging.warning(f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
+        LOGGER.warning(f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
 
 
 def write_rtofs(output_dir: str, model_run_date: Union[datetime, date], day_deltas: range = MODEL_DAY_DELTAS['RTOFS'], scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
@@ -158,16 +164,16 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime, date], day_delt
                     if len(scalar_variables_to_write) > 0:
                         rtofs_dataset.write_rasters(daily_average_dir, variables=scalar_variables_to_write, time=day_of_forecast, driver='GTiff')
                     else:
-                        logging.info(f'Skipping RTOFS day {day_delta} scalar variables')
+                        LOGGER.info(f'Skipping RTOFS day {day_delta} scalar variables')
 
                     if not all(any(vector_variable in filename for filename in existing_files) for vector_variable in vector_variables):
                         rtofs_dataset.write_rasters(daily_average_dir, variables=vector_variables, time=day_of_forecast, driver='AAIGrid')
                     else:
-                        logging.info(f'Skipping RTOFS day {day_delta} uv')
+                        LOGGER.info(f'Skipping RTOFS day {day_delta} uv')
         del rtofs_dataset
     except Exception as error:
         _, _, error_traceback = sys.exc_info()
-        logging.warning(f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
+        LOGGER.warning(f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
 
 
 def write_wcofs(output_dir: str, model_run_date: Union[datetime, date, int, float], day_deltas: range = MODEL_DAY_DELTAS['WCOFS'], scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
@@ -273,20 +279,20 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime, date, int, floa
                         wcofs_dataset.write_rasters(daily_average_dir, scalar_variables_to_write, filename_suffix=wcofs_filename_suffix, time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
                                                     driver='GTiff')
                     else:
-                        logging.info(f'Skipping WCOFS day {day_delta} scalar variables')
+                        LOGGER.info(f'Skipping WCOFS day {day_delta} scalar variables')
 
                     if not all(any(vector_variable in filename for filename in existing_files) for vector_variable in vector_variables):
                         wcofs_dataset.write_rasters(daily_average_dir, vector_variables, filename_suffix=wcofs_filename_suffix, time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
                                                     driver='AAIGrid')
                     else:
-                        logging.info(f'Skipping WCOFS day {day_delta} uv')
+                        LOGGER.info(f'Skipping WCOFS day {day_delta} uv')
         del wcofs_dataset
 
         if grid_size_km == 2:
             wcofs.reset_dataset_grid()
     except Exception as error:
         _, _, error_traceback = sys.exc_info()
-        logging.warning(f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
+        LOGGER.warning(f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
 
 
 def write_daily_average(output_dir: str, output_date: Union[datetime, date, int, float], day_deltas: range = MODEL_DAY_DELTAS['WCOFS']):
@@ -299,47 +305,41 @@ def write_daily_average(output_dir: str, output_date: Union[datetime, date, int,
     """
 
     # write initial message
-    logging.info(f'Starting file conversion for {output_date}')
+    LOGGER.info(f'Starting file conversion for {output_date}')
 
-    logging.info('Processing HFR SSUV...')
+    LOGGER.info('Processing HFR SSUV...')
     write_observation(output_dir, output_date, 'hf_radar')
-    logging.info('Processing VIIRS SST...')
+    LOGGER.info('Processing VIIRS SST...')
     write_observation(output_dir, output_date, 'viirs')
-    logging.info('Processing SMAP SSS...')
+    LOGGER.info('Processing SMAP SSS...')
     write_observation(output_dir, output_date, 'smap')
-    # logging.info('Processing NDBC data...')
+    # LOGGER.info('Processing NDBC data...')
     # write_observation(output_dir, output_date, 'data_buoy')
 
-    logging.info(f'Wrote observations to {output_dir}')
+    LOGGER.info(f'Wrote observations to {output_dir}')
 
-    logging.info('Processing RTOFS...')  # RTOFS forecast is uploaded at 1700 UTC
+    LOGGER.info('Processing RTOFS...')  # RTOFS forecast is uploaded at 1700 UTC
     write_rtofs(output_dir, output_date, day_deltas)
-    logging.info('Processing WCOFS DA...')
+    LOGGER.info('Processing WCOFS DA...')
     write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'))
-    # logging.info('Processing WCOFS experimental DA...')
+    # LOGGER.info('Processing WCOFS experimental DA...')
     # write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/option'),
     #             use_defaults=False, suffix='exp')
-    logging.info('Processing WCOFS noDA...')
+    LOGGER.info('Processing WCOFS noDA...')
     write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'), data_assimilation=False)
-    logging.info(f'Wrote models to {output_dir}')
+    LOGGER.info(f'Wrote models to {output_dir}')
 
 
 if __name__ == '__main__':
     # create folders if they do not exist
-    for dir_path in [OUTPUT_DIR, LOG_DIR]:
+    for dir_path in [OUTPUT_DIRECTORY, LOG_DIRECTORY]:
         if not os.path.isdir(dir_path):
             os.mkdir(dir_path)
 
-    start_time = datetime.now()
-
-    log_path = os.path.join(LOG_DIR, f'{start_time:%Y%m%d}_conversion.log')
-    logger = create_logger('', log_path, file_level=logging.INFO, console_level=logging.INFO, log_format='[%(asctime)s] %(levelname)-8s: %(message)s')
-
-    # disable complaints from Fiona environment within conda
-    logging.root.manager.loggerDict['fiona._env'].setLevel(logging.CRITICAL)
-
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = MODEL_DAY_DELTAS['WCOFS']
+
+    start_time = datetime.now()
 
     # from PyOFS.utilities import range_daily
     #
@@ -348,21 +348,21 @@ if __name__ == '__main__':
     #     write_daily_average(OUTPUT_DIR, model_run_date, day_deltas)
 
     model_run_date = date.today()
-    write_daily_average(OUTPUT_DIR, model_run_date, day_deltas)
+    write_daily_average(OUTPUT_DIRECTORY, model_run_date, day_deltas)
 
-    logging.info(f'Finished writing files. Total time: ' + f'{(datetime.now() - start_time).total_seconds():.2f} seconds')
+    LOGGER.info(f'Finished writing files. Total time: ' + f'{(datetime.now() - start_time).total_seconds():.2f} seconds')
 
     start_time = datetime.now()
 
     files_json_filename = os.path.join(REFERENCE_DIR, 'files.json')
-    write_json.dir_structure_to_json(OUTPUT_DIR, files_json_filename)
+    write_json.dir_structure_to_json(OUTPUT_DIRECTORY, files_json_filename)
 
     with open(os.path.join(DATA_DIRECTORY, 'azure_credentials.txt')) as credentials_file:
         azure_blob_url, credentials = (line.strip('\n') for line in credentials_file.readlines())
 
     sync_with_azure(files_json_filename, f'{azure_blob_url}/reference/files.json', credentials)
-    sync_with_azure(OUTPUT_DIR, f'{azure_blob_url}/output', credentials)
+    sync_with_azure(OUTPUT_DIRECTORY, f'{azure_blob_url}/output', credentials)
 
-    logging.info(f'Finished uploading files. Total time: ' + f'{(datetime.now() - start_time).total_seconds():.2f} seconds')
+    LOGGER.info(f'Finished uploading files. Total time: ' + f'{(datetime.now() - start_time).total_seconds():.2f} seconds')
 
     print('done')

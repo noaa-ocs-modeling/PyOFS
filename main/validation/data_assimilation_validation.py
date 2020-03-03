@@ -8,9 +8,12 @@ import xarray
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
+from PyOFS.utilities import get_logger
 from PyOFS import DATA_DIRECTORY
 from PyOFS.observation import hf_radar, viirs
 from PyOFS.model import wcofs
+
+LOGGER = get_logger('PyOFS.valid')
 
 WORKSPACE_DIR = os.path.join(DATA_DIRECTORY, 'validation')
 
@@ -150,7 +153,7 @@ def interpolate_grids(datasets: dict) -> dict:
                 v_futures['noDA_model'][v_noDA_future] = time_delta
                 v_futures['DA_model'][v_DA_future] = time_delta
             except IndexError as error:
-                print(f'{time_delta} IndexError: {error}')
+                LOGGER.error(f'{time_delta} IndexError: {error}')
                 continue
 
         for completed_future in futures.as_completed(sst_futures['noDA_model']):
@@ -234,7 +237,7 @@ if __name__ == '__main__':
         }
     }
 
-    print('interpolating WCOFS data onto observational grids...')
+    LOGGER.info('interpolating WCOFS data onto observational grids...')
     data.update(interpolate_grids(datasets))
 
     time_deltas = data['DA_model']['sst'].keys()
@@ -263,13 +266,13 @@ if __name__ == '__main__':
         }
 
     for time_delta, methods in metrics.items():
-        print(f'{time_delta}:')
+        LOGGER.info(f'{time_delta}:')
         for metric, variables in methods.items():
-            print(f'{metric}:')
+            LOGGER.info(f'{metric}:')
             for variable, assimilations in variables.items():
                 no_da_metric = assimilations["noDA"]
                 da_metric = assimilations["DA"]
 
-                print(f'{no_da_metric:5.2f} -> {da_metric:5.2f}: {da_metric - no_da_metric: 5.2f}')
+                LOGGER.info(f'{no_da_metric:5.2f} -> {da_metric:5.2f}: {da_metric - no_da_metric: 5.2f}')
 
     print('done')

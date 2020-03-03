@@ -9,12 +9,18 @@ Created on Feb 27, 2019
 
 from datetime import datetime, timedelta
 import os
+import sys
 
 import fiona
 from matplotlib import pyplot
 import numpy
 import pandas
 from shapely import geometry
+
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
+from PyOFS.utilities import get_logger
+
+LOGGER = get_logger('PyOFS.track')
 
 
 def diffusion(polygons: [geometry.Polygon]):
@@ -31,13 +37,9 @@ def diffusion(polygons: [geometry.Polygon]):
 
 
 if __name__ == '__main__':
-    import sys
-
     from pandas.plotting import register_matplotlib_converters
 
     register_matplotlib_converters()
-
-    sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
     from PyOFS import DATA_DIRECTORY
 
@@ -64,7 +66,7 @@ if __name__ == '__main__':
         input_path = os.path.join(DATA_DIRECTORY, 'output', 'test', 'contours.gpkg')
         layer_name = f'{source}_{start_time:%Y%m%dT%H%M%S}_{(start_time + period):"%Y%m%dT%H%M%S"}_{int(time_delta.total_seconds() / 3600)}h'
 
-        print(f'[{datetime.now()}]: Reading {input_path}...')
+        LOGGER.info(f'[{datetime.now()}]: Reading {input_path}...')
         with fiona.open(input_path, layer=layer_name) as contours_file:
             contour_names = sorted(numpy.unique([feature['properties']['contour'] for feature in contours_file]))
 
@@ -87,10 +89,10 @@ if __name__ == '__main__':
 
     plotting_values = {'area': '%' if plot_percentages else 'm^2', 'perimeter': '%' if plot_percentages else 'm'}
 
-    print(f'[{datetime.now()}]: Plotting...')
+    LOGGER.info(f'[{datetime.now()}]: Plotting...')
 
     # for contour_name, contour_velocity_products in values.items():
-    #     print(f'[{datetime.now()}]: Plotting {contour_name}...')
+    #     LOGGER.info(f'[{datetime.now()}]: Plotting {contour_name}...')
     #
     #     for plotting_value, plotting_unit in plotting_values.items():
     #         figure = pyplot.figure()

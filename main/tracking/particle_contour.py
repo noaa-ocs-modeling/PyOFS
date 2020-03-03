@@ -11,6 +11,7 @@ from concurrent import futures
 from datetime import datetime, timedelta
 import math
 import os
+import sys
 from typing import Union
 
 import cartopy.feature
@@ -22,7 +23,12 @@ import scipy.interpolate
 import shapely.geometry
 import xarray
 
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
+
 from PyOFS import utilities
+from PyOFS.utilities import get_logger
+
+LOGGER = get_logger('PyOFS.track')
 
 
 class VectorField:
@@ -730,7 +736,7 @@ def track_contour(contour: ParticleContour, timestep: timedelta, steps: int, int
         contour.step(intermediate_timestep, order)
 
         if intermediate_step % int(timestep / intermediate_timestep) == 0:
-            print(f'[{datetime.now()}]: Tracked {contour}')
+            LOGGER.info(f'[{datetime.now()}]: Tracked {contour}')
             polygons[contour.time] = contour.geometry()
 
     return polygons
@@ -765,10 +771,6 @@ def interpolate_contour(points: numpy.array, interval: float, method: str = 'lin
 
 
 if __name__ == '__main__':
-    import sys
-
-    sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
-
     from PyOFS import DATA_DIRECTORY
     from PyOFS.model import rtofs, wcofs
     from PyOFS.observation import hf_radar
@@ -789,14 +791,14 @@ if __name__ == '__main__':
     output_path = os.path.join(DATA_DIRECTORY, 'output', 'test', 'contours.gpkg')
     layer_name = f'{source}_{start_time:%Y%m%dT%H%M%S}_' + f'{(start_time + period):%Y%m%dT%H%M%S}_' + f'{int(time_delta.total_seconds() / 3600)}h'
 
-    print(f'[{datetime.now()}]: Started processing...')
+    LOGGER.info(f'[{datetime.now()}]: Started processing...')
 
     with fiona.open(os.path.join(DATA_DIRECTORY, 'reference', 'study_points.gpkg')) as contour_centers_file:
         for point in contour_centers_file:
             contour_id = point['properties']['name']
             contour_centers[contour_id] = point['geometry']['coordinates']
 
-    print(f'[{datetime.now()}]: Creating velocity field...')
+    LOGGER.info(f'[{datetime.now()}]: Creating velocity field...')
     if source == 'rankine':
         vortex_radius = contour_radius * 5
         vortex_center = utilities.translate_geographic_coordinates(next(iter(contour_centers.values())), numpy.array([contour_radius * -2, contour_radius * -2]))
@@ -809,7 +811,7 @@ if __name__ == '__main__':
     else:
         data_path = os.path.join(DATA_DIRECTORY, 'output', 'test', f'{source.lower()}_{start_time:%Y%m%d}.nc')
 
-        print(f'[{datetime.now()}]: Collecting data...')
+        LOGGER.info(f'[{datetime.now()}]: Collecting data...')
 
         if not os.path.exists(data_path):
             if source.upper() == 'HFR':
@@ -930,7 +932,7 @@ if __name__ == '__main__':
 
     contours = {}
 
-    print(f'[{datetime.now()}]: Creating {len(contour_centers)} initial contours...')
+    LOGGER.info(f'[{datetime.now()}]: Creating {len(contour_centers)} initial contours...')
     with futures.ThreadPoolExecutor() as concurrency_pool:
         running_futures = {concurrency_pool.submit(create_contour, contour_center, contour_radius, start_time, velocity_field, contour_shape): contour_id for contour_id, contour_center in
                            contour_centers.items()}
@@ -939,7 +941,7 @@ if __name__ == '__main__':
             contour_id = running_futures[completed_future]
             contour = completed_future.result()
             contours[contour_id] = contour
-            print(f'[{datetime.now()}]: Contour {contour_id} created: {contour}')
+            LOGGER.info(f'[{datetime.now()}]: Contour {contour_id} created: {contour}')
 
     # with fiona.open(r"C:\Data\develop\output\test\alex_contours.gpkg") as contour_file:
     #     contours['1'] = ParticleContour(next(iter(contour_file))['geometry']['coordinates'][0], start_time,#                                     velocity_field)
@@ -948,7 +950,7 @@ if __name__ == '__main__':
     #     for record in test_points_layer:
     #         contours[record['properties']['name']] = CircleContour(record['geometry']['coordinates'], contour_radius,#                                                                start_time, velocity_field)
 
-    print(f'[{datetime.now()}]: Contours created.')
+    LOGGER.info(f'[{datetime.now()}]: Contours created.')
 
     # define schema
     schema = {'geometry': 'Polygon', 'properties': {'contour': 'str', 'datetime': 'datetime', 'area': 'float', 'perimeter': 'float'}}
@@ -968,7 +970,7 @@ if __name__ == '__main__':
                         'contour': contour_id, 'datetime': contour_time, 'area': polygon.area, 'perimeter': polygon.length
                     }
                                } for contour_time, polygon in polygons.items())
-                print(f'[{datetime.now()}]: Finished tracking contour.')
+                LOGGER.info(f'[{datetime.now()}]: Finished tracking contour.')
 
         del running_futures
 

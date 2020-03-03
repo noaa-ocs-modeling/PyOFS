@@ -9,7 +9,6 @@ Created on Jun 25, 2018
 
 from collections import OrderedDict
 from datetime import datetime, timedelta, date
-import logging
 import os
 import threading
 from typing import Collection
@@ -25,6 +24,9 @@ from shapely import geometry
 import xarray
 
 from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, utilities
+from PyOFS.utilities import get_logger
+
+LOGGER = get_logger('PyOFS.RTOFS')
 
 OUTPUT_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
@@ -109,7 +111,7 @@ class RTOFSDataset:
                         self.datasets[forecast_direction][dataset_name] = dataset
                         self.dataset_locks[forecast_direction][dataset_name] = threading.Lock()
                     except OSError as error:
-                        logging.error(f'error "{error}" reading from {url}')
+                        LOGGER.error(f'error "{error}" reading from {url}')
 
         if (len(self.datasets['nowcast']) + len(self.datasets['forecast'])) > 0:
             if len(self.datasets['nowcast']) > 0:
@@ -177,7 +179,7 @@ class RTOFSDataset:
                 else:
                     raise ValueError(f'Variable must be not one of {list(DATA_VARIABLES.keys())}.')
             else:
-                logging.warning(f'{direction} does not exist in RTOFS observation for {self.model_time:%Y%m%d}.')
+                LOGGER.warning(f'{direction} does not exist in RTOFS observation for {self.model_time:%Y%m%d}.')
         else:
             raise ValueError(f'Direction must be one of {list(DATASET_STRUCTURE[self.source].keys())}.')
 
@@ -267,7 +269,7 @@ class RTOFSDataset:
 
                 output_filename = f'{os.path.splitext(output_filename)[0]}.{file_extension}'
 
-                logging.info(f'Writing {output_filename}')
+                LOGGER.info(f'Writing {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(variable_mean, 1)
 
@@ -314,7 +316,7 @@ class RTOFSDataset:
 
             output_filename = f'{os.path.splitext(output_filename)[0]}.{file_extension}'
 
-            logging.info(f'Writing {output_filename}')
+            LOGGER.info(f'Writing {output_filename}')
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(output_data, 1)
 

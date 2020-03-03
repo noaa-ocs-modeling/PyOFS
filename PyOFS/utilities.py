@@ -9,7 +9,9 @@ Created on Jun 13, 2018
 
 import datetime
 from functools import partial
+import logging
 import os
+import sys
 
 import fiona
 import fiona.crs
@@ -21,11 +23,72 @@ from shapely.geometry import shape
 from shapely.ops import transform
 import xarray
 
+DEFAULT_LOG_FORMAT = '[%(asctime)s] %(name)-11s %(levelname)-8s: %(message)s'
+
 WGS84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
 WEB_MERCATOR = pyproj.Proj('+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs')
 
 GRAVITATIONAL_ACCELERATION = 9.80665  # meters per second squared
 SIDEREAL_ROTATION_PERIOD = datetime.timedelta(hours=23, minutes=56, seconds=4.1)
+
+
+def get_logger(name: str) -> logging.Logger:
+    logger = logging.getLogger(name)
+
+    # check if logger is already configured
+    if logger.level == logging.NOTSET and len(logger.handlers) == 0:
+        # check if logger has a parent
+        if '.' in name:
+            logger.parent = get_logger(name.rsplit('.', 1)[0])
+        else:
+            logger = create_logger(name)
+
+    return logger
+
+
+def create_logger(name: str, log_filename: str = None, file_level: int = logging.DEBUG, console_level: int = logging.INFO, log_format: str = None) -> logging.Logger:
+    if log_format is None:
+        log_format = DEFAULT_LOG_FORMAT
+
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+
+    # remove handlers
+    for handler in logger.handlers:
+        logger.removeHandler(handler)
+
+    log_formatter = logging.Formatter(log_format)
+
+    if console_level != logging.NOTSET:
+        if console_level <= logging.INFO:
+            console_output = logging.StreamHandler(sys.stdout)
+            console_output.setFormatter(log_formatter)
+            console_output.setLevel(console_level)
+            console_output.addFilter(LoggingOutputFilter())
+            logger.addHandler(console_output)
+
+        console_errors = logging.StreamHandler(sys.stderr)
+        console_errors.setFormatter(log_formatter)
+        console_errors.setLevel(max((console_level, logging.WARNING)))
+        logger.addHandler(console_errors)
+
+    if log_filename is not None:
+        log_file = logging.FileHandler(log_filename)
+        log_file.setFormatter(log_formatter)
+        log_file.setLevel(file_level)
+        logger.addHandler(log_file)
+
+    return logger
+
+
+class LoggingOutputFilter(logging.Filter):
+    """ class to filter output from a logger to only INFO or DEBUG """
+
+    def filter(self, rec):
+        return rec.levelno in (logging.DEBUG, logging.INFO)
+
+
+LOGGER = get_logger('PyOFS.utili')
 
 
 def copy_xarray(input_path: str, output_path: str) -> xarray.Dataset:
@@ -37,16 +100,16 @@ def copy_xarray(input_path: str, output_path: str) -> xarray.Dataset:
     :return: copied observation at given path
     """
 
-    print(f'Reading observation from {input_path}')
+    LOGGER.info(f'Reading observation from {input_path}')
 
     input_dataset = xarray.open_dataset(input_path, decode_times=False)
 
-    print(f'Copying observation to local memory...')
+    LOGGER.info(f'Copying observation to local memory...')
 
     # deep copy of xarray observation
     output_dataset = input_dataset.copy(deep=True)
 
-    print(f'Writing to {output_path}')
+    LOGGER.info(f'Writing to {output_path}')
 
     # save observation to file
     output_dataset.to_netcdf(output_path)
@@ -198,13 +261,13 @@ def write_gpkg_subdataset(input_data: numpy.array, output_filename: str, layer_n
                                raster_identifier=layer_name, raster_description=layer_name, append_subdataset='YES', **kwargs) as output_raster:
                 output_raster.write(input_data.astype(dtype), 1)
 
-            print(f'Writing {output_filename}:{layer_name}')
+            LOGGER.info(f'Writing {output_filename}:{layer_name}')
 
         except rasterio._err.CPLE_AppDefinedError:
-            print(f'Subdataset already exists at {output_filename}:{layer_name}')
+            LOGGER.info(f'Subdataset already exists at {output_filename}:{layer_name}')
 
     if overwrite:
-        print(f'Erasing {output_filename}')
+        LOGGER.info(f'Erasing {output_filename}')
 
     # if error with appending, erase entire observation and append as new
     with rasterio.open(output_filename, 'w', driver='GPKG', height=height, width=width, count=1, dtype=dtype, crs=crs, transform=transform, nodata=nodata, raster_table=layer_name,
