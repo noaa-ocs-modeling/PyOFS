@@ -22,7 +22,7 @@ from main.leaflet import write_json
 from PyOFS import DATA_DIRECTORY, LEAFLET_NODATA_VALUE
 from PyOFS.observation import hf_radar, viirs, smap, data_buoy
 from PyOFS.model import wcofs, rtofs
-from PyOFS.utilities import create_logger
+from PyOFS.utilities import create_logger, NoDataError
 
 # disable complaints from Fiona environment within conda
 logging.root.manager.loggerDict['fiona._env'].setLevel(logging.CRITICAL)
@@ -108,6 +108,8 @@ def write_observation(output_dir: str, observation_date: Union[datetime, date], 
             output_filename = os.path.join(observation_dir, f'ndbc_data_buoys_{observation_date:%Y%m%d}.gpkg')
             data_buoy_range.write_vector(output_filename, day_start_ndbc, day_end_ndbc)
             del data_buoy_range
+    except NoDataError as error:
+        LOGGER.warning(f'{error.__class__.__name__}: {error}')
     except:
         LOGGER.exception(f'observation: {observation}')
 
@@ -170,6 +172,8 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime, date], day_delt
                     else:
                         LOGGER.info(f'Skipping RTOFS day {day_delta} uv')
         del rtofs_dataset
+    except NoDataError as error:
+        LOGGER.warning(f'{error.__class__.__name__}: {error}')
     except:
         LOGGER.exception(f'model run date: {model_run_date}, day deltas: {day_deltas}')
 
@@ -288,6 +292,8 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime, date, int, floa
 
         if grid_size_km == 2:
             wcofs.reset_dataset_grid()
+    except NoDataError as error:
+        LOGGER.warning(f'{error.__class__.__name__}: {error}')
     except:
         LOGGER.exception(f'model run date: {model_run_date}, day deltas: {day_deltas}')
 
