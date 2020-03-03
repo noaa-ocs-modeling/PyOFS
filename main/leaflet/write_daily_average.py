@@ -108,9 +108,8 @@ def write_observation(output_dir: str, observation_date: Union[datetime, date], 
             output_filename = os.path.join(observation_dir, f'ndbc_data_buoys_{observation_date:%Y%m%d}.gpkg')
             data_buoy_range.write_vector(output_filename, day_start_ndbc, day_end_ndbc)
             del data_buoy_range
-    except Exception as error:
-        _, _, error_traceback = sys.exc_info()
-        LOGGER.warning(f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
+    except:
+        LOGGER.exception(f'observation: {observation}')
 
 
 def write_rtofs(output_dir: str, model_run_date: Union[datetime, date], day_deltas: range = MODEL_DAY_DELTAS['RTOFS'], scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
@@ -171,9 +170,8 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime, date], day_delt
                     else:
                         LOGGER.info(f'Skipping RTOFS day {day_delta} uv')
         del rtofs_dataset
-    except Exception as error:
-        _, _, error_traceback = sys.exc_info()
-        LOGGER.warning(f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
+    except:
+        LOGGER.exception(f'model run date: {model_run_date}, day deltas: {day_deltas}')
 
 
 def write_wcofs(output_dir: str, model_run_date: Union[datetime, date, int, float], day_deltas: range = MODEL_DAY_DELTAS['WCOFS'], scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
@@ -290,9 +288,8 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime, date, int, floa
 
         if grid_size_km == 2:
             wcofs.reset_dataset_grid()
-    except Exception as error:
-        _, _, error_traceback = sys.exc_info()
-        LOGGER.warning(f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
+    except:
+        LOGGER.exception(f'model run date: {model_run_date}, day deltas: {day_deltas}')
 
 
 def write_daily_average(output_dir: str, output_date: Union[datetime, date, int, float], day_deltas: range = MODEL_DAY_DELTAS['WCOFS']):

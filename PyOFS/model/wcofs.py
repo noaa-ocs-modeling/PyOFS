@@ -151,7 +151,7 @@ class WCOFSDataset:
                         LOGGER.info(f'found dataset at {url}')
                         self.source_url = source_url
                     except OSError as error:
-                        LOGGER.warning(error)
+                        LOGGER.warning(f'{error.__class__.__name__}: {error}')
             else:
                 for hour in self.time_deltas:
                     model_type = 'n' if hour <= 0 else 'f'
@@ -162,7 +162,7 @@ class WCOFSDataset:
                         LOGGER.info(f'found dataset at {url}')
                         self.source_url = source_url
                     except OSError as error:
-                        LOGGER.warning(error)
+                        LOGGER.warning(f'{error.__class__.__name__}: {error}')
 
         if len(self.datasets) > 0:
             self.dataset_locks = {time_delta: threading.Lock() for time_delta in self.datasets.keys()}

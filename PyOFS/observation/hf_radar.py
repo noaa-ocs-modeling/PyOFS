@@ -20,6 +20,9 @@ import scipy.interpolate
 import xarray
 
 from PyOFS import CRS_EPSG, LEAFLET_NODATA_VALUE, utilities
+from PyOFS.utilities import get_logger
+
+LOGGER = get_logger('PyOFS.HFR')
 
 DATA_VARIABLES = {'ssu': 'u', 'ssv': 'v', 'dopx': 'dopx', 'dopy': 'dopy'}
 
@@ -81,7 +84,7 @@ class HFRadarRange:
                 self.url = url
                 break
             except OSError as error:
-                LOGGER.error(f'error "{error}" reading dataset from {url}')
+                LOGGER.warning(f'{error.__class__.__name__}: {error}')
         else:
             raise utilities.NoDataError(f'No HFR observations found between {self.start_time} and {self.end_time}')
 

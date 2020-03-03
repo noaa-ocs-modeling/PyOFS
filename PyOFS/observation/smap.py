@@ -63,7 +63,7 @@ class SMAPDataset:
                 self.dataset = xarray.open_dataset(source_url)
                 break
             except Exception as error:
-                LOGGER.error(f'error "{error}" reading from {source}')
+                LOGGER.warning(f'{error.__class__.__name__}: {error}')
 
         # construct rectangular polygon of granule extent
         lon_min = float(self.dataset.geospatial_lon_min)

@@ -111,7 +111,7 @@ class RTOFSDataset:
                         self.datasets[forecast_direction][dataset_name] = dataset
                         self.dataset_locks[forecast_direction][dataset_name] = threading.Lock()
                     except OSError as error:
-                        LOGGER.error(f'error "{error}" reading from {url}')
+                        LOGGER.warning(f'{error.__class__.__name__}: {error}')
 
         if (len(self.datasets['nowcast']) + len(self.datasets['forecast'])) > 0:
             if len(self.datasets['nowcast']) > 0:

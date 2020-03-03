@@ -124,8 +124,7 @@ def interpolate_grids(datasets: dict) -> dict:
         u_futures = {'noDA_model': {}, 'DA_model': {}}
         v_futures = {'noDA_model': {}, 'DA_model': {}}
 
-        for time_delta_index, time_delta in dict(
-                zip(range(len(datasets['wcofs_sst_noDA'][wcofs_dimensions['sst'][0]].values)), sorted(datasets['wcofs_sst_noDA'][wcofs_dimensions['sst'][0]].values, reverse=True))).items():
+        for time_delta_index, time_delta in enumerate(sorted(datasets['wcofs_sst_noDA'][wcofs_dimensions['sst'][0]].values, reverse=True)):
             try:
 
                 sst_noDA_future = concurrency_pool.submit(wcofs.interpolate_grid, datasets['wcofs_sst_noDA']['lon'].values, datasets['wcofs_sst_noDA']['lat'].values,
@@ -152,8 +151,8 @@ def interpolate_grids(datasets: dict) -> dict:
                 u_futures['DA_model'][u_DA_future] = time_delta
                 v_futures['noDA_model'][v_noDA_future] = time_delta
                 v_futures['DA_model'][v_DA_future] = time_delta
-            except IndexError as error:
-                LOGGER.error(f'{time_delta} IndexError: {error}')
+            except IndexError:
+                LOGGER.exception(f'time delta: {time_delta}')
                 continue
 
         for completed_future in futures.as_completed(sst_futures['noDA_model']):

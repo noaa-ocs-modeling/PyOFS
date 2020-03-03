@@ -13,7 +13,6 @@ from datetime import datetime, timedelta
 import ftplib
 import math
 import os
-import sys
 from typing import Collection
 
 import fiona.crs
@@ -123,14 +122,14 @@ class VIIRSDataset:
                 if source == 'NESDIS':
                     url = f'{source_url}/grid{"" if self.near_real_time else "S"}{self.satellite.upper()}VIIRSSCIENCEL3UWW00/{month_dir}/{filename}'
                 else:
-                    LOGGER.warning(f'{source} does not have a reanalysis archive')
+                    LOGGER.warning(f'{source} does not contain a reanalysis archive')
 
             try:
                 self.dataset = xarray.open_dataset(url)
                 self.url = url
                 break
             except Exception as error:
-                LOGGER.error(f'error "{error}" reading from {url}')
+                LOGGER.warning(f'{error.__class__.__name__}: {error}')
 
         if self.url is None:
             LOGGER.warning('Error collecting from OpenDAP; falling back to FTP...')
@@ -174,7 +173,7 @@ class VIIRSDataset:
                     self.url = url
                     break
                 except Exception as error:
-                    LOGGER.error(f'error "{error}" reading from {url}')
+                    LOGGER.warning(f'{error.__class__.__name__}: {error}')
 
                 if self.url is not None:
                     break
@@ -749,8 +748,7 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
                 # if we get to here, break and continue to the next datetime
                 break
             except utilities.NoDataError as error:
-                _, _, error_traceback = sys.exc_info()
-                LOGGER.warning(f'{error} ({os.path.split(error_traceback.tb_frame.f_code.co_filename)[1]}:{error_traceback.tb_lineno})')
+                LOGGER.warning(f'{error.__class__.__name__}: {error}')
         else:
             LOGGER.warning(f'{current_time:%Y%m%dT%H%M%S}: missing observation across all cycles')
 
