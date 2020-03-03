@@ -8,7 +8,7 @@ Created on Feb 6, 2019
 """
 
 from collections import OrderedDict
-import datetime
+from datetime import datetime
 import logging
 import os
 from typing import Collection
@@ -68,13 +68,11 @@ class Jason3Dataset:
         lat_max = float(self.dataset.geospatial_lat_max)
 
         if lon_min < lon_max:
-            self.data_extent = shapely.geometry.Polygon(
-                [(lon_min, lat_max), (lon_max, lat_max), (lon_max, lat_min), (lon_min, lat_min)])
+            self.data_extent = shapely.geometry.Polygon([(lon_min, lat_max), (lon_max, lat_max), (lon_max, lat_min), (lon_min, lat_min)])
         else:
             # geospatial bounds cross the antimeridian, so we create a multipolygon
-            self.data_extent = shapely.geometry.MultiPolygon(
-                [shapely.geometry.Polygon([(lon_min, lat_max), (180, lat_max), (180, lat_min), (lon_min, lat_min)]),
-                 shapely.geometry.Polygon([(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
+            self.data_extent = shapely.geometry.MultiPolygon([shapely.geometry.Polygon([(lon_min, lat_max), (180, lat_max), (180, lat_min), (lon_min, lat_min)]),
+                                                              shapely.geometry.Polygon([(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
 
         lon_pixel_size = numpy.mean(numpy.diff(self.dataset['longitude'].values))
         lat_pixel_size = numpy.mean(numpy.diff(self.dataset['latitude'].values))
@@ -82,25 +80,18 @@ class Jason3Dataset:
         if Jason3Dataset.study_area_extent is None:
             # get first record in layer
             Jason3Dataset.study_area_extent = shapely.geometry.MultiPolygon(
-                [shapely.geometry.Polygon(polygon[0]) for polygon in
-                 utilities.get_first_record(self.study_area_polygon_filename)[
-                     'geometry']['coordinates']])
+                [shapely.geometry.Polygon(polygon[0]) for polygon in utilities.get_first_record(self.study_area_polygon_filename)['geometry']['coordinates']])
 
             Jason3Dataset.study_area_bounds = Jason3Dataset.study_area_extent.bounds
-            Jason3Dataset.study_area_transform = rasterio.transform.from_origin(Jason3Dataset.study_area_bounds[0],
-                                                                                Jason3Dataset.study_area_bounds[3],
-                                                                                lon_pixel_size,
-                                                                                lat_pixel_size)
+            Jason3Dataset.study_area_transform = rasterio.transform.from_origin(Jason3Dataset.study_area_bounds[0], Jason3Dataset.study_area_bounds[3], lon_pixel_size, lat_pixel_size)
 
         if Jason3Dataset.study_area_bounds is not None:
-            self.dataset = self.dataset.sel(
-                longitude=slice(Jason3Dataset.study_area_bounds[0], Jason3Dataset.study_area_bounds[2]),
-                latitude=slice(Jason3Dataset.study_area_bounds[3], Jason3Dataset.study_area_bounds[1]))
+            self.dataset = self.dataset.sel(longitude=slice(Jason3Dataset.study_area_bounds[0], Jason3Dataset.study_area_bounds[2]),
+                                            latitude=slice(Jason3Dataset.study_area_bounds[3], Jason3Dataset.study_area_bounds[1]))
 
         if Jason3Dataset.study_area_coordinates is None:
             Jason3Dataset.study_area_coordinates = {
-                'lon': self.dataset['longitude'],
-                'lat': self.dataset['latitude']
+                'lon': self.dataset['longitude'], 'lat': self.dataset['latitude']
             }
 
     def bounds(self) -> tuple:
@@ -121,7 +112,7 @@ class Jason3Dataset:
 
         return self.dataset.geospatial_lon_resolution, self.dataset.geospatial_lat_resolution
 
-    def data(self, data_time: datetime.datetime, variable: str = 'sss') -> numpy.array:
+    def data(self, data_time: datetime, variable: str = 'sss') -> numpy.array:
         """
         Retrieve SMOS SSS data.
 
@@ -137,7 +128,7 @@ class Jason3Dataset:
 
         return output_data
 
-    def _sss(self, data_time: datetime.datetime) -> numpy.array:
+    def _sss(self, data_time: datetime) -> numpy.array:
         """
         Retrieve SMOS SSS data.
 
@@ -146,15 +137,15 @@ class Jason3Dataset:
         """
 
         # SMOS has data on month-long resolution
-        data_time = datetime.datetime(data_time.year, data_time.month, 16)
+        data_time = datetime(data_time.year, data_time.month, 16)
 
         if numpy.datetime64(data_time) in self.dataset['times'].values:
             return self.dataset['smap_sss'].sel(times=data_time).values
         else:
             raise utilities.NoDataError(f'No data exists for {data_time:%Y%m%dT%H%M%S}.')
 
-    def write_rasters(self, output_dir: str, data_time: datetime.datetime, variables: Collection[str] = tuple(['sss']),
-                      filename_prefix: str = 'smos', fill_value: float = LEAFLET_NODATA_VALUE, driver: str = 'GTiff'):
+    def write_rasters(self, output_dir: str, data_time: datetime, variables: Collection[str] = tuple(['sss']), filename_prefix: str = 'smos', fill_value: float = LEAFLET_NODATA_VALUE,
+                      driver: str = 'GTiff'):
         """
         Write SMOS rasters to file using data from given variables.
 
@@ -221,6 +212,6 @@ if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIRECTORY, r'output\test')
 
     smap_dataset = Jason3Dataset()
-    smap_dataset.write_rasters(output_dir, datetime.datetime(2018, 12, 1))
+    smap_dataset.write_rasters(output_dir, datetime(2018, 12, 1))
 
     print('done')

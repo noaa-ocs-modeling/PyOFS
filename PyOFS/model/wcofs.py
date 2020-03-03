@@ -8,7 +8,7 @@ Created on Jun 25, 2018
 """
 
 from concurrent import futures
-import datetime
+from datetime import datetime, timedelta, date
 import logging
 import os
 import threading
@@ -19,6 +19,7 @@ import fiona.crs
 import numpy
 import pyproj
 import rasterio.control
+from rasterio.crs import CRS
 from rasterio.io import MemoryFile
 import rasterio.mask
 import rasterio.warp
@@ -28,20 +29,20 @@ import xarray
 
 from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, utilities
 
-RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
-FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
+OUTPUT_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
 ROTATED_POLE = (-57.6, 37.4)
-WCOFS_GCS = pyproj.Proj(
-    f'+proj=ob_tran +o_proj=longlat +o_lon_p={ROTATED_POLE[0]} +o_lat_p={ROTATED_POLE[1]} +ellps=WGS84')
+WCOFS_GCS = pyproj.Proj(f'+proj=ob_tran +o_proj=longlat +o_lon_p={ROTATED_POLE[0]} +o_lat_p={ROTATED_POLE[1]} +ellps=WGS84')
 
 GRID_LOCATIONS = {'face': 'rho', 'edge1': 'u', 'edge2': 'v', 'node': 'psi'}
-COORDINATE_VARIABLES = ['grid', 'ocean_time', 'lon_rho', 'lat_rho', 'lon_u', 'lat_u', 'lon_v', 'lat_v', 'lon_psi',
-                        'lat_psi']
+COORDINATE_VARIABLES = ['grid', 'ocean_time', 'lon_rho', 'lat_rho', 'lon_u', 'lat_u', 'lon_v', 'lat_v', 'lon_psi', 'lat_psi']
 STATIC_VARIABLES = ['h', 'f', 'mask_rho', 'mask_u', 'mask_v', 'mask_psi', 'angle', 'pm', 'pn']
 DATA_VARIABLES = {
-    'sst': {'2ds': 'temp_sur', 'avg': 'temp'}, 'ssu': {'2ds': 'u_sur', 'avg': 'u'}, 'ssv': {'2ds': 'v_sur', 'avg': 'v'},
-    'sss': {'2ds': 'salt_sur', 'avg': 'salt'}, 'ssh': {'2ds': 'zeta', 'avg': 'zeta'}
+    'sst': {'2ds': 'temp_sur', 'avg': 'temp'},
+    'ssu': {'2ds': 'u_sur', 'avg': 'u'},
+    'ssv': {'2ds': 'v_sur', 'avg': 'v'},
+    'sss': {'2ds': 'salt_sur', 'avg': 'salt'},
+    'ssh': {'2ds': 'zeta', 'avg': 'zeta'}
 }
 
 WCOFS_MODEL_HOURS = {'n': -24, 'f': 72}
@@ -54,8 +55,7 @@ VALID_SOURCE_STRINGS = ['stations', 'fields', 'avg', '2ds']
 
 GLOBAL_LOCK = threading.Lock()
 
-SOURCE_URLS = ['http://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS',
-               os.path.join(DATA_DIRECTORY, 'input/wcofs/avg')]
+SOURCE_URLS = ['http://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS', os.path.join(DATA_DIRECTORY, 'input/wcofs/avg')]
 
 
 class WCOFSDataset:
@@ -71,8 +71,8 @@ class WCOFSDataset:
     masks = None
     angle = None
 
-    def __init__(self, model_date: datetime.datetime = None, source: str = None, time_deltas: list = None, x_size: float = None, y_size: float = None,
-                 grid_filename: str = None, source_url: str = None, wcofs_string: str = 'wcofs', use_defaults: bool = True):
+    def __init__(self, model_date: datetime = None, source: str = None, time_deltas: list = None, x_size: float = None, y_size: float = None, grid_filename: str = None, source_url: str = None,
+                 wcofs_string: str = 'wcofs', use_defaults: bool = True):
         """
         Creates new observation object from datetime and given model parameters.
 
@@ -90,12 +90,11 @@ class WCOFSDataset:
         """
 
         if model_date is None:
-            model_date = datetime.datetime.now()
+            model_date = datetime.now()
 
         # set start time to WCOFS model run time (0300 UTC)
-        if type(model_date) is datetime.date:
-            self.model_time = datetime.datetime.combine(model_date, datetime.datetime.min.time()) + datetime.timedelta(
-                hours=WCOFS_MODEL_RUN_HOUR)
+        if type(model_date) is date:
+            self.model_time = datetime.combine(model_date, datetime.min.time()) + timedelta(hours=WCOFS_MODEL_RUN_HOUR)
         else:
             self.model_time = model_date.replace(hour=WCOFS_MODEL_RUN_HOUR, minute=0, second=0, microsecond=0)
 
@@ -236,9 +235,7 @@ class WCOFSDataset:
                         west = numpy.min(lon)
                         south = numpy.min(lat)
 
-                        WCOFSDataset.grid_transforms[grid_name] = rasterio.transform.from_origin(west=west, north=south,
-                                                                                                 xsize=self.x_size,
-                                                                                                 ysize=-self.y_size)
+                        WCOFSDataset.grid_transforms[grid_name] = rasterio.transform.from_origin(west=west, north=south, xsize=self.x_size, ysize=-self.y_size)
 
             with GLOBAL_LOCK:
                 if WCOFSDataset.grid_bounds is None and 'wcofs_grid' in locals():
@@ -256,8 +253,7 @@ class WCOFSDataset:
                         WCOFSDataset.grid_bounds[grid_name] = (west, north, east, south)
 
         else:
-            raise utilities.NoDataError(
-                f'No WCOFS datasets found for {self.model_time} at the given time deltas ({self.time_deltas}).')
+            raise utilities.NoDataError(f'No WCOFS datasets found for {self.model_time} at the given time deltas ({self.time_deltas}).')
 
     def bounds(self, variable: str = 'psi') -> tuple:
         """
@@ -296,10 +292,8 @@ class WCOFSDataset:
                         # get surface layer; the last layer (of 40) at dimension 1
                         if not native_grid and variable in ['ssu', 'ssv']:
                             # correct for angles
-                            raw_u = self.datasets[dataset_index][DATA_VARIABLES['ssu'][self.source]][day_index, -1, :-1,
-                                    :].values
-                            raw_v = self.datasets[dataset_index][DATA_VARIABLES['ssv'][self.source]][day_index, -1, :,
-                                    :-1].values
+                            raw_u = self.datasets[dataset_index][DATA_VARIABLES['ssu'][self.source]][day_index, -1, :-1, :].values
+                            raw_v = self.datasets[dataset_index][DATA_VARIABLES['ssv'][self.source]][day_index, -1, :, :-1].values
                             theta = WCOFSDataset.angle[:-1, :-1]
 
                             if variable == 'ssu':
@@ -344,8 +338,7 @@ class WCOFSDataset:
 
         # concurrently populate array with data for every hour
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            running_futures = {concurrency_pool.submit(self.data, variable, time_delta): time_delta for time_delta in
-                               time_deltas}
+            running_futures = {concurrency_pool.submit(self.data, variable, time_delta): time_delta for time_delta in time_deltas}
 
             for completed_future in futures.as_completed(running_futures):
                 result = completed_future.result()
@@ -362,11 +355,8 @@ class WCOFSDataset:
 
         return variable_data
 
-    def write_rasters(self, output_dir: str, variables: Collection[str] = None, filename_suffix: str = None,
-                      time_deltas: list = None,
-                      study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, x_size: float = 0.04,
-                      y_size: float = 0.04,
-                      fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff'):
+    def write_rasters(self, output_dir: str, variables: Collection[str] = None, filename_suffix: str = None, time_deltas: list = None, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
+                      x_size: float = 0.04, y_size: float = 0.04, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff'):
         """
         Write averaged raster data of given variables to given output directory.
 
@@ -381,7 +371,7 @@ class WCOFSDataset:
         :param driver: strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
         """
 
-        start_time = datetime.datetime.now()
+        start_time = datetime.now()
 
         if variables is None:
             variables = list(DATA_VARIABLES.keys())
@@ -430,8 +420,7 @@ class WCOFSDataset:
 
         # concurrently populate dictionary with averaged data within given time interval for each variable
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            running_futures = {concurrency_pool.submit(self.data_average, variable, time_deltas): variable for variable
-                               in variables if variable not in ['dir', 'mag']}
+            running_futures = {concurrency_pool.submit(self.data_average, variable, time_deltas): variable for variable in variables if variable not in ['dir', 'mag']}
 
             for completed_future in futures.as_completed(running_futures):
                 variable = running_futures[completed_future]
@@ -458,10 +447,9 @@ class WCOFSDataset:
                 if v_data is not None:
                     variable_means[v_name] = v_data
 
-        logging.debug('parallel data aggregation took ' +
-                      f'{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+        logging.debug('parallel data aggregation took ' + f'{(datetime.now() - start_time).total_seconds():.2f} seconds')
 
-        start_time = datetime.datetime.now()
+        start_time = datetime.now()
 
         interpolated_data = {}
 
@@ -483,8 +471,7 @@ class WCOFSDataset:
                         lat = self.data_coordinates[grid_name]['lat']
 
                         if len(grid_lon) > 0:
-                            running_future = concurrency_pool.submit(interpolate_grid, lon, lat, variable_data,
-                                                                     grid_lon, grid_lat)
+                            running_future = concurrency_pool.submit(interpolate_grid, lon, lat, variable_data, grid_lon, grid_lat)
                             running_futures[running_future] = variable
 
                 for completed_future in futures.as_completed(running_futures):
@@ -517,8 +504,7 @@ class WCOFSDataset:
                     if v_name not in variables:
                         del interpolated_data[v_name]
 
-            logging.debug(f'parallel grid interpolation took ' +
-                          f'{(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+            logging.debug(f'parallel grid interpolation took ' + f'{(datetime.now() - start_time).total_seconds():.2f} seconds')
 
         # write interpolated grids to raster files
         for variable, variable_data in interpolated_data.items():
@@ -539,7 +525,8 @@ class WCOFSDataset:
             gdal_args = {
                 'width': raster_data.shape[1],
                 'height': raster_data.shape[0],
-                'count': 1, 'crs': RASTERIO_CRS,
+                'count': 1,
+                'crs': CRS.from_dict(OUTPUT_CRS),
                 'transform': grid_transform,
                 'dtype': raster_data.dtype,
                 'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
@@ -588,16 +575,13 @@ class WCOFSDataset:
 
         variables = list(DATA_VARIABLES.keys())
 
-        start_time = datetime.datetime.now()
+        start_time = datetime.now()
 
         variable_means = {}
 
         # concurrently populate dictionary with averaged data within given time interval for each variable
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            running_futures = {
-                concurrency_pool.submit(self.data_average, variable, time_deltas): variable
-                for variable in variables
-            }
+            running_futures = {concurrency_pool.submit(self.data_average, variable, time_deltas): variable for variable in variables}
 
             for completed_future in futures.as_completed(running_futures):
                 variable = running_futures[completed_future]
@@ -605,23 +589,18 @@ class WCOFSDataset:
 
             del running_futures
 
-        logging.debug(
-            f'parallel data aggregation took {(datetime.datetime.now() - start_time).total_seconds(): .2f} seconds')
+        logging.debug(f'parallel data aggregation took {(datetime.now() - start_time).total_seconds(): .2f} seconds')
 
         schema = {
-            'geometry': 'Point',
-            'properties': {
-                'row': 'int',
-                'col': 'int',
-                'rho_lon': 'float',
-                'rho_lat': 'float'
+            'geometry': 'Point', 'properties': {
+                'row': 'int', 'col': 'int', 'rho_lon': 'float', 'rho_lat': 'float'
             }
         }
 
         for variable in variables:
             schema['properties'][variable] = 'float'
 
-        start_time = datetime.datetime.now()
+        start_time = datetime.now()
 
         logging.debug('Creating records...')
 
@@ -638,8 +617,7 @@ class WCOFSDataset:
                 for row in range(grid_height):
                     if WCOFSDataset.masks['psi'][row, col] == 0:
                         # check if current record is unmasked
-                        running_futures.append(
-                            concurrency_pool.submit(self._create_fiona_record, variable_means, row, col, feature_index))
+                        running_futures.append(concurrency_pool.submit(self._create_fiona_record, variable_means, row, col, feature_index))
                         feature_index += 1
 
             for completed_future in futures.as_completed(running_futures):
@@ -648,18 +626,17 @@ class WCOFSDataset:
                 if result is not None:
                     layer_records.append(result)
 
-        logging.debug(f'creating records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+        logging.debug(f'creating records took {(datetime.now() - start_time).total_seconds():.2f} seconds')
 
-        start_time = datetime.datetime.now()
+        start_time = datetime.now()
 
         logging.info(f'Writing {output_filename}:{layer_name}')
 
         # create layer
-        with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_CRS,
-                        layer=layer_name) as output_vector_file:
+        with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=OUTPUT_CRS, layer=layer_name) as output_vector_file:
             output_vector_file.writerecords(layer_records)
 
-        logging.debug(f'writing records took {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds')
+        logging.debug(f'writing records took {(datetime.now() - start_time).total_seconds():.2f} seconds')
 
     @staticmethod
     def _create_fiona_record(variable_means, row, col, feature_index):
@@ -668,7 +645,8 @@ class WCOFSDataset:
         rho_lat = WCOFSDataset.data_coordinates['rho']['lat'][row, col]
 
         record = {
-            'id': feature_index, 'geometry': {'type': 'Point', 'coordinates': (float(rho_lon), float(rho_lat))},
+            'id': feature_index,
+            'geometry': {'type': 'Point', 'coordinates': (float(rho_lon), float(rho_lat))},
             'properties': {'row': row, 'col': col, 'rho_lon': float(rho_lon), 'rho_lat': float(rho_lat)}
         }
 
@@ -693,31 +671,28 @@ class WCOFSDataset:
 
         for variable in variables:
             if self.source is 'avg':
-                times = [self.model_time + datetime.timedelta(days=time_delta) for time_delta in self.time_deltas]
+                times = [self.model_time + timedelta(days=time_delta) for time_delta in self.time_deltas]
             else:
-                times = [self.model_time + datetime.timedelta(hours=time_delta) for time_delta in self.time_deltas]
+                times = [self.model_time + timedelta(hours=time_delta) for time_delta in self.time_deltas]
 
             grid = self.variable_grids[variable]
-            data_stack = numpy.stack(
-                [self.data(variable, time_delta, native_grid=native_grid) for time_delta in self.time_deltas], axis=0)
+            data_stack = numpy.stack([self.data(variable, time_delta, native_grid=native_grid) for time_delta in self.time_deltas], axis=0)
 
             if native_grid:
                 wgs84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
 
-                native_lon, native_lat = pyproj.transform(wgs84, WCOFS_GCS, self.data_coordinates[grid]['lon'],
-                                                          self.data_coordinates[grid]['lat'])
+                native_lon, native_lat = pyproj.transform(wgs84, WCOFS_GCS, self.data_coordinates[grid]['lon'], self.data_coordinates[grid]['lat'])
 
                 native_lon = native_lon[:, 0]
                 native_lat = native_lat[0, :]
 
                 data_array = xarray.DataArray(data_stack, coords={
-                    'time': times, f'{grid}_lon': native_lon,
-                    f'{grid}_lat': native_lat
-                },
-                                              dims=('time', f'{grid}_lon', f'{grid}_lat'))
+                    'time': times, f'{grid}_lon': native_lon, f'{grid}_lat': native_lat
+                }, dims=('time', f'{grid}_lon', f'{grid}_lat'))
             else:
                 data_array = xarray.DataArray(data_stack, coords={
-                    'time': times, f'{grid}_lon': ((f'{grid}_eta', f'{grid}_xi'), self.data_coordinates[grid]['lon']),
+                    'time': times,
+                    f'{grid}_lon': ((f'{grid}_eta', f'{grid}_xi'), self.data_coordinates[grid]['lon']),
                     f'{grid}_lat': ((f'{grid}_eta', f'{grid}_xi'), self.data_coordinates[grid]['lat'])
                 }, dims=('time', f'{grid}_eta', f'{grid}_xi'))
 
@@ -751,8 +726,7 @@ class WCOFSDataset:
 
     def __repr__(self):
         used_params = [self.model_time.__repr__()]
-        optional_params = [self.source, self.time_deltas, self.x_size, self.y_size, self.grid_filename, self.source_url,
-                           self.wcofs_string]
+        optional_params = [self.source, self.time_deltas, self.x_size, self.y_size, self.grid_filename, self.source_url, self.wcofs_string]
 
         for param in optional_params:
             if param is not None:
@@ -771,10 +745,8 @@ class WCOFSRange:
     Range of WCOFS datasets.
     """
 
-    def __init__(self, start_time: datetime.datetime, end_time: datetime.datetime, source: str = None,
-                 time_deltas: list = None,
-                 x_size: float = None, y_size: float = None, grid_filename: str = None, source_url: str = None,
-                 wcofs_string: str = 'wcofs'):
+    def __init__(self, start_time: datetime, end_time: datetime, source: str = None, time_deltas: list = None, x_size: float = None, y_size: float = None, grid_filename: str = None,
+                 source_url: str = None, wcofs_string: str = 'wcofs'):
         """
         Create range of WCOFS datasets from the given time interval.
 
@@ -813,10 +785,9 @@ class WCOFSRange:
         logging.info(f'Collecting WCOFS stack between {self.start_time} and {self.end_time}...')
 
         # get all possible model dates that could overlap with the given time interval
-        overlapping_start_time = self.start_time - datetime.timedelta(hours=WCOFS_MODEL_HOURS['f'] - 24)
-        overlapping_end_time = self.end_time + datetime.timedelta(hours=-WCOFS_MODEL_HOURS['n'] - 24)
-        model_dates = utilities.range_daily(utilities.round_to_day(overlapping_start_time, 'floor'),
-                                            utilities.round_to_day(overlapping_end_time, 'ceiling'))
+        overlapping_start_time = self.start_time - timedelta(hours=WCOFS_MODEL_HOURS['f'] - 24)
+        overlapping_end_time = self.end_time + timedelta(hours=-WCOFS_MODEL_HOURS['n'] - 24)
+        model_dates = utilities.range_daily(utilities.round_to_day(overlapping_start_time, 'floor'), utilities.round_to_day(overlapping_end_time, 'ceiling'))
 
         self.datasets = {}
 
@@ -853,7 +824,7 @@ class WCOFSRange:
                     else:
                         time_deltas = overlapping_days
                 else:
-                    model_time = model_date + datetime.timedelta(hours=3)
+                    model_time = model_date + timedelta(hours=3)
 
                     # construct start and end hours from given time interval
                     start_duration = self.start_time - model_time
@@ -884,12 +855,8 @@ class WCOFSRange:
 
                 # get observation for the current hours (usually all hours)
                 if time_deltas is None or len(time_deltas) > 0:
-                    running_future = concurrency_pool.submit(WCOFSDataset, model_date=model_date, source=self.source,
-                                                             time_deltas=self.time_deltas, x_size=self.x_size,
-                                                             y_size=self.y_size,
-                                                             grid_filename=self.grid_filename,
-                                                             source_url=self.source_url,
-                                                             wcofs_string=self.wcofs_string)
+                    running_future = concurrency_pool.submit(WCOFSDataset, model_date=model_date, source=self.source, time_deltas=self.time_deltas, x_size=self.x_size, y_size=self.y_size,
+                                                             grid_filename=self.grid_filename, source_url=self.source_url, wcofs_string=self.wcofs_string)
 
                     running_futures[running_future] = model_date
 
@@ -911,7 +878,7 @@ class WCOFSRange:
         else:
             raise utilities.NoDataError(f'No WCOFS datasets found between {self.start_time} and {self.end_time}.')
 
-    def data(self, variable: str, model_time: datetime.datetime, time_delta: int) -> numpy.array:
+    def data(self, variable: str, model_time: datetime, time_delta: int) -> numpy.array:
         """
         Return data from given model run at given variable and hour.
 
@@ -923,7 +890,7 @@ class WCOFSRange:
 
         return self.datasets[model_time].data(variable, time_delta)
 
-    def data_stack(self, variable: str, input_time: datetime.datetime) -> dict:
+    def data_stack(self, variable: str, input_time: datetime) -> dict:
         """
         Return dictionary of data for each model run within the given variable and datetime.
 
@@ -967,8 +934,7 @@ class WCOFSRange:
             del running_futures
         return output_data
 
-    def data_stacks(self, variable: str, start_time: datetime.datetime = None,
-                    end_time: datetime.datetime = None) -> dict:
+    def data_stacks(self, variable: str, start_time: datetime = None, end_time: datetime = None) -> dict:
         """
         Return dictionary of data for each model run within the given variable and datetime.
 
@@ -992,8 +958,7 @@ class WCOFSRange:
 
         # concurrently populate dictionary with data stack for each time in given time interval
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            running_futures = {concurrency_pool.submit(self.data_stack, variable, data_time): data_time for
-                               data_time in time_range}
+            running_futures = {concurrency_pool.submit(self.data_stack, variable, data_time): data_time for data_time in time_range}
 
             for completed_future in futures.as_completed(running_futures):
                 data_time = running_futures[completed_future]
@@ -1006,8 +971,7 @@ class WCOFSRange:
 
         return output_data
 
-    def data_averages(self, variable: str, start_time: datetime.datetime = None,
-                      end_time: datetime.datetime = None) -> dict:
+    def data_averages(self, variable: str, start_time: datetime = None, end_time: datetime = None) -> dict:
         """
         Collect averaged data for every time index in given time interval.
 
@@ -1050,11 +1014,8 @@ class WCOFSRange:
             del running_futures
         return output_data
 
-    def write_rasters(self, output_dir: str, variables: Collection[str] = None, filename_suffix: str = None,
-                      start_time: datetime.datetime = None, end_time: datetime.datetime = None,
-                      study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, x_size: float = 0.04,
-                      y_size: float = 0.04,
-                      fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff'):
+    def write_rasters(self, output_dir: str, variables: Collection[str] = None, filename_suffix: str = None, start_time: datetime = None, end_time: datetime = None,
+                      study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, x_size: float = 0.04, y_size: float = 0.04, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff'):
         """
         Write raster data of given variables to given output directory, averaged over given time interval.
 
@@ -1116,16 +1077,13 @@ class WCOFSRange:
             output_grid_coordinates[variable]['lat'] = numpy.arange(south, north, y_size)
 
         if start_time is None:
-            start_time = datetime.datetime.now()
+            start_time = datetime.now()
 
         variable_data_stack_averages = {}
 
         # concurrently populate dictionary with averaged data within given time interval for each variable
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            running_futures = {
-                concurrency_pool.submit(self.data_averages, variable, start_time, end_time): variable
-                for variable in variables if variable not in ['dir', 'mag']
-            }
+            running_futures = {concurrency_pool.submit(self.data_averages, variable, start_time, end_time): variable for variable in variables if variable not in ['dir', 'mag']}
 
             for completed_future in futures.as_completed(running_futures):
                 variable = running_futures[completed_future]
@@ -1143,10 +1101,9 @@ class WCOFSRange:
             if v_name not in variable_data_stack_averages:
                 variable_data_stack_averages[v_name] = self.data_averages(v_name, start_time, end_time)
 
-        logging.debug('parallel data aggregation took ' +
-                      f'{(datetime.datetime.now() - start_time).total_seconds(): .2=f} seconds')
+        logging.debug('parallel data aggregation took ' + f'{(datetime.now() - start_time).total_seconds(): .2=f} seconds')
 
-        start_time = datetime.datetime.now()
+        start_time = datetime.now()
 
         interpolated_data = {}
 
@@ -1206,8 +1163,7 @@ class WCOFSRange:
             if v_name not in variables:
                 del interpolated_data[v_name]
 
-        logging.debug('parallel grid interpolation took ' +
-                      f'{(datetime.datetime.now() - start_time).total_seconds(): .2f} seconds')
+        logging.debug('parallel grid interpolation took ' + f'{(datetime.now() - start_time).total_seconds(): .2f} seconds')
 
         # write interpolated grids to raster files
         for variable, variable_data_stack in interpolated_data.items():
@@ -1231,7 +1187,7 @@ class WCOFSRange:
                         'width': raster_data.shape[1],
                         'height': raster_data.shape[0],
                         'count': 1,
-                        'crs': RASTERIO_CRS,
+                        'crs': CRS.from_dict(OUTPUT_CRS),
                         'transform': grid_transform,
                         'dtype': raster_data.dtype,
                         'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
@@ -1257,8 +1213,7 @@ class WCOFSRange:
                     else:
                         file_extension = 'tiff'
 
-                    output_filename = os.path.join(output_dir,
-                                                   f'wcofs_{variable}_{model_string}{filename_suffix}.{file_extension}')
+                    output_filename = os.path.join(output_dir, f'wcofs_{variable}_{model_string}{filename_suffix}.{file_extension}')
 
                     if os.path.isfile(output_filename):
                         os.remove(output_filename)
@@ -1267,9 +1222,7 @@ class WCOFSRange:
                     with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
                         output_raster.write(masked_data, 1)
 
-    def write_vector(self, output_filename: str, variables: Collection[str] = None,
-                     start_time: datetime.datetime = None,
-                     end_time: datetime.datetime = None):
+    def write_vector(self, output_filename: str, variables: Collection[str] = None, start_time: datetime = None, end_time: datetime = None):
         """
         Write average of surface velocity vector data for all hours in the given time interval to a single layer of the provided output file.
 
@@ -1283,16 +1236,13 @@ class WCOFSRange:
             variables = list(DATA_VARIABLES.keys())
 
         if start_time is None:
-            start_time = datetime.datetime.now()
+            start_time = datetime.now()
 
         variable_data_stack_averages = {}
 
         # concurrently populate dictionary with averaged data within given time interval for each variable
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            running_futures = {
-                concurrency_pool.submit(self.data_averages, variable, start_time, end_time): variable
-                for variable in variables
-            }
+            running_futures = {concurrency_pool.submit(self.data_averages, variable, start_time, end_time): variable for variable in variables}
 
             for completed_future in futures.as_completed(running_futures):
                 variable = running_futures[completed_future]
@@ -1300,18 +1250,14 @@ class WCOFSRange:
 
             del running_futures
 
-        logging.debug('parallel data aggregation took ' +
-                      f'{(datetime.datetime.now() - start_time).total_seconds(): .2f} seconds')
+        logging.debug('parallel data aggregation took ' + f'{(datetime.now() - start_time).total_seconds(): .2f} seconds')
 
-        model_time_strings = [model_time for model_time in
-                              next(iter(variable_data_stack_averages.values())).keys()]
+        model_time_strings = [model_time for model_time in next(iter(variable_data_stack_averages.values())).keys()]
 
         # define layer schema
         schema = {
-            'geometry': 'Point',
-            'properties': {
-                'lon': 'float',
-                'lat': 'float'
+            'geometry': 'Point', 'properties': {
+                'lon': 'float', 'lat': 'float'
             }
         }
 
@@ -1334,18 +1280,14 @@ class WCOFSRange:
                 rho_lat = self.data_coordinates['rho']['lat'][row, col]
 
                 for model_time_string in model_time_strings:
-                    data = [float(variable_data_stack_averages[variable][model_time_string][row, col]) for variable in
-                            variables]
+                    data = [float(variable_data_stack_averages[variable][model_time_string][row, col]) for variable in variables]
 
                     if not numpy.isnan(data).all():
                         record = {
-                            'id': layer_feature_indices[model_time_string],
-                            'geometry': {
-                                'type': 'Point',
-                                'coordinates': (rho_lon, rho_lat)
+                            'id': layer_feature_indices[model_time_string], 'geometry': {
+                                'type': 'Point', 'coordinates': (rho_lon, rho_lat)
                             }, 'properties': {
-                                'lon': float(rho_lon),
-                                'lat': float(rho_lat)
+                                'lon': float(rho_lon), 'lat': float(rho_lat)
                             }
                         }
 
@@ -1357,8 +1299,7 @@ class WCOFSRange:
         # write queued features to layer
         for layer_name, layer_records in layers.items():
             logging.info(f'Writing {output_filename}:{layer_name}')
-            with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=FIONA_CRS,
-                            layer=layer_name) as layer:
+            with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=OUTPUT_CRS, layer=layer_name) as layer:
                 layer.writerecords(layer_records)
 
     def to_xarray(self, variables: Collection[str] = None, mean: bool = True) -> xarray.Dataset:
@@ -1380,8 +1321,7 @@ class WCOFSRange:
                 grid = self.variable_grids[variable]
 
                 data = self.data_averages(variable)
-                data_stack = numpy.stack(
-                    [time_delta_data for time_delta, time_delta_data in sorted(data.items(), reverse=True)], axis=0)
+                data_stack = numpy.stack([time_delta_data for time_delta, time_delta_data in sorted(data.items(), reverse=True)], axis=0)
 
                 data_array = xarray.DataArray(data_stack, coords={
                     'time_delta': sorted(data.keys(), reverse=True),
@@ -1398,25 +1338,21 @@ class WCOFSRange:
                 grid = self.variable_grids[variable]
 
                 if self.source == 'avg':
-                    model_times = utilities.range_daily(utilities.round_to_day(self.start_time),
-                                                        utilities.round_to_day(self.end_time))
+                    model_times = utilities.range_daily(utilities.round_to_day(self.start_time), utilities.round_to_day(self.end_time))
                 else:
-                    model_times = utilities.range_hourly(utilities.round_to_hour(self.start_time),
-                                                         utilities.round_to_hour(self.end_time))
+                    model_times = utilities.range_hourly(utilities.round_to_hour(self.start_time), utilities.round_to_hour(self.end_time))
 
                 data = {}
                 time_deltas = None
 
                 for model_time in model_times:
                     model_time_data = self.data_stack(variable, model_time)
-                    data[model_time] = numpy.stack([time_delta_data for time_delta, time_delta_data in
-                                                    sorted(model_time_data.items(), reverse=True)], axis=0)
+                    data[model_time] = numpy.stack([time_delta_data for time_delta, time_delta_data in sorted(model_time_data.items(), reverse=True)], axis=0)
 
                     if time_deltas is None:
                         time_deltas = sorted(model_time_data.keys(), reverse=True)
 
-                data_array = xarray.concat([time_delta_data for time_delta, time_delta_data in sorted(data.items())],
-                                           'time')
+                data_array = xarray.concat([time_delta_data for time_delta, time_delta_data in sorted(data.items())], 'time')
 
                 # data_stack = numpy.stack([time_delta_data for time_delta, time_delta_data in sorted(data.items())], axis=0)
                 # data_array = xarray.DataArray(data_stack,
@@ -1450,8 +1386,7 @@ class WCOFSRange:
 
     def __repr__(self):
         used_params = [self.start_time.__repr__(), self.end_time.__repr__()]
-        optional_params = [self.source, self.time_deltas, self.x_size, self.y_size, self.grid_filename, self.source_url,
-                           self.wcofs_string]
+        optional_params = [self.source, self.time_deltas, self.x_size, self.y_size, self.grid_filename, self.source_url, self.wcofs_string]
 
         for param in optional_params:
             if param is not None:
@@ -1465,8 +1400,7 @@ class WCOFSRange:
         return f'{self.__class__.__name__}({str(", ".join(used_params))})'
 
 
-def interpolate_grid(input_lon: numpy.array, input_lat: numpy.array, input_data: numpy.array, output_lon: numpy.array,
-                     output_lat: numpy.array, method: str = 'nearest') -> numpy.array:
+def interpolate_grid(input_lon: numpy.array, input_lat: numpy.array, input_data: numpy.array, output_lon: numpy.array, output_lat: numpy.array, method: str = 'nearest') -> numpy.array:
     """
     Interpolate the given data onto a coordinate grid.
 
@@ -1491,8 +1425,7 @@ def interpolate_grid(input_lon: numpy.array, input_lat: numpy.array, input_data:
         output_lat = output_lat[:, None]
 
     # get grid interpolation
-    interpolated_grid = interpolate.griddata((input_lon, input_lat), input_data, (output_lon, output_lat),
-                                             method=method)
+    interpolated_grid = interpolate.griddata((input_lon, input_lat), input_data, (output_lon, output_lat), method=method)
 
     return interpolated_grid
 
@@ -1551,7 +1484,7 @@ def write_convex_hull(netcdf_dataset: xarray.Dataset, output_filename: str, grid
 
     schema = {'geometry': 'Polygon', 'properties': {'name': 'str'}}
 
-    with fiona.open(output_filename, 'w', 'GPKG', schema=schema, crs=FIONA_CRS, layer=layer_name) as vector_file:
+    with fiona.open(output_filename, 'w', 'GPKG', schema=schema, crs=OUTPUT_CRS, layer=layer_name) as vector_file:
         vector_file.write({'properties': {'name': layer_name}, 'geometry': shapely.geometry.mapping(polygon)})
 
 
@@ -1594,8 +1527,8 @@ def rotate_coordinates_from_wcofs(point: numpy.array, pole: numpy.array) -> tupl
 if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIRECTORY, r'output\test')
 
-    start_time = datetime.datetime(2018, 11, 8)
-    end_time = start_time + datetime.timedelta(days=1)
+    start_time = datetime(2018, 11, 8)
+    end_time = start_time + timedelta(days=1)
 
     wcofs_range = WCOFSRange(start_time, end_time, source='avg')
     wcofs_range.write_rasters(output_dir, variables=['sss', 'sst', 'ssu', 'ssv', 'zeta'])

@@ -22,8 +22,7 @@ from shapely.ops import transform
 import xarray
 
 WGS84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
-WEB_MERCATOR = pyproj.Proj(
-    '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs')
+WEB_MERCATOR = pyproj.Proj('+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs')
 
 GRAVITATIONAL_ACCELERATION = 9.80665  # meters per second squared
 SIDEREAL_ROTATION_PERIOD = datetime.timedelta(hours=23, minutes=56, seconds=4.1)
@@ -174,8 +173,8 @@ def get_masked_data(masked_constant: numpy.ma.core.MaskedConstant) -> object:
         return masked_constant
 
 
-def write_gpkg_subdataset(input_data: numpy.array, output_filename: str, layer_name: str, height: int, width: int, dtype: str,
-                          crs: rasterio.crs.CRS, transform: rasterio.Affine, nodata: float, overwrite: bool = False, **kwargs):
+def write_gpkg_subdataset(input_data: numpy.array, output_filename: str, layer_name: str, height: int, width: int, dtype: str, crs: rasterio.crs.CRS, transform: rasterio.Affine, nodata: float,
+                          overwrite: bool = False, **kwargs):
     """
     Write input array to a raster layer in a geopackage.
     If the layer exists in the given geopackage, the entire file must be overwritten to replace it.
@@ -195,9 +194,8 @@ def write_gpkg_subdataset(input_data: numpy.array, output_filename: str, layer_n
 
     with rasterio.Env(OGR_GPKG_FOREIGN_KEY_CHECK='NO'):
         try:
-            with rasterio.open(output_filename, 'w', driver='GPKG', height=height, width=width, count=1, dtype=dtype, crs=crs,
-                               transform=transform, nodata=nodata, raster_table=layer_name, raster_identifier=layer_name,
-                               raster_description=layer_name, append_subdataset='YES', **kwargs) as output_raster:
+            with rasterio.open(output_filename, 'w', driver='GPKG', height=height, width=width, count=1, dtype=dtype, crs=crs, transform=transform, nodata=nodata, raster_table=layer_name,
+                               raster_identifier=layer_name, raster_description=layer_name, append_subdataset='YES', **kwargs) as output_raster:
                 output_raster.write(input_data.astype(dtype), 1)
 
             print(f'Writing {output_filename}:{layer_name}')
@@ -209,9 +207,8 @@ def write_gpkg_subdataset(input_data: numpy.array, output_filename: str, layer_n
         print(f'Erasing {output_filename}')
 
     # if error with appending, erase entire observation and append as new
-    with rasterio.open(output_filename, 'w', driver='GPKG', height=height, width=width, count=1, dtype=dtype, crs=crs, transform=transform,
-                       nodata=nodata, raster_table=layer_name, raster_identifier=layer_name, raster_description=layer_name,
-                       **kwargs) as output_raster:
+    with rasterio.open(output_filename, 'w', driver='GPKG', height=height, width=width, count=1, dtype=dtype, crs=crs, transform=transform, nodata=nodata, raster_table=layer_name,
+                       raster_identifier=layer_name, raster_description=layer_name, **kwargs) as output_raster:
         output_raster.write(input_data.astype(dtype), 1)
 
 
@@ -280,8 +277,7 @@ class RotatedPoleCoordinateSystem:
         cosine_pole_latitude = numpy.cos(pole[1])
 
         # precalculate rotation transformation
-        rotated_longitude = numpy.arctan2(sine_longitude * cosine_latitude,
-                                          cosine_longitude * cosine_latitude * sine_pole_latitude - sine_latitude * cosine_pole_latitude)
+        rotated_longitude = numpy.arctan2(sine_longitude * cosine_latitude, cosine_longitude * cosine_latitude * sine_pole_latitude - sine_latitude * cosine_pole_latitude)
         rotated_latitude = numpy.arcsin(cosine_longitude * cosine_latitude * cosine_pole_latitude + sine_latitude * sine_pole_latitude)
 
         # convert radians to degrees
@@ -313,8 +309,7 @@ class RotatedPoleCoordinateSystem:
         # calculate rotation transformation
         longitude = pole[0] + numpy.arctan2(sine_rotated_longitude * cosine_rotated_latitude,
                                             cosine_rotated_longitude * cosine_rotated_latitude * sine_pole_latitude + sine_rotated_latitude * cosine_pole_latitude)
-        latitude = numpy.arcsin(
-            -cosine_rotated_longitude * cosine_rotated_latitude * cosine_pole_latitude + sine_rotated_latitude * sine_pole_latitude)
+        latitude = numpy.arcsin(-cosine_rotated_longitude * cosine_rotated_latitude * cosine_pole_latitude + sine_rotated_latitude * sine_pole_latitude)
 
         # convert radians to degrees
         return numpy.array((longitude * 180 / numpy.pi, latitude * 180 / numpy.pi))
@@ -344,8 +339,7 @@ class RotatedPoleCoordinateSystem:
 
                 discrepancies[lon_index, lat_index] = numpy.abs(numpy.diff(rotated_latitudes)).max()
 
-        discrepancies = xarray.DataArray(discrepancies, coords={'lon': starting_pole[0] + deltas, 'lat': starting_pole[1] + deltas},
-                                         dims=('lon', 'lat'))
+        discrepancies = xarray.DataArray(discrepancies, coords={'lon': starting_pole[0] + deltas, 'lat': starting_pole[1] + deltas}, dims=('lon', 'lat'))
 
         from matplotlib import pyplot
         discrepancies.plot.imshow()
@@ -361,8 +355,7 @@ def xarray_to_geopackage(input_path: str, output_path: str, epsg: int = 4326):
     with xarray.open_dataset(input_path) as input_dataset:
         starting_index = 0
         for contour_index in range(len(input_dataset['time'])):
-            ending_index = int(input_dataset['EndPoint'][contour_index].values.item()) if contour_index <= len(
-                input_dataset['EndPoint']) else -1
+            ending_index = int(input_dataset['EndPoint'][contour_index].values.item()) if contour_index <= len(input_dataset['EndPoint']) else -1
 
             contour_datetime = datetime64_to_time(input_dataset['time'][contour_index])
             longitude = input_dataset['longitude'][starting_index:ending_index]
@@ -378,11 +371,8 @@ def xarray_to_geopackage(input_path: str, output_path: str, epsg: int = 4326):
     schema['properties'].update({'area': 'float', 'perimeter': 'float'})
 
     records = [{
-        'geometry': shapely.geometry.mapping(polygon),
-        'properties': {
-            'datetime': contour_time,
-            'area': transform(partial(pyproj.transform, pyproj.Proj(init=f'epsg:{epsg}'), pyproj.Proj(init='epsg:3857')), polygon).area,
-            'perimeter': polygon.length
+        'geometry': shapely.geometry.mapping(polygon), 'properties': {
+            'datetime': contour_time, 'area': transform(partial(pyproj.transform, pyproj.Proj(init=f'epsg:{epsg}'), pyproj.Proj(init='epsg:3857')), polygon).area, 'perimeter': polygon.length
         }
     } for contour_time, polygon in polygons.items()]
 
@@ -404,8 +394,8 @@ def geodetic_radius(latitude: float) -> float:
     sine_latitude = numpy.sin(latitude * numpy.pi / 180) * 180 / numpy.pi
     cosine_latitude = numpy.cos(latitude * numpy.pi / 180) * 180 / numpy.pi
 
-    return numpy.sqrt(((semimajor_radius ** 2 * cosine_latitude) ** 2 + (semiminor_radius ** 2 + sine_latitude) ** 2) / (
-            (semimajor_radius * cosine_latitude) ** 2 + (semiminor_radius + sine_latitude) ** 2))
+    return numpy.sqrt(
+        ((semimajor_radius ** 2 * cosine_latitude) ** 2 + (semiminor_radius ** 2 + sine_latitude) ** 2) / ((semimajor_radius * cosine_latitude) ** 2 + (semiminor_radius + sine_latitude) ** 2))
 
 
 def rossby_deformation_radius(latitude: float) -> float:
@@ -449,8 +439,7 @@ if __name__ == '__main__':
     # xarray_to_geopackage(#     input_path=r"C:\Users\zachary.burnett\Downloads\lagr_contour_Exp24_r20Clon-125Clat40dr500m_20100601-20100604.nc",#     output_path=r"C:\Users\zachary.burnett\Downloads\alex_contour.gpkg")
 
     geopackage_path = r"C:\Data\develop\output\test\contours.gpkg"
-    layer_names = ['wcofs_qck_20160925T010000_20160929T010000_1h', 'wcofs_qck_20160925T010000_20160929T010000_24h',
-                   'wcofs_qck_geostrophic_20160925T010000_20160929T010000_1h']
+    layer_names = ['wcofs_qck_20160925T010000_20160929T010000_1h', 'wcofs_qck_20160925T010000_20160929T010000_24h', 'wcofs_qck_geostrophic_20160925T010000_20160929T010000_1h']
 
     for layer_name in layer_names:
         records = []
@@ -467,8 +456,7 @@ if __name__ == '__main__':
         # add value fields to schema
         schema['properties'].update({'area': 'float', 'perimeter': 'float'})
 
-        with fiona.open(geopackage_path, 'w', 'GPKG', schema=schema, crs=fiona.crs.from_epsg(3857),
-                        layer=f'{layer_name}_copy') as output_file:
+        with fiona.open(geopackage_path, 'w', 'GPKG', schema=schema, crs=fiona.crs.from_epsg(3857), layer=f'{layer_name}_copy') as output_file:
             output_file.writerecords(records)
 
     print('done')

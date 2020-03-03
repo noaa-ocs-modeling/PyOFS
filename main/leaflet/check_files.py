@@ -6,7 +6,8 @@ Created on Apr 10, 2019
 
 @author: zachary.burnett
 """
-import datetime
+
+from datetime import datetime, timedelta
 import os
 import sys
 
@@ -47,7 +48,7 @@ def check_files(input_dir: str) -> dict:
                 else:
                     day_delta = (int(time_delta[1:]) - 1) * -1
 
-                date = f'{datetime.datetime.strptime(day, "%Y%m%d") + datetime.timedelta(days=day_delta):%Y%m%d}'
+                date = f'{datetime.strptime(day, "%Y%m%d") + timedelta(days=day_delta):%Y%m%d}'
 
                 for variable in variables:
                     if variable in ['dir', 'mag']:

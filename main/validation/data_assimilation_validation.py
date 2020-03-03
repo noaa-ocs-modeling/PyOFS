@@ -1,5 +1,5 @@
 from concurrent import futures
-import datetime
+from datetime import datetime, timedelta
 import os
 import sys
 
@@ -18,7 +18,7 @@ WORKSPACE_DIR = os.path.join(DATA_DIRECTORY, 'validation')
 UTC_OFFSET = 8
 
 
-def to_netcdf(start_time: datetime.datetime, end_time: datetime.datetime, output_dir: str):
+def to_netcdf(start_time: datetime, end_time: datetime, output_dir: str):
     """
     Writes HFR, VIIRS, and WCOFS data to NetCDF files at the given filenames.
 
@@ -46,25 +46,23 @@ def to_netcdf(start_time: datetime.datetime, end_time: datetime.datetime, output
 
     # write VIIRS NetCDF file if it does not exist
     if not os.path.exists(nc_filenames['viirs']):
-        utc_start_time = start_time + datetime.timedelta(hours=UTC_OFFSET)
-        utc_end_time = end_time + datetime.timedelta(hours=UTC_OFFSET)
+        utc_start_time = start_time + timedelta(hours=UTC_OFFSET)
+        utc_end_time = end_time + timedelta(hours=UTC_OFFSET)
 
         viirs_range = viirs.VIIRSRange(utc_start_time, utc_end_time)
         viirs_range.to_netcdf(nc_filenames['viirs'], variables=['sst'])
 
     # write WCOFS NetCDF files if they do not exist
-    if not os.path.exists(nc_filenames['wcofs_u_noDA']) or not os.path.exists(nc_filenames['wcofs_v_noDA']) or not os.path.exists(
-            nc_filenames['wcofs_sst_noDA']):
-        wcofs_range_noDA = wcofs.WCOFSRange(start_time, end_time, source='avg', grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME,
-                                            source_url=os.path.join(DATA_DIRECTORY, 'input', 'wcofs', 'avg'), wcofs_string='wcofs4')
+    if not os.path.exists(nc_filenames['wcofs_u_noDA']) or not os.path.exists(nc_filenames['wcofs_v_noDA']) or not os.path.exists(nc_filenames['wcofs_sst_noDA']):
+        wcofs_range_noDA = wcofs.WCOFSRange(start_time, end_time, source='avg', grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME, source_url=os.path.join(DATA_DIRECTORY, 'input', 'wcofs', 'avg'),
+                                            wcofs_string='wcofs4')
 
         # TODO find a way to combine WCOFS variables without raising MemoryError
         wcofs_range_noDA.to_netcdf(nc_filenames['wcofs_sst_noDA'], variables=['temp'])
         wcofs_range_noDA.to_netcdf(nc_filenames['wcofs_u_noDA'], variables=['u'])
         wcofs_range_noDA.to_netcdf(nc_filenames['wcofs_v_noDA'], variables=['v'])
 
-    if not os.path.exists(nc_filenames['wcofs_sst_DA']) or not os.path.exists(nc_filenames['wcofs_u_DA']) or not os.path.exists(
-            nc_filenames['wcofs_v_DA']):
+    if not os.path.exists(nc_filenames['wcofs_sst_DA']) or not os.path.exists(nc_filenames['wcofs_u_DA']) or not os.path.exists(nc_filenames['wcofs_v_DA']):
         wcofs_range = wcofs.WCOFSRange(start_time, end_time, source='avg')
 
         # TODO find a way to combine WCOFS variables without raising MemoryError
@@ -107,22 +105,15 @@ def interpolate_grids(datasets: dict) -> dict:
 
     data = {
         'noDA_model': {
-            'sst': {},
-            'u': {},
-            'v': {}
-        },
-        'DA_model': {
-            'sst': {},
-            'u': {},
-            'v': {}
+            'sst': {}, 'u': {}, 'v': {}
+        }, 'DA_model': {
+            'sst': {}, 'u': {}, 'v': {}
         }
     }
 
     # get dimensions of WCOFS observation (time delta, eta, rho)
     wcofs_dimensions = {
-        'sst': list(datasets['wcofs_sst_noDA']['temp'].coords),
-        'u': list(datasets['wcofs_u_noDA']['u'].coords),
-        'v': list(datasets['wcofs_v_DA']['v'].coords)
+        'sst': list(datasets['wcofs_sst_noDA']['temp'].coords), 'u': list(datasets['wcofs_u_noDA']['u'].coords), 'v': list(datasets['wcofs_v_DA']['v'].coords)
     }
 
     with futures.ThreadPoolExecutor() as concurrency_pool:
@@ -130,40 +121,27 @@ def interpolate_grids(datasets: dict) -> dict:
         u_futures = {'noDA_model': {}, 'DA_model': {}}
         v_futures = {'noDA_model': {}, 'DA_model': {}}
 
-        for time_delta_index, time_delta in dict(zip(range(len(datasets['wcofs_sst_noDA'][wcofs_dimensions['sst'][0]].values)),
-                                                     sorted(datasets['wcofs_sst_noDA'][wcofs_dimensions['sst'][0]].values,
-                                                            reverse=True))).items():
+        for time_delta_index, time_delta in dict(
+                zip(range(len(datasets['wcofs_sst_noDA'][wcofs_dimensions['sst'][0]].values)), sorted(datasets['wcofs_sst_noDA'][wcofs_dimensions['sst'][0]].values, reverse=True))).items():
             try:
 
-                sst_noDA_future = concurrency_pool.submit(wcofs.interpolate_grid, datasets['wcofs_sst_noDA']['lon'].values,
-                                                          datasets['wcofs_sst_noDA']['lat'].values,
-                                                          datasets['wcofs_sst_noDA']['temp'][time_delta_index, :, :].values,
-                                                          datasets['viirs']['lon'].values, datasets['viirs']['lat'].values, 'linear')
+                sst_noDA_future = concurrency_pool.submit(wcofs.interpolate_grid, datasets['wcofs_sst_noDA']['lon'].values, datasets['wcofs_sst_noDA']['lat'].values,
+                                                          datasets['wcofs_sst_noDA']['temp'][time_delta_index, :, :].values, datasets['viirs']['lon'].values, datasets['viirs']['lat'].values, 'linear')
 
-                sst_DA_future = concurrency_pool.submit(wcofs.interpolate_grid, datasets['wcofs_sst_DA']['lon'].values,
-                                                        datasets['wcofs_sst_DA']['lat'].values,
-                                                        datasets['wcofs_sst_DA']['temp'][time_delta_index, :, :].values,
-                                                        datasets['viirs']['lon'].values, datasets['viirs']['lat'].values, 'linear')
+                sst_DA_future = concurrency_pool.submit(wcofs.interpolate_grid, datasets['wcofs_sst_DA']['lon'].values, datasets['wcofs_sst_DA']['lat'].values,
+                                                        datasets['wcofs_sst_DA']['temp'][time_delta_index, :, :].values, datasets['viirs']['lon'].values, datasets['viirs']['lat'].values, 'linear')
 
-                u_noDA_future = concurrency_pool.submit(wcofs.interpolate_grid, datasets['wcofs_u_noDA']['lon'].values,
-                                                        datasets['wcofs_u_noDA']['lat'].values,
-                                                        datasets['wcofs_u_noDA']['u'][time_delta_index, :, :].values,
-                                                        datasets['hfr']['lon'].values, datasets['hfr']['lat'].values, 'linear')
+                u_noDA_future = concurrency_pool.submit(wcofs.interpolate_grid, datasets['wcofs_u_noDA']['lon'].values, datasets['wcofs_u_noDA']['lat'].values,
+                                                        datasets['wcofs_u_noDA']['u'][time_delta_index, :, :].values, datasets['hfr']['lon'].values, datasets['hfr']['lat'].values, 'linear')
 
-                u_DA_future = concurrency_pool.submit(wcofs.interpolate_grid, datasets['wcofs_u_DA']['lon'].values,
-                                                      datasets['wcofs_u_DA']['lat'].values,
-                                                      datasets['wcofs_u_DA']['u'][time_delta_index, :, :].values,
-                                                      datasets['hfr']['lon'].values, datasets['hfr']['lat'].values, 'linear')
+                u_DA_future = concurrency_pool.submit(wcofs.interpolate_grid, datasets['wcofs_u_DA']['lon'].values, datasets['wcofs_u_DA']['lat'].values,
+                                                      datasets['wcofs_u_DA']['u'][time_delta_index, :, :].values, datasets['hfr']['lon'].values, datasets['hfr']['lat'].values, 'linear')
 
-                v_noDA_future = concurrency_pool.submit(wcofs.interpolate_grid, datasets['wcofs_v_noDA']['lon'].values,
-                                                        datasets['wcofs_v_noDA']['lat'].values,
-                                                        datasets['wcofs_v_noDA']['v'][time_delta_index, :, :].values,
-                                                        datasets['hfr']['lon'].values, datasets['hfr']['lat'].values, 'linear')
+                v_noDA_future = concurrency_pool.submit(wcofs.interpolate_grid, datasets['wcofs_v_noDA']['lon'].values, datasets['wcofs_v_noDA']['lat'].values,
+                                                        datasets['wcofs_v_noDA']['v'][time_delta_index, :, :].values, datasets['hfr']['lon'].values, datasets['hfr']['lat'].values, 'linear')
 
-                v_DA_future = concurrency_pool.submit(wcofs.interpolate_grid, datasets['wcofs_v_DA']['lon'].values,
-                                                      datasets['wcofs_v_DA']['lat'].values,
-                                                      datasets['wcofs_v_DA']['v'][time_delta_index, :, :].values,
-                                                      datasets['hfr']['lon'].values, datasets['hfr']['lat'].values, 'linear')
+                v_DA_future = concurrency_pool.submit(wcofs.interpolate_grid, datasets['wcofs_v_DA']['lon'].values, datasets['wcofs_v_DA']['lat'].values,
+                                                      datasets['wcofs_v_DA']['v'][time_delta_index, :, :].values, datasets['hfr']['lon'].values, datasets['hfr']['lat'].values, 'linear')
 
                 sst_futures['noDA_model'][sst_noDA_future] = time_delta
                 sst_futures['DA_model'][sst_DA_future] = time_delta
@@ -238,8 +216,8 @@ def r_squ(x: numpy.array, y: numpy.array) -> float:
 
 if __name__ == '__main__':
     # setup start and ending times
-    start_time = datetime.datetime(2018, 11, 11)
-    end_time = start_time + datetime.timedelta(days=1)
+    start_time = datetime(2018, 11, 11)
+    end_time = start_time + timedelta(days=1)
 
     day_dir = os.path.join(WORKSPACE_DIR, f'{start_time:%Y%m%d}')
     if not os.path.exists(day_dir):
@@ -252,9 +230,7 @@ if __name__ == '__main__':
     # interpolate nearest-neighbor observational data onto WCOFS grid
     data = {
         'obser': {
-            'sst': datasets['viirs']['sst'].values,
-            'u': datasets['hfr']['u'].values,
-            'v': datasets['hfr']['v'].values
+            'sst': datasets['viirs']['sst'].values, 'u': datasets['hfr']['u'].values, 'v': datasets['hfr']['v'].values
         }
     }
 
@@ -269,25 +245,19 @@ if __name__ == '__main__':
         metrics[time_delta] = {
             'rmse': {
                 'sst': {
-                    'noDA': rmse(data['obser']['sst'], data['noDA_model']['sst'][time_delta]),
-                    'DA': rmse(data['obser']['sst'], data['DA_model']['sst'][time_delta])
+                    'noDA': rmse(data['obser']['sst'], data['noDA_model']['sst'][time_delta]), 'DA': rmse(data['obser']['sst'], data['DA_model']['sst'][time_delta])
                 }, 'u': {
-                    'noDA': rmse(data['obser']['u'], data['noDA_model']['u'][time_delta]),
-                    'DA': rmse(data['obser']['u'], data['DA_model']['u'][time_delta])
+                    'noDA': rmse(data['obser']['u'], data['noDA_model']['u'][time_delta]), 'DA': rmse(data['obser']['u'], data['DA_model']['u'][time_delta])
                 }, 'v': {
-                    'noDA': rmse(data['obser']['v'], data['noDA_model']['v'][time_delta]),
-                    'DA': rmse(data['obser']['v'], data['DA_model']['v'][time_delta])
+                    'noDA': rmse(data['obser']['v'], data['noDA_model']['v'][time_delta]), 'DA': rmse(data['obser']['v'], data['DA_model']['v'][time_delta])
                 }
             }, 'r_squ': {
                 'sst': {
-                    'noDA': r_squ(data['obser']['sst'], data['noDA_model']['sst'][time_delta]),
-                    'DA': r_squ(data['obser']['sst'], data['DA_model']['sst'][time_delta])
+                    'noDA': r_squ(data['obser']['sst'], data['noDA_model']['sst'][time_delta]), 'DA': r_squ(data['obser']['sst'], data['DA_model']['sst'][time_delta])
                 }, 'u': {
-                    'noDA': r_squ(data['obser']['u'], data['noDA_model']['u'][time_delta]),
-                    'DA': r_squ(data['obser']['u'], data['DA_model']['u'][time_delta])
+                    'noDA': r_squ(data['obser']['u'], data['noDA_model']['u'][time_delta]), 'DA': r_squ(data['obser']['u'], data['DA_model']['u'][time_delta])
                 }, 'v': {
-                    'noDA': r_squ(data['obser']['v'], data['noDA_model']['v'][time_delta]),
-                    'DA': r_squ(data['obser']['v'], data['DA_model']['v'][time_delta])
+                    'noDA': r_squ(data['obser']['v'], data['noDA_model']['v'][time_delta]), 'DA': r_squ(data['obser']['v'], data['DA_model']['v'][time_delta])
                 }
             }
         }

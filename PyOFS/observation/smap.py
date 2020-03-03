@@ -8,13 +8,15 @@ Created on Feb 6, 2019
 """
 
 from collections import OrderedDict
-import datetime
+from datetime import datetime
 import logging
 import os
 from typing import Collection
 
+import fiona.crs
 import numpy
 import rasterio
+from rasterio.crs import CRS
 import rasterio.features
 import shapely
 import shapely.geometry
@@ -25,7 +27,7 @@ from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, utilities
 
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIRECTORY, r"reference\wcofs.gpkg:study_area")
 
-RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
+OUTPUT_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
 SOURCE_URLS = OrderedDict({
     'OpenDAP': OrderedDict({
@@ -71,23 +73,19 @@ class SMAPDataset:
             self.data_extent = shapely.geometry.Polygon([(lon_min, lat_max), (lon_max, lat_max), (lon_max, lat_min), (lon_min, lat_min)])
         else:
             # geospatial bounds cross the antimeridian, so we create a multipolygon
-            self.data_extent = shapely.geometry.MultiPolygon(
-                [shapely.geometry.Polygon([(lon_min, lat_max), (180, lat_max), (180, lat_min), (lon_min, lat_min)]),
-                 shapely.geometry.Polygon([(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
+            self.data_extent = shapely.geometry.MultiPolygon([shapely.geometry.Polygon([(lon_min, lat_max), (180, lat_max), (180, lat_min), (lon_min, lat_min)]),
+                                                              shapely.geometry.Polygon([(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
 
         lon_pixel_size = numpy.mean(numpy.diff(self.dataset['longitude'].values))
         lat_pixel_size = numpy.mean(numpy.diff(self.dataset['latitude'].values))
 
         if SMAPDataset.study_area_extent is None:
             # get first record in layer
-            SMAPDataset.study_area_extent = shapely.geometry.MultiPolygon([shapely.geometry.Polygon(polygon[0]) for polygon in
-                                                                           utilities.get_first_record(self.study_area_polygon_filename)[
-                                                                               'geometry']['coordinates']])
+            SMAPDataset.study_area_extent = shapely.geometry.MultiPolygon(
+                [shapely.geometry.Polygon(polygon[0]) for polygon in utilities.get_first_record(self.study_area_polygon_filename)['geometry']['coordinates']])
 
             SMAPDataset.study_area_bounds = SMAPDataset.study_area_extent.bounds
-            SMAPDataset.study_area_transform = rasterio.transform.from_origin(SMAPDataset.study_area_bounds[0],
-                                                                              SMAPDataset.study_area_bounds[3], lon_pixel_size,
-                                                                              lat_pixel_size)
+            SMAPDataset.study_area_transform = rasterio.transform.from_origin(SMAPDataset.study_area_bounds[0], SMAPDataset.study_area_bounds[3], lon_pixel_size, lat_pixel_size)
 
         if SMAPDataset.study_area_bounds is not None:
             self.dataset = self.dataset.sel(longitude=slice(SMAPDataset.study_area_bounds[0], SMAPDataset.study_area_bounds[2]),
@@ -95,8 +93,7 @@ class SMAPDataset:
 
         if SMAPDataset.study_area_coordinates is None:
             SMAPDataset.study_area_coordinates = {
-                'lon': self.dataset['longitude'],
-                'lat': self.dataset['latitude']
+                'lon': self.dataset['longitude'], 'lat': self.dataset['latitude']
             }
 
     def bounds(self) -> tuple:
@@ -117,7 +114,7 @@ class SMAPDataset:
 
         return self.dataset.geospatial_lon_resolution, self.dataset.geospatial_lat_resolution
 
-    def data(self, data_time: datetime.datetime, variable: str = 'sss') -> numpy.array:
+    def data(self, data_time: datetime, variable: str = 'sss') -> numpy.array:
         """
         Retrieve SMOS SSS data.
 
@@ -133,7 +130,7 @@ class SMAPDataset:
 
         return output_data
 
-    def _sss(self, data_time: datetime.datetime) -> numpy.array:
+    def _sss(self, data_time: datetime) -> numpy.array:
         """
         Retrieve SMOS SSS data.
 
@@ -142,15 +139,15 @@ class SMAPDataset:
         """
 
         # SMOS has data on month-long resolution
-        data_time = datetime.datetime(data_time.year, data_time.month, 16)
+        data_time = datetime(data_time.year, data_time.month, 16)
 
         if numpy.datetime64(data_time) in self.dataset['times'].values:
             return self.dataset['smap_sss'].sel(times=data_time).values
         else:
             raise utilities.NoDataError(f'No data exists for {data_time:%Y%m%dT%H%M%S}.')
 
-    def write_rasters(self, output_dir: str, data_time: datetime.datetime, variables: Collection[str] = tuple(['sss']),
-                      filename_prefix: str = 'smos', fill_value: float = LEAFLET_NODATA_VALUE, driver: str = 'GTiff'):
+    def write_rasters(self, output_dir: str, data_time: datetime, variables: Collection[str] = tuple(['sss']), filename_prefix: str = 'smos', fill_value: float = LEAFLET_NODATA_VALUE,
+                      driver: str = 'GTiff'):
         """
         Write SMOS rasters to file using data from given variables.
 
@@ -174,7 +171,7 @@ class SMAPDataset:
                     'width': input_data.shape[1],
                     'count': 1,
                     'dtype': rasterio.float32,
-                    'crs': RASTERIO_CRS,
+                    'crs': CRS.from_dict(OUTPUT_CRS),
                     'transform': SMAPDataset.study_area_transform,
                     'nodata': fill_value
                 }
@@ -217,6 +214,6 @@ if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIRECTORY, r'output\test')
 
     smap_dataset = SMAPDataset()
-    smap_dataset.write_rasters(output_dir, datetime.datetime(2018, 12, 1))
+    smap_dataset.write_rasters(output_dir, datetime(2018, 12, 1))
 
     print('done')

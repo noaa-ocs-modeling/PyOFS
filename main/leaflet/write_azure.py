@@ -10,8 +10,8 @@ def upload_to_azure(local_path: str, remote_path: str, credentials: str, overwri
     azcopy_dir, azcopy_filename = os.path.split(AZCOPY_PATH)
     os.chdir(azcopy_dir)
     kwargs_string = ' '.join(f'--{key}={value}' for key, value in kwargs.items())
-    os.system(f'{azcopy_filename} copy "{local_path}" "{remote_path}?{credentials}" ' +
-              f'--overwrite={str(overwrite).lower()} --recursive --from-to=LocalBlob --blob-type=BlockBlob --put-md5 {kwargs_string}')
+    os.system(
+        f'{azcopy_filename} copy "{local_path}" "{remote_path}?{credentials}" ' + f'--overwrite={str(overwrite).lower()} --recursive --from-to=LocalBlob --blob-type=BlockBlob --put-md5 {kwargs_string}')
 
 
 def sync_with_azure(local_path: str, remote_path: str, credentials: str, **kwargs):

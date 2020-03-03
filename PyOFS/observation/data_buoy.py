@@ -8,7 +8,7 @@ Created on Aug 1, 2018
 """
 
 from concurrent import futures
-import datetime
+from datetime import datetime
 import logging
 import os
 import re
@@ -16,7 +16,6 @@ import re
 import fiona
 import fiona.crs
 import numpy
-import rasterio
 import requests
 import shapely
 import shapely.geometry
@@ -24,11 +23,9 @@ import xarray
 
 from PyOFS import CRS_EPSG, DATA_DIRECTORY, utilities
 
-MEASUREMENT_VARIABLES = ['water_temperature', 'conductivity', 'salinity', 'o2_saturation', 'dissolved_oxygen', 'chlorophyll_concentration',
-                         'turbidity', 'water_ph', 'water_eh']
+MEASUREMENT_VARIABLES = ['water_temperature', 'conductivity', 'salinity', 'o2_saturation', 'dissolved_oxygen', 'chlorophyll_concentration', 'turbidity', 'water_ph', 'water_eh']
 
-RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
-FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
+OUTPUT_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIRECTORY, r"reference\wcofs.gpkg:study_area")
 WCOFS_NDBC_STATIONS_FILENAME = os.path.join(DATA_DIRECTORY, r"reference\ndbc_stations.txt")
@@ -69,7 +66,7 @@ class DataBuoyDataset:
 
         return shapely.geometry.point.Point(self.longitude, self.latitude)
 
-    def data(self, variable: str, start_time: datetime.datetime, end_time: datetime.datetime) -> dict:
+    def data(self, variable: str, start_time: datetime, end_time: datetime) -> dict:
         """
         Collects data from given station in the given time interval.
 
@@ -112,8 +109,7 @@ class DataBuoyRange:
 
         # concurrently populate dictionary with datasets for each station
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            running_futures = {concurrency_pool.submit(DataBuoyDataset, station_name): station_name for station_name in
-                               self.station_names}
+            running_futures = {concurrency_pool.submit(DataBuoyDataset, station_name): station_name for station_name in self.station_names}
 
             for completed_future in futures.as_completed(running_futures):
                 station_name = running_futures[completed_future]
@@ -127,7 +123,7 @@ class DataBuoyRange:
         if len(self.stations) == 0:
             raise utilities.NoDataError(f'No NDBC datasets found in {self.stations}')
 
-    def data(self, variables: [str], start_time: datetime.datetime, end_time: datetime.datetime) -> {str: {str: xarray.DataArray}}:
+    def data(self, variables: [str], start_time: datetime, end_time: datetime) -> {str: {str: xarray.DataArray}}:
         """
         Get data of given variables within given time interval.
 
@@ -147,7 +143,7 @@ class DataBuoyRange:
 
         return output_data
 
-    def data_average(self, variables: [str], start_time: datetime.datetime, end_time: datetime.datetime) -> {str: {str: float}}:
+    def data_average(self, variables: [str], start_time: datetime, end_time: datetime) -> {str: {str: float}}:
         """
         Get data of given variables within given time interval.
 
@@ -167,7 +163,7 @@ class DataBuoyRange:
 
         return output_data
 
-    def write_vector(self, output_filename: str, start_time: datetime.datetime, end_time: datetime.datetime, variables: [str] = None):
+    def write_vector(self, output_filename: str, start_time: datetime, end_time: datetime, variables: [str] = None):
         """
         Write average of buoy data for all hours in the given time interval to a single layer of the provided output file.
 
@@ -206,8 +202,7 @@ class DataBuoyRange:
         #                 station_data[station_name][station_running_futures[completed_future]] = result
 
         schema = {
-            'geometry': 'Point',
-            'properties': {
+            'geometry': 'Point', 'properties': {
                 'name': 'str',
                 'longitude': 'float',
                 'latitude': 'float',
@@ -232,10 +227,8 @@ class DataBuoyRange:
 
             record = {
                 'geometry': {
-                    'type': 'Point',
-                    'coordinates': (station.longitude, station.latitude)
-                },
-                'properties': {
+                    'type': 'Point', 'coordinates': (station.longitude, station.latitude)
+                }, 'properties': {
                     'name': station_name,
                     'longitude': station.longitude,
                     'latitude': station.latitude,
@@ -254,7 +247,7 @@ class DataBuoyRange:
             layer_records.append(record)
 
         logging.info(f'Writing to {output_filename}{":" + layer_name if layer_name is not None else ""}')
-        with fiona.open(output_filename, 'w', 'GPKG', schema, FIONA_CRS, layer=layer_name) as output_layer:
+        with fiona.open(output_filename, 'w', 'GPKG', schema, OUTPUT_CRS, layer=layer_name) as output_layer:
             output_layer.writerecords(layer_records)
 
     def __repr__(self):
@@ -297,8 +290,8 @@ if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIRECTORY, r'output\test')
     wcofs_stations = list(numpy.genfromtxt(WCOFS_NDBC_STATIONS_FILENAME, dtype='str'))
 
-    start_time = datetime.datetime(2018, 7, 14)
-    end_time = datetime.datetime.now()
+    start_time = datetime(2018, 7, 14)
+    end_time = datetime.now()
     date_interval_string = f'{start_time:%m%d%H}_{end_time:%m%d%H}'
 
     ndbc_range = DataBuoyRange(wcofs_stations)
