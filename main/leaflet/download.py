@@ -112,7 +112,7 @@ if __name__ == '__main__':
                             logger.info(f'Copied "{input_path}" to "{output_path}" ' + f'({(datetime.now() - current_start_time).total_seconds():.2f}s, {os.stat(output_path).st_size / 1000} KB)')
                             num_downloads += 1
                         except Exception as error:
-                            logger.info(f'error with "{input_path}": {error.__class__.__name__} - {error}')
+                            logger.exception(f'input path: {input_path}, {output_path}: {output_path}')
                 else:
                     # only write 'file exists' message on the first run of the day
                     logger.log(logging.DEBUG if log_exists else logging.INFO, 'Destination file already exists: ' + f'"{output_path}", {os.stat(output_path).st_size / 1000} KB')

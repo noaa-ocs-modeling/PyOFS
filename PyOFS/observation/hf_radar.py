@@ -15,7 +15,6 @@ import fiona
 import fiona.crs
 import numpy
 import rasterio
-from rasterio.crs import CRS
 import scipy.interpolate
 import xarray
 
@@ -391,7 +390,7 @@ class HFRadarRange:
                 'width': raster_data.shape[1],
                 'count': 1,
                 'dtype': raster_data.dtype,
-                'crs': CRS.from_dict(OUTPUT_CRS),
+                'crs': OUTPUT_CRS,
                 'transform': self.grid_transform,
                 'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
             }

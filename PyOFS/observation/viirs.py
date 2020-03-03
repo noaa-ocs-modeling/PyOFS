@@ -165,8 +165,8 @@ class VIIRSDataset:
                             with open(output_filename, 'wb') as output_file:
                                 ftp_connection.retrbinary(f'RETR {ftp_path}', output_file.write)
                                 self.dataset = xarray.open_dataset(output_filename)
-                        except Exception as error:
-                            raise error
+                        except:
+                            raise
                         finally:
                             os.remove(output_filename)
 
@@ -586,7 +586,7 @@ class VIIRSRange:
                     'height': raster_data.shape[0],
                     'width': raster_data.shape[1],
                     'count': 1,
-                    'crs': CRS.from_dict(OUTPUT_CRS),
+                    'crs': OUTPUT_CRS,
                     'dtype': raster_data.dtype,
                     'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item(),
                     'transform': VIIRSRange.study_area_transform

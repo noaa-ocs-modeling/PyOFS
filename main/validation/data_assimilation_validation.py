@@ -151,8 +151,8 @@ def interpolate_grids(datasets: dict) -> dict:
                 u_futures['DA_model'][u_DA_future] = time_delta
                 v_futures['noDA_model'][v_noDA_future] = time_delta
                 v_futures['DA_model'][v_DA_future] = time_delta
-            except IndexError:
-                LOGGER.exception(f'time delta: {time_delta}')
+            except IndexError as error:
+                LOGGER.warning(f'{error.__class__.__name__}: {error}')
                 continue
 
         for completed_future in futures.as_completed(sst_futures['noDA_model']):

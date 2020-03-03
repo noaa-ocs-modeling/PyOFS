@@ -253,7 +253,6 @@ class WCOFSDataset:
                         south = numpy.min(lat)
 
                         WCOFSDataset.grid_bounds[grid_name] = (west, north, east, south)
-
         else:
             raise utilities.NoDataError(f'No WCOFS datasets found for {self.model_time} at the given time deltas ({self.time_deltas}).')
 
