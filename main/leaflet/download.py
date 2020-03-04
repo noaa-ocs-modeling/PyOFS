@@ -39,7 +39,8 @@ if __name__ == '__main__':
     mod_dir = os.path.join(wcofs_dir, 'mod')
     # experimental_dir = os.path.join(wcofs_dir, 'exp', f'{datetime.now():%Y%m}')
 
-    month_dir = os.path.join(avg_dir, f'{datetime.now():%Y%m}')
+    month_string = f'{datetime.now():%Y%m}'
+    month_dir = os.path.join(avg_dir, month_string)
 
     # create folders if they do not exist
     for directory in [OUTPUT_DIR, LOG_DIR, wcofs_dir, rtofs_dir, avg_dir, fwd_dir, obs_dir, mod_dir, month_dir]:  # experimental_dir]:
@@ -77,8 +78,10 @@ if __name__ == '__main__':
                     output_path = os.path.join(obs_dir, filename)
                 elif 'mod' in filename:
                     output_path = os.path.join(mod_dir, filename)
-                else:
+                elif month_string in filename:
                     output_path = os.path.join(month_dir, filename)
+                else:
+                    output_path = os.path.join(avg_dir, filename)
             else:
                 output_path = os.path.join(OUTPUT_DIR, filename)
 
