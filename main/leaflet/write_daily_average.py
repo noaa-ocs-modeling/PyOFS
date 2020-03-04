@@ -324,12 +324,12 @@ def write_daily_average(output_dir: str, output_date: Union[datetime, date, int,
     LOGGER.info('Processing RTOFS...')  # RTOFS forecast is uploaded at 1700 UTC
     write_rtofs(output_dir, output_date, day_deltas)
     LOGGER.info('Processing WCOFS DA...')
-    write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'))
+    write_wcofs(output_dir, output_date, day_deltas)
     # LOGGER.info('Processing WCOFS experimental DA...')
     # write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/option'),
     #             use_defaults=False, suffix='exp')
     LOGGER.info('Processing WCOFS noDA...')
-    write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/avg'), data_assimilation=False)
+    write_wcofs(output_dir, output_date, day_deltas, data_assimilation=False)
     LOGGER.info(f'Wrote models to {output_dir}')
 
 

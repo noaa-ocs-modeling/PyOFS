@@ -54,7 +54,7 @@ def create_logger(name: str, log_filename: str = None, file_level: int = logging
     logger.setLevel(logging.DEBUG)
 
     # remove handlers
-    for handler in logger.handlers:
+    for handler in [handler for handler in logger.handlers]:
         logger.removeHandler(handler)
 
     log_formatter = logging.Formatter(log_format)
