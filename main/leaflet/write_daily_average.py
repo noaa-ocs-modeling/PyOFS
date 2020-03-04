@@ -30,7 +30,7 @@ logging.root.manager.loggerDict['fiona._env'].setLevel(logging.CRITICAL)
 LOG_DIRECTORY = os.path.join(DATA_DIRECTORY, 'log')
 LOG_FILENAME = os.path.join(LOG_DIRECTORY, f'{datetime.now():%Y%m%d}_conversion.log')
 OUTPUT_DIRECTORY = os.path.join(DATA_DIRECTORY, 'output')
-REFERENCE_DIR = os.path.join(DATA_DIRECTORY, 'reference')
+REFERENCE_DIRECTORY = os.path.join(DATA_DIRECTORY, 'reference')
 
 # offset from study area to UTC
 STUDY_AREA_TIMEZONE = 'US/Pacific'
@@ -357,7 +357,7 @@ if __name__ == '__main__':
 
     start_time = datetime.now()
 
-    files_json_filename = os.path.join(REFERENCE_DIR, 'files.json')
+    files_json_filename = os.path.join(REFERENCE_DIRECTORY, 'files.json')
     write_json.dir_structure_to_json(OUTPUT_DIRECTORY, files_json_filename)
 
     with open(os.path.join(DATA_DIRECTORY, 'azure_credentials.txt')) as credentials_file:
