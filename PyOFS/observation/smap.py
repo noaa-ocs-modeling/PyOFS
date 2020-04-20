@@ -8,13 +8,14 @@ Created on Feb 6, 2019
 """
 
 from collections import OrderedDict
-import datetime
-import logging
+from datetime import datetime
 import os
 from typing import Collection
 
+import fiona.crs
 import numpy
 import rasterio
+from rasterio.crs import CRS
 import rasterio.features
 import shapely
 import shapely.geometry
@@ -22,10 +23,13 @@ import shapely.wkt
 import xarray
 
 from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, utilities
+from PyOFS.utilities import get_logger
+
+LOGGER = get_logger('PyOFS.SMAP')
 
 STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIRECTORY, r"reference\wcofs.gpkg:study_area")
 
-RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
+OUTPUT_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
 SOURCE_URLS = OrderedDict({'OpenDAP': OrderedDict({'JPL': 'https://thredds.jpl.nasa.gov/thredds/dodsC/ncml_aggregation/SalinityDensity/smap/aggregate__SMAP_JPL_L3_SSS_CAP_MONTHLY_V42.ncml', })})
 
@@ -55,7 +59,7 @@ class SMAPDataset:
                 self.dataset = xarray.open_dataset(source_url)
                 break
             except Exception as error:
-                logging.error(f'error "{error}" reading from {source}')
+                LOGGER.warning(f'{error.__class__.__name__}: {error}')
 
         # construct rectangular polygon of granule extent
         lon_min = float(self.dataset.geospatial_lon_min)
@@ -106,7 +110,7 @@ class SMAPDataset:
 
         return self.dataset.geospatial_lon_resolution, self.dataset.geospatial_lat_resolution
 
-    def data(self, data_time: datetime.datetime, variable: str = 'sss') -> numpy.array:
+    def data(self, data_time: datetime, variable: str = 'sss') -> numpy.array:
         """
         Retrieve SMOS SSS data.
 
@@ -122,7 +126,7 @@ class SMAPDataset:
 
         return output_data
 
-    def _sss(self, data_time: datetime.datetime) -> numpy.array:
+    def _sss(self, data_time: datetime) -> numpy.array:
         """
         Retrieve SMOS SSS data.
 
@@ -131,14 +135,14 @@ class SMAPDataset:
         """
 
         # SMOS has data on month-long resolution
-        data_time = datetime.datetime(data_time.year, data_time.month, 16)
+        data_time = datetime(data_time.year, data_time.month, 16)
 
         if numpy.datetime64(data_time) in self.dataset['times'].values:
             return self.dataset['smap_sss'].sel(times=data_time).values
         else:
             raise utilities.NoDataError(f'No data exists for {data_time:%Y%m%dT%H%M%S}.')
 
-    def write_rasters(self, output_dir: str, data_time: datetime.datetime, variables: Collection[str] = tuple(['sss']), filename_prefix: str = 'smos', fill_value: float = LEAFLET_NODATA_VALUE,
+    def write_rasters(self, output_dir: str, data_time: datetime, variables: Collection[str] = tuple(['sss']), filename_prefix: str = 'smos', fill_value: float = LEAFLET_NODATA_VALUE,
                       driver: str = 'GTiff'):
         """
         Write SMOS rasters to file using data from given variables.
@@ -163,7 +167,7 @@ class SMAPDataset:
                     'width': input_data.shape[1],
                     'count': 1,
                     'dtype': rasterio.float32,
-                    'crs': RASTERIO_CRS,
+                    'crs': CRS.from_dict(OUTPUT_CRS),
                     'transform': SMAPDataset.study_area_transform,
                     'nodata': fill_value}
 
@@ -179,7 +183,7 @@ class SMAPDataset:
                 output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
 
                 # use rasterio to write to raster with GDAL args
-                logging.info(f'Writing to {output_filename}')
+                LOGGER.info(f'Writing to {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(input_data, 1)
                     if driver == 'GTiff':
@@ -206,6 +210,6 @@ if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIRECTORY, r'output\test')
 
     smap_dataset = SMAPDataset()
-    smap_dataset.write_rasters(output_dir, datetime.datetime(2018, 12, 1))
+    smap_dataset.write_rasters(output_dir, datetime(2018, 12, 1))
 
     print('done')

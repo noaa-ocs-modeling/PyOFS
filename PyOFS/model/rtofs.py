@@ -8,8 +8,7 @@ Created on Jun 25, 2018
 """
 
 from collections import OrderedDict
-import datetime
-import logging
+from datetime import datetime, timedelta, date
 import os
 import threading
 from typing import Collection
@@ -17,6 +16,7 @@ from typing import Collection
 import fiona.crs
 import numpy
 import rasterio.control
+from rasterio.crs import CRS
 import rasterio.features
 import rasterio.mask
 import rasterio.warp
@@ -24,9 +24,11 @@ from shapely import geometry
 import xarray
 
 from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, utilities
+from PyOFS.utilities import get_logger
 
-RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
-FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
+LOGGER = get_logger('PyOFS.RTOFS')
+
+OUTPUT_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
 COORDINATE_VARIABLES = ['time', 'lev', 'lat', 'lon']
 
@@ -57,7 +59,7 @@ class RTOFSDataset:
     Real-Time Ocean Forecasting System (RTOFS) NetCDF observation.
     """
 
-    def __init__(self, model_date: datetime.datetime = None, source: str = '2ds', time_interval: str = 'daily', study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME):
+    def __init__(self, model_date: datetime = None, source: str = '2ds', time_interval: str = 'daily', study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME):
         """
         Creates new observation object from datetime and given model parameters.
 
@@ -68,10 +70,10 @@ class RTOFSDataset:
         """
 
         if model_date is None:
-            model_date = datetime.datetime.now()
+            model_date = datetime.now()
 
-        if type(model_date) is datetime.date:
-            self.model_time = datetime.datetime.combine(model_date, datetime.datetime.min.time())
+        if type(model_date) is date:
+            self.model_time = datetime.combine(model_date, datetime.min.time())
         else:
             self.model_time = model_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -102,7 +104,7 @@ class RTOFSDataset:
                         self.datasets[forecast_direction][dataset_name] = dataset
                         self.dataset_locks[forecast_direction][dataset_name] = threading.Lock()
                     except OSError as error:
-                        logging.error(f'error "{error}" reading from {url}')
+                        LOGGER.warning(f'{error.__class__.__name__}: {error}')
 
         if (len(self.datasets['nowcast']) + len(self.datasets['forecast'])) > 0:
             if len(self.datasets['nowcast']) > 0:
@@ -129,7 +131,7 @@ class RTOFSDataset:
         else:
             raise utilities.NoDataError(f'No RTOFS datasets found for {self.model_time}.')
 
-    def data(self, variable: str, time: datetime.datetime, crop: bool = True) -> xarray.DataArray:
+    def data(self, variable: str, time: datetime, crop: bool = True) -> xarray.DataArray:
         """
         Get data of specified variable at specified hour.
 
@@ -170,11 +172,11 @@ class RTOFSDataset:
                 else:
                     raise ValueError(f'Variable must be not one of {list(DATA_VARIABLES.keys())}.')
             else:
-                logging.warning(f'{direction} does not exist in RTOFS observation for {self.model_time:%Y%m%d}.')
+                LOGGER.warning(f'{direction} does not exist in RTOFS observation for {self.model_time:%Y%m%d}.')
         else:
             raise ValueError(f'Direction must be one of {list(DATASET_STRUCTURE[self.source].keys())}.')
 
-    def write_rasters(self, output_dir: str, variables: list, time: datetime.datetime, filename_prefix: str = None, filename_suffix: str = None, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff',
+    def write_rasters(self, output_dir: str, variables: list, time: datetime, filename_prefix: str = None, filename_suffix: str = None, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff',
                       crop: bool = True):
         """
         Write averaged raster data of given variables to given output directory.
@@ -240,7 +242,7 @@ class RTOFSDataset:
                     'width': variable_mean.shape[1],
                     'count': 1,
                     'dtype': rasterio.float32,
-                    'crs': RASTERIO_CRS,
+                    'crs': CRS.from_dict(OUTPUT_CRS),
                     'nodata': numpy.array([fill_value]).astype(variable_mean.dtype).item()}
 
                 output_filename = f'{filename_prefix}_{variable}_{self.model_time:%Y%m%d}_{time_delta_string}{filename_suffix}'
@@ -257,14 +259,14 @@ class RTOFSDataset:
 
                 output_filename = f'{os.path.splitext(output_filename)[0]}.{file_extension}'
 
-                logging.info(f'Writing {output_filename}')
+                LOGGER.info(f'Writing {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(variable_mean, 1)
                     if driver == 'GTiff':
                         output_raster.build_overviews(utilities.overview_levels(variable_mean.shape), Resampling['average'])
                         output_raster.update_tags(ns='rio_overview', resampling='average')
 
-    def write_raster(self, output_filename: str, variable: str, time: datetime.datetime, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff', crop: bool = True):
+    def write_raster(self, output_filename: str, variable: str, time: datetime, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff', crop: bool = True):
         """
         Writes interpolated raster of given variable to output path.
 
@@ -290,7 +292,7 @@ class RTOFSDataset:
                 'width': output_data.shape[1],
                 'count': 1,
                 'dtype': rasterio.float32,
-                'crs': RASTERIO_CRS,
+                'crs': CRS.from_dict(OUTPUT_CRS),
                 'nodata': numpy.array([fill_value]).astype(output_data.dtype).item()}
 
             if driver == 'AAIGrid':
@@ -304,7 +306,7 @@ class RTOFSDataset:
 
             output_filename = f'{os.path.splitext(output_filename)[0]}.{file_extension}'
 
-            logging.info(f'Writing {output_filename}')
+            LOGGER.info(f'Writing {output_filename}')
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(output_data, 1)
                 if driver == 'GTiff':
@@ -326,7 +328,7 @@ class RTOFSDataset:
         output_dataset = xarray.Dataset()
 
         if self.time_interval == 'daily':
-            times = [self.model_time + datetime.timedelta(days=day_delta) for day_delta in TIME_DELTAS['daily']]
+            times = [self.model_time + timedelta(days=day_delta) for day_delta in TIME_DELTAS['daily']]
         else:
             times = None
 
@@ -384,7 +386,7 @@ class RTOFSDataset:
 if __name__ == '__main__':
     output_dir = os.path.join(DATA_DIRECTORY, r'output\test')
 
-    rtofs_dataset = RTOFSDataset(datetime.datetime.now())
-    rtofs_dataset.write_raster(os.path.join(output_dir, 'rtofs_ssh.tiff'), 'ssh', datetime.datetime.now())
+    rtofs_dataset = RTOFSDataset(datetime.now())
+    rtofs_dataset.write_raster(os.path.join(output_dir, 'rtofs_ssh.tiff'), 'ssh', datetime.now())
 
     print('done')

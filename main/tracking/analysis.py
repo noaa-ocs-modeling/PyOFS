@@ -7,14 +7,20 @@ Created on Feb 27, 2019
 @author: zachary.burnett
 """
 
-import datetime
+from datetime import datetime, timedelta
 import os
+import sys
 
 import fiona
 from matplotlib import pyplot
 import numpy
 import pandas
 from shapely import geometry
+
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
+from PyOFS.utilities import get_logger
+
+LOGGER = get_logger('PyOFS.track')
 
 
 def diffusion(polygons: [geometry.Polygon]):
@@ -31,13 +37,9 @@ def diffusion(polygons: [geometry.Polygon]):
 
 
 if __name__ == '__main__':
-    import sys
-
     from pandas.plotting import register_matplotlib_converters
 
     register_matplotlib_converters()
-
-    sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
     from PyOFS import DATA_DIRECTORY
 
@@ -49,8 +51,8 @@ if __name__ == '__main__':
     contour_names = [f'{letter}{number}' for number in range(1, 5) for letter in ['A', 'B', 'C']]
     # contour_names = (str(item) for item in range(1, 8))
 
-    start_time = datetime.datetime(2016, 9, 25, 1)
-    period = datetime.timedelta(days=4)
+    start_time = datetime(2016, 9, 25, 1)
+    period = timedelta(days=4)
 
     # whether to plot percentages of the starting value (instead of actual values)
     plot_percentages = True
@@ -58,13 +60,13 @@ if __name__ == '__main__':
     values = {contour_name: {} for contour_name in contour_names}
 
     for velocity_product in velocity_products:
-        time_delta = datetime.timedelta(hours=1) if 'hourly' in velocity_product else datetime.timedelta(days=1)
+        time_delta = timedelta(hours=1) if 'hourly' in velocity_product else timedelta(days=1)
         source = 'wcofs_qck' if 'modeled' in velocity_product else 'wcofs_qck_geostrophic'
 
         input_path = os.path.join(DATA_DIRECTORY, 'output', 'test', 'contours.gpkg')
         layer_name = f'{source}_{start_time:%Y%m%dT%H%M%S}_{(start_time + period):"%Y%m%dT%H%M%S"}_{int(time_delta.total_seconds() / 3600)}h'
 
-        print(f'[{datetime.datetime.now()}]: Reading {input_path}...')
+        LOGGER.info(f'[{datetime.now()}]: Reading {input_path}...')
         with fiona.open(input_path, layer=layer_name) as contours_file:
             contour_names = sorted(numpy.unique([feature['properties']['contour'] for feature in contours_file]))
 
@@ -76,7 +78,7 @@ if __name__ == '__main__':
                 contour_records = [record for record in filter(lambda record: record['properties']['contour'] == contour_name, contours_file)]
 
                 for record in contour_records:
-                    contour_datetime = datetime.datetime.strptime(record['properties']['datetime'], '%Y-%m-%dT%H:%M:%S')
+                    contour_datetime = datetime.strptime(record['properties']['datetime'], '%Y-%m-%dT%H:%M:%S')
                     contour_polygon = geometry.Polygon(record['geometry']['coordinates'][0])
 
                     contour_datetimes.append(contour_datetime)
@@ -87,10 +89,10 @@ if __name__ == '__main__':
 
     plotting_values = {'area': '%' if plot_percentages else 'm^2', 'perimeter': '%' if plot_percentages else 'm'}
 
-    print(f'[{datetime.datetime.now()}]: Plotting...')
+    LOGGER.info(f'[{datetime.now()}]: Plotting...')
 
     # for contour_name, contour_velocity_products in values.items():
-    #     print(f'[{datetime.datetime.now()}]: Plotting {contour_name}...')
+    #     LOGGER.info(f'[{datetime.now()}]: Plotting {contour_name}...')
     #
     #     for plotting_value, plotting_unit in plotting_values.items():
     #         figure = pyplot.figure()

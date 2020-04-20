@@ -7,8 +7,7 @@ Created on Jun 13, 2018
 @author: zachary.burnett
 """
 
-import datetime
-import logging
+from datetime import datetime, timedelta
 import os
 from typing import Collection
 
@@ -20,13 +19,15 @@ import scipy.interpolate
 import xarray
 
 from PyOFS import CRS_EPSG, LEAFLET_NODATA_VALUE, utilities
+from PyOFS.utilities import get_logger
+
+LOGGER = get_logger('PyOFS.HFR')
 
 DATA_VARIABLES = {'ssu': 'u', 'ssv': 'v', 'dopx': 'dopx', 'dopy': 'dopy'}
 
-RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
-FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
+OUTPUT_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
-NRT_DELAY = datetime.timedelta(hours=1)
+NRT_DELAY = timedelta(hours=1)
 
 # either UCSD (University of California San Diego) or NDBC (National Data Buoy Center); NDBC has larger extent but only for the past 4 days
 SOURCE_URLS = {'NDBC': 'https://dods.ndbc.noaa.gov/thredds/dodsC', 'UCSD': 'http://hfrnet-tds.ucsd.edu/thredds/dodsC/HFR/USWC'}
@@ -39,7 +40,7 @@ class HFRadarRange:
 
     grid_transform = None
 
-    def __init__(self, start_time: datetime.datetime = None, end_time: datetime.datetime = None, resolution: int = 6):
+    def __init__(self, start_time: datetime = None, end_time: datetime = None, resolution: int = 6):
         """
         Creates new observation object from source.
 
@@ -50,16 +51,16 @@ class HFRadarRange:
         """
 
         if start_time is None:
-            start_time = datetime.datetime.now()
+            start_time = datetime.now()
 
         self.start_time = start_time
 
         if end_time is None:
-            end_time = self.start_time + datetime.timedelta(days=1)
+            end_time = self.start_time + timedelta(days=1)
 
-        if end_time > datetime.datetime.utcnow():
+        if end_time > datetime.utcnow():
             # HFR near real time delay is 1 hour behind UTC
-            self.end_time = datetime.datetime.utcnow() - NRT_DELAY
+            self.end_time = datetime.utcnow() - NRT_DELAY
         else:
             self.end_time = end_time
 
@@ -80,7 +81,7 @@ class HFRadarRange:
                 self.url = url
                 break
             except OSError as error:
-                logging.error(f'error "{error}" reading dataset from {url}')
+                LOGGER.warning(f'{error.__class__.__name__}: {error}')
         else:
             raise utilities.NoDataError(f'No HFR observations found between {self.start_time} and {self.end_time}')
 
@@ -90,7 +91,7 @@ class HFRadarRange:
 
         self.dataset = self.dataset.sel(time=slice(self.start_time, self.end_time))
 
-        logging.info(f'Collecting HFR velocity between {str(self.dataset["time"].min().values)[:19]} and {str(self.dataset["time"].max().values)[:19]}...')
+        LOGGER.info(f'Collecting HFR velocity between {str(self.dataset["time"].min().values)[:19]} and {str(self.dataset["time"].max().values)[:19]}...')
 
         if HFRadarRange.grid_transform is None:
             lon = self.dataset['lon'].values
@@ -106,7 +107,7 @@ class HFRadarRange:
             # get rasterio geotransform of HFR observation (flipped latitude)
             self.grid_transform = rasterio.transform.from_origin(west, north, self.mean_x_size, self.mean_y_size)
 
-    def data(self, variable: str, time: datetime.datetime, dop_threshold: float = None) -> numpy.array:
+    def data(self, variable: str, time: datetime, dop_threshold: float = None) -> numpy.array:
         """
         Get data for the specified variable at a single time.
 
@@ -123,7 +124,7 @@ class HFRadarRange:
 
         return output_data.values
 
-    def data_average(self, variable: str, start_time: datetime.datetime = None, end_time: datetime.datetime = None, dop_threshold: float = None, include_incomplete: bool = False) -> numpy.array:
+    def data_average(self, variable: str, start_time: datetime = None, end_time: datetime = None, dop_threshold: float = None, include_incomplete: bool = False) -> numpy.array:
         """
         Get data for the specified variable at a single time.
 
@@ -196,10 +197,10 @@ class HFRadarRange:
 
         schema = {'geometry': 'Point', 'properties': {'code': 'str', 'net_code': 'str', 'lon': 'float', 'lat': 'float'}}
 
-        with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_CRS) as layer:
+        with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=OUTPUT_CRS.to_dict()) as layer:
             layer.writerecords(layer_records)
 
-    def write_vectors(self, output_filename: str, variables: Collection[str] = None, start_time: datetime.datetime = None, end_time: datetime.datetime = None, dop_threshold: float = 0.5):
+    def write_vectors(self, output_filename: str, variables: Collection[str] = None, start_time: datetime = None, end_time: datetime = None, dop_threshold: float = 0.5):
         """
         Write HFR data to a layer of the provided output file for every hour in the given time interval.
 
@@ -230,7 +231,7 @@ class HFRadarRange:
 
         # create layer using OGR, then add features using QGIS
         for hfr_time in time_interval_selection['time']:
-            hfr_time = datetime.datetime.utcfromtimestamp((hfr_time.values - numpy.datetime64('1970-01-01T00:00:00Z')) / numpy.timedelta64(1, 's'))
+            hfr_time = datetime.utcfromtimestamp((hfr_time.values - numpy.datetime64('1970-01-01T00:00:00Z')) / numpy.timedelta64(1, 's'))
             layer_name = f'{hfr_time:%Y%m%dT%H%M%S}'
 
             hfr_data = time_interval_selection.sel(time=hfr_time)
@@ -262,11 +263,10 @@ class HFRadarRange:
         schema = {'geometry': 'Point', 'properties': {'u': 'float', 'v': 'float', 'lat': 'float', 'lon': 'float', 'dop_lat': 'float', 'dop_lon': 'float'}}
 
         for layer_name, layer_records in layers.items():
-            with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_CRS) as layer:
+            with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=OUTPUT_CRS.to_dict()) as layer:
                 layer.writerecords(layer_records)
 
-    def write_vector(self, output_filename: str, layer_name: str = 'ssuv', variables: Collection[str] = None, start_time: datetime.datetime = None, end_time: datetime.datetime = None,
-                     dop_threshold: float = 0.5):
+    def write_vector(self, output_filename: str, layer_name: str = 'ssuv', variables: Collection[str] = None, start_time: datetime = None, end_time: datetime = None, dop_threshold: float = 0.5):
         """
         Write average of HFR data for all hours in the given time interval to a single layer of the provided output file.
 
@@ -310,12 +310,12 @@ class HFRadarRange:
                     feature_index += 1
 
         # write queued features to layer
-        logging.info(f'Writing {output_filename}')
-        with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_CRS) as layer:
+        LOGGER.info(f'Writing {output_filename}')
+        with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=OUTPUT_CRS.to_dict()) as layer:
             layer.writerecords(layer_records)
 
-    def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = '', variables: Collection[str] = None, start_time: datetime.datetime = None,
-                      end_time: datetime.datetime = None, fill_value: float = LEAFLET_NODATA_VALUE, driver: str = 'GTiff', dop_threshold: float = None):
+    def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = '', variables: Collection[str] = None, start_time: datetime = None,
+                      end_time: datetime = None, fill_value: float = LEAFLET_NODATA_VALUE, driver: str = 'GTiff', dop_threshold: float = None):
         """
         Write average of HFR data for all hours in the given time interval to rasters.
 
@@ -361,7 +361,7 @@ class HFRadarRange:
                 'width': raster_data.shape[1],
                 'count': 1,
                 'dtype': raster_data.dtype,
-                'crs': RASTERIO_CRS,
+                'crs': OUTPUT_CRS,
                 'transform': self.grid_transform,
                 'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()}
 
@@ -395,14 +395,14 @@ class HFRadarRange:
 
             output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
 
-            logging.info(f'Writing {output_filename}')
+            LOGGER.info(f'Writing {output_filename}')
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(numpy.flipud(raster_data), 1)
                 if driver == 'GTiff':
                     output_raster.build_overviews(utilities.overview_levels(raster_data.shape), Resampling['average'])
                     output_raster.update_tags(ns='rio_overview', resampling='average')
 
-    def dop_mask(self, threshold: float, start_time: datetime.datetime = None, end_time: datetime.datetime = None):
+    def dop_mask(self, threshold: float, start_time: datetime = None, end_time: datetime = None):
         """
         Get mask of time series with a dilution of precision (DOP) below the given threshold.
 
@@ -422,7 +422,7 @@ class HFRadarRange:
         dop_y = self.dataset['dopy'].sel(time=slice(start_time, end_time))
         return ((dop_x <= threshold) & (dop_y <= threshold)).values
 
-    def to_xarray(self, variables: Collection[str] = None, start_time: datetime.datetime = None, end_time: datetime.datetime = None, mean: bool = True, dop_threshold: float = 0.5) -> xarray.Dataset:
+    def to_xarray(self, variables: Collection[str] = None, start_time: datetime = None, end_time: datetime = None, mean: bool = True, dop_threshold: float = 0.5) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
 
@@ -461,7 +461,7 @@ class HFRadarRange:
 
         return output_dataset
 
-    def to_netcdf(self, output_file: str, variables: Collection[str] = None, start_time: datetime.datetime = None, end_time: datetime.datetime = None, mean: bool = True):
+    def to_netcdf(self, output_file: str, variables: Collection[str] = None, start_time: datetime = None, end_time: datetime = None, mean: bool = True):
         """
         Writes to NetCDF file.
 
@@ -504,8 +504,8 @@ if __name__ == '__main__':
 
     output_dir = os.path.join(DATA_DIRECTORY, r'output\test')
 
-    start_time = datetime.datetime(2019, 2, 6)
-    end_time = start_time + datetime.timedelta(days=1)
+    start_time = datetime(2019, 2, 6)
+    end_time = start_time + timedelta(days=1)
 
     hfr_range = HFRadarRange(start_time, end_time, source='UCSD')
 

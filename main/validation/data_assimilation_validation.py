@@ -1,5 +1,5 @@
 from concurrent import futures
-import datetime
+from datetime import datetime, timedelta
 import os
 import sys
 
@@ -8,9 +8,12 @@ import xarray
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
+from PyOFS.utilities import get_logger
 from PyOFS import DATA_DIRECTORY
 from PyOFS.observation import hf_radar, viirs
 from PyOFS.model import wcofs
+
+LOGGER = get_logger('PyOFS.valid')
 
 WORKSPACE_DIR = os.path.join(DATA_DIRECTORY, 'validation')
 
@@ -18,7 +21,7 @@ WORKSPACE_DIR = os.path.join(DATA_DIRECTORY, 'validation')
 UTC_OFFSET = 8
 
 
-def to_netcdf(start_time: datetime.datetime, end_time: datetime.datetime, output_dir: str):
+def to_netcdf(start_time: datetime, end_time: datetime, output_dir: str):
     """
     Writes HFR, VIIRS, and WCOFS data to NetCDF files at the given filenames.
 
@@ -45,8 +48,8 @@ def to_netcdf(start_time: datetime.datetime, end_time: datetime.datetime, output
 
     # write VIIRS NetCDF file if it does not exist
     if not os.path.exists(nc_filenames['viirs']):
-        utc_start_time = start_time + datetime.timedelta(hours=UTC_OFFSET)
-        utc_end_time = end_time + datetime.timedelta(hours=UTC_OFFSET)
+        utc_start_time = start_time + timedelta(hours=UTC_OFFSET)
+        utc_end_time = end_time + timedelta(hours=UTC_OFFSET)
 
         viirs_range = viirs.VIIRSRange(utc_start_time, utc_end_time)
         viirs_range.to_netcdf(nc_filenames['viirs'], variables=['sst'])
@@ -111,8 +114,7 @@ def interpolate_grids(datasets: dict) -> dict:
         u_futures = {'noDA_model': {}, 'DA_model': {}}
         v_futures = {'noDA_model': {}, 'DA_model': {}}
 
-        for time_delta_index, time_delta in dict(
-                zip(range(len(datasets['wcofs_sst_noDA'][wcofs_dimensions['sst'][0]].values)), sorted(datasets['wcofs_sst_noDA'][wcofs_dimensions['sst'][0]].values, reverse=True))).items():
+        for time_delta_index, time_delta in enumerate(sorted(datasets['wcofs_sst_noDA'][wcofs_dimensions['sst'][0]].values, reverse=True)):
             try:
 
                 sst_noDA_future = concurrency_pool.submit(wcofs.interpolate_grid, datasets['wcofs_sst_noDA']['lon'].values, datasets['wcofs_sst_noDA']['lat'].values,
@@ -140,7 +142,7 @@ def interpolate_grids(datasets: dict) -> dict:
                 v_futures['noDA_model'][v_noDA_future] = time_delta
                 v_futures['DA_model'][v_DA_future] = time_delta
             except IndexError as error:
-                print(f'{time_delta} IndexError: {error}')
+                LOGGER.warning(f'{error.__class__.__name__}: {error}')
                 continue
 
         for completed_future in futures.as_completed(sst_futures['noDA_model']):
@@ -206,8 +208,8 @@ def r_squ(x: numpy.array, y: numpy.array) -> float:
 
 if __name__ == '__main__':
     # setup start and ending times
-    start_time = datetime.datetime(2018, 11, 11)
-    end_time = start_time + datetime.timedelta(days=1)
+    start_time = datetime(2018, 11, 11)
+    end_time = start_time + timedelta(days=1)
 
     day_dir = os.path.join(WORKSPACE_DIR, f'{start_time:%Y%m%d}')
     if not os.path.exists(day_dir):
@@ -220,7 +222,7 @@ if __name__ == '__main__':
     # interpolate nearest-neighbor observational data onto WCOFS grid
     data = {'obser': {'sst': datasets['viirs']['sst'].values, 'u': datasets['hfr']['u'].values, 'v': datasets['hfr']['v'].values}}
 
-    print('interpolating WCOFS data onto observational grids...')
+    LOGGER.info('interpolating WCOFS data onto observational grids...')
     data.update(interpolate_grids(datasets))
 
     time_deltas = data['DA_model']['sst'].keys()
@@ -239,13 +241,13 @@ if __name__ == '__main__':
                 'v': {'noDA': r_squ(data['obser']['v'], data['noDA_model']['v'][time_delta]), 'DA': r_squ(data['obser']['v'], data['DA_model']['v'][time_delta])}}}
 
     for time_delta, methods in metrics.items():
-        print(f'{time_delta}:')
+        LOGGER.info(f'{time_delta}:')
         for metric, variables in methods.items():
-            print(f'{metric}:')
+            LOGGER.info(f'{metric}:')
             for variable, assimilations in variables.items():
                 no_da_metric = assimilations["noDA"]
                 da_metric = assimilations["DA"]
 
-                print(f'{no_da_metric:5.2f} -> {da_metric:5.2f}: {da_metric - no_da_metric: 5.2f}')
+                LOGGER.info(f'{no_da_metric:5.2f} -> {da_metric:5.2f}: {da_metric - no_da_metric: 5.2f}')
 
     print('done')

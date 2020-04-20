@@ -6,13 +6,17 @@ Created on Apr 10, 2019
 
 @author: zachary.burnett
 """
-import datetime
+
+from datetime import datetime, timedelta
 import os
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
+from PyOFS.utilities import get_logger
 from main.leaflet import write_json
+
+LOGGER = get_logger('PyOFS.check')
 
 observations = {'hfr': ['dir', 'mag'], 'viirs': ['sst']}
 models = {'wcofs': ['dir', 'mag', 'sst', 'ssh', 'sss'], 'rtofs': ['dir', 'mag', 'sst', 'ssh', 'sss']}
@@ -47,7 +51,7 @@ def check_files(input_dir: str) -> dict:
                 else:
                     day_delta = (int(time_delta[1:]) - 1) * -1
 
-                date = f'{datetime.datetime.strptime(day, "%Y%m%d") + datetime.timedelta(days=day_delta):%Y%m%d}'
+                date = f'{datetime.strptime(day, "%Y%m%d") + timedelta(days=day_delta):%Y%m%d}'
 
                 for variable in variables:
                     if variable in ['dir', 'mag']:
