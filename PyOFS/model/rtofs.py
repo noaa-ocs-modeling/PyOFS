@@ -32,24 +32,16 @@ COORDINATE_VARIABLES = ['time', 'lev', 'lat', 'lon']
 
 DATASET_STRUCTURE = {
     '2ds': {
-        'nowcast': {
-            'prog': ['sss', 'sst', 'u_velocity', 'v_velocity'], 'diag': ['ssh', 'ice_coverage', 'ice_thickness']
-        }, 'forecast': {
-            'prog': ['sss', 'sst', 'u_velocity', 'v_velocity'], 'diag': ['ssh', 'ice_coverage', 'ice_thickness']
-        }
-    }, '3dz': {
-        'nowcast': {'salt': ['salinity'], 'temp': ['temperature'], 'uvel': ['u'], 'vvel': ['v']},
-        'forecast': {'salt': ['salinity'], 'temp': ['temperature'], 'uvel': ['u'], 'vvel': ['v']}
-    }
-}
+        'nowcast': {'prog': ['sss', 'sst', 'u_velocity', 'v_velocity'], 'diag': ['ssh', 'ice_coverage', 'ice_thickness']},
+        'forecast': {'prog': ['sss', 'sst', 'u_velocity', 'v_velocity'], 'diag': ['ssh', 'ice_coverage', 'ice_thickness']}},
+    '3dz': {'nowcast': {'salt': ['salinity'], 'temp': ['temperature'], 'uvel': ['u'], 'vvel': ['v']}, 'forecast': {'salt': ['salinity'], 'temp': ['temperature'], 'uvel': ['u'], 'vvel': ['v']}}}
 
 DATA_VARIABLES = {
     'sst': {'2ds': {'prog': 'sst'}, '3dz': {'temp': 'temperature'}},
     'sss': {'2ds': {'prog': 'sss'}, '3dz': {'salt': 'salinity'}},
     'ssu': {'2ds': {'prog': 'u_velocity'}, '3dz': {'uvel': 'u'}},
     'ssv': {'2ds': {'prog': 'v_velocity'}, '3dz': {'vvel': 'v'}},
-    'ssh': {'2ds': {'diag': 'ssh'}}
-}
+    'ssh': {'2ds': {'diag': 'ssh'}}}
 
 TIME_DELTAS = {'daily': range(-3, 8 + 1)}
 
@@ -65,8 +57,7 @@ class RTOFSDataset:
     Real-Time Ocean Forecasting System (RTOFS) NetCDF observation.
     """
 
-    def __init__(self, model_date: datetime.datetime = None, source: str = '2ds', time_interval: str = 'daily',
-                 study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME):
+    def __init__(self, model_date: datetime.datetime = None, source: str = '2ds', time_interval: str = 'daily', study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME):
         """
         Creates new observation object from datetime and given model parameters.
 
@@ -130,15 +121,11 @@ class RTOFSDataset:
             self.global_west = numpy.min(self.lon)
             self.global_north = numpy.max(self.lat)
 
-            self.global_grid_transform = rasterio.transform.from_origin(self.global_west, self.global_north,
-                                                                        lon_pixel_size, lat_pixel_size)
+            self.global_grid_transform = rasterio.transform.from_origin(self.global_west, self.global_north, lon_pixel_size, lat_pixel_size)
 
-            self.study_area_west, self.study_area_south, self.study_area_east, self.study_area_north = geometry.shape(
-                self.study_area_geojson).bounds
+            self.study_area_west, self.study_area_south, self.study_area_east, self.study_area_north = geometry.shape(self.study_area_geojson).bounds
 
-            self.study_area_transform = rasterio.transform.from_origin(self.study_area_west, self.study_area_north,
-                                                                       lon_pixel_size,
-                                                                       lat_pixel_size)
+            self.study_area_transform = rasterio.transform.from_origin(self.study_area_west, self.study_area_north, lon_pixel_size, lat_pixel_size)
         else:
             raise utilities.NoDataError(f'No RTOFS datasets found for {self.model_time}.')
 
@@ -167,23 +154,15 @@ class RTOFSDataset:
                     dataset_name, variable_name = next(iter(datasets.items()))
 
                     with self.dataset_locks[direction][dataset_name]:
-                        data_variable = self.datasets[direction][dataset_name][
-                            DATA_VARIABLES[variable][self.source][dataset_name]]
+                        data_variable = self.datasets[direction][dataset_name][DATA_VARIABLES[variable][self.source][dataset_name]]
 
                         # TODO study areas that cross over longitude +74.16 may have problems here
                         if crop:
-                            selection = data_variable.sel(time=time, method='nearest').sel(
-                                lon=slice(self.study_area_west + 360, self.study_area_east + 360),
-                                lat=slice(self.study_area_south, self.study_area_north))
+                            selection = data_variable.sel(time=time, method='nearest').sel(lon=slice(self.study_area_west + 360, self.study_area_east + 360),
+                                                                                           lat=slice(self.study_area_south, self.study_area_north))
                         else:
-                            western_selection = data_variable.sel(time=time, method='nearest').sel(
-                                lon=slice(180, numpy.max(self.raw_lon)),
-                                lat=slice(numpy.min(self.lat),
-                                          numpy.max(self.lat)))
-                            eastern_selection = data_variable.sel(time=time, method='nearest').sel(
-                                lon=slice(numpy.min(self.raw_lon), 180),
-                                lat=slice(numpy.min(self.lat),
-                                          numpy.max(self.lat)))
+                            western_selection = data_variable.sel(time=time, method='nearest').sel(lon=slice(180, numpy.max(self.raw_lon)), lat=slice(numpy.min(self.lat), numpy.max(self.lat)))
+                            eastern_selection = data_variable.sel(time=time, method='nearest').sel(lon=slice(numpy.min(self.raw_lon), 180), lat=slice(numpy.min(self.lat), numpy.max(self.lat)))
                             selection = numpy.concatenate((western_selection, eastern_selection), axis=1)
 
                         selection = numpy.flip(selection.squeeze(), axis=0)
@@ -195,8 +174,7 @@ class RTOFSDataset:
         else:
             raise ValueError(f'Direction must be one of {list(DATASET_STRUCTURE[self.source].keys())}.')
 
-    def write_rasters(self, output_dir: str, variables: list, time: datetime.datetime, filename_prefix: str = None,
-                      filename_suffix: str = None, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff',
+    def write_rasters(self, output_dir: str, variables: list, time: datetime.datetime, filename_prefix: str = None, filename_suffix: str = None, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff',
                       crop: bool = True):
         """
         Write averaged raster data of given variables to given output directory.
@@ -225,8 +203,7 @@ class RTOFSDataset:
         direction = 'forecast' if time_delta >= 0 else 'nowcast'
         time_delta_string = f'{direction[0]}{abs(time_delta) + 1 if direction == "forecast" else abs(time_delta):03}'
 
-        variable_means = {variable: self.data(variable, time, crop).values for variable in variables if
-                          variable not in ['dir', 'mag']}
+        variable_means = {variable: self.data(variable, time, crop).values for variable in variables if variable not in ['dir', 'mag']}
 
         if 'dir' in variables or 'mag' in variables:
             u_name = 'ssu'
@@ -262,9 +239,9 @@ class RTOFSDataset:
                     'height': variable_mean.shape[0],
                     'width': variable_mean.shape[1],
                     'count': 1,
-                    'dtype': rasterio.float32, 'crs': RASTERIO_CRS,
-                    'nodata': numpy.array([fill_value]).astype(variable_mean.dtype).item()
-                }
+                    'dtype': rasterio.float32,
+                    'crs': RASTERIO_CRS,
+                    'nodata': numpy.array([fill_value]).astype(variable_mean.dtype).item()}
 
                 output_filename = f'{filename_prefix}_{variable}_{self.model_time:%Y%m%d}_{time_delta_string}{filename_suffix}'
                 output_filename = os.path.join(output_dir, output_filename)
@@ -286,9 +263,7 @@ class RTOFSDataset:
                     output_raster.build_overviews(utilities.overview_levels(variable_mean.shape), Resampling['average'])
                     output_raster.update_tags(ns='rio_overview', resampling='average')
 
-    def write_raster(self, output_filename: str, variable: str, time: datetime.datetime,
-                     fill_value=LEAFLET_NODATA_VALUE,
-                     driver: str = 'GTiff', crop: bool = True):
+    def write_raster(self, output_filename: str, variable: str, time: datetime.datetime, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff', crop: bool = True):
         """
         Writes interpolated raster of given variable to output path.
 
@@ -315,8 +290,7 @@ class RTOFSDataset:
                 'count': 1,
                 'dtype': rasterio.float32,
                 'crs': RASTERIO_CRS,
-                'nodata': numpy.array([fill_value]).astype(output_data.dtype).item()
-            }
+                'nodata': numpy.array([fill_value]).astype(output_data.dtype).item()}
 
             if driver == 'AAIGrid':
                 file_extension = 'asc'
@@ -361,16 +335,9 @@ class RTOFSDataset:
             variable_data = [self.data(variable=variable, time=time) for time in times]
 
             if mean:
-                coordinates = OrderedDict({
-                    'lat': variable_data[0]['lat'].values,
-                    'lon': variable_data[0]['lon'].values
-                })
+                coordinates = OrderedDict({'lat': variable_data[0]['lat'].values, 'lon': variable_data[0]['lon'].values})
             else:
-                coordinates = OrderedDict({
-                    'time': times,
-                    'lat': variable_data[0]['lat'].values,
-                    'lon': variable_data[0]['lon'].values
-                })
+                coordinates = OrderedDict({'time': times, 'lat': variable_data[0]['lat'].values, 'lon': variable_data[0]['lon'].values})
 
             variable_data = numpy.stack(variable_data, axis=0)
             variable_data = numpy.squeeze(variable_data)
@@ -381,9 +348,7 @@ class RTOFSDataset:
             variables_data[variable] = variable_data
 
         for variable, variable_data in variables_data.items():
-            output_dataset.update(
-                {variable: xarray.DataArray(variable_data, coords=coordinates, dims=tuple(coordinates.keys()))},
-                inplace=True)
+            output_dataset.update({variable: xarray.DataArray(variable_data, coords=coordinates, dims=tuple(coordinates.keys()))}, inplace=True)
 
         return output_dataset
 

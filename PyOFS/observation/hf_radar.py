@@ -29,10 +29,7 @@ FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
 NRT_DELAY = datetime.timedelta(hours=1)
 
 # either UCSD (University of California San Diego) or NDBC (National Data Buoy Center); NDBC has larger extent but only for the past 4 days
-SOURCE_URLS = {
-    'NDBC': 'https://dods.ndbc.noaa.gov/thredds/dodsC',
-    'UCSD': 'http://hfrnet-tds.ucsd.edu/thredds/dodsC/HFR/USWC'
-}
+SOURCE_URLS = {'NDBC': 'https://dods.ndbc.noaa.gov/thredds/dodsC', 'UCSD': 'http://hfrnet-tds.ucsd.edu/thredds/dodsC/HFR/USWC'}
 
 
 class HFRadarRange:
@@ -89,14 +86,11 @@ class HFRadarRange:
 
         raw_times = self.dataset['time']
 
-        self.dataset['time'] = xarray.DataArray(numpy.array(raw_times.values, dtype='datetime64[h]'),
-                                                coords=raw_times.coords,
-                                                dims=raw_times.dims, attrs=raw_times.attrs)
+        self.dataset['time'] = xarray.DataArray(numpy.array(raw_times.values, dtype='datetime64[h]'), coords=raw_times.coords, dims=raw_times.dims, attrs=raw_times.attrs)
 
         self.dataset = self.dataset.sel(time=slice(self.start_time, self.end_time))
 
-        logging.info(f'Collecting HFR velocity between {str(self.dataset["time"].min().values)[:19]} and ' + \
-                     f'{str(self.dataset["time"].max().values)[:19]}...')
+        logging.info(f'Collecting HFR velocity between {str(self.dataset["time"].min().values)[:19]} and {str(self.dataset["time"].max().values)[:19]}...')
 
         if HFRadarRange.grid_transform is None:
             lon = self.dataset['lon'].values
@@ -129,8 +123,7 @@ class HFRadarRange:
 
         return output_data.values
 
-    def data_average(self, variable: str, start_time: datetime.datetime = None, end_time: datetime.datetime = None,
-                     dop_threshold: float = None, include_incomplete: bool = False) -> numpy.array:
+    def data_average(self, variable: str, start_time: datetime.datetime = None, end_time: datetime.datetime = None, dop_threshold: float = None, include_incomplete: bool = False) -> numpy.array:
         """
         Get data for the specified variable at a single time.
 
@@ -167,9 +160,7 @@ class HFRadarRange:
         :return: tuple of bounds (west, north, east, south)
         """
 
-        return (
-            self.dataset.geospatial_lon_min, self.dataset.geospatial_lat_max, self.dataset.geospatial_lon_max,
-            self.dataset.geospatial_lat_min)
+        return (self.dataset.geospatial_lon_min, self.dataset.geospatial_lat_max, self.dataset.geospatial_lon_max, self.dataset.geospatial_lat_min)
 
     def cell_size(self) -> tuple:
         """
@@ -198,36 +189,17 @@ class HFRadarRange:
 
             record = {
                 'id': site_index + 1,
-                'geometry': {
-                    'type': 'Point',
-                    'coordinates': (lon, lat)
-                },
-                'properties': {
-                    'code': site_code,
-                    'net_code': site_network_code,
-                    'lon': float(lon),
-                    'lat': float(lat)
-                }
-            }
+                'geometry': {'type': 'Point', 'coordinates': (lon, lat)},
+                'properties': {'code': site_code, 'net_code': site_network_code, 'lon': float(lon), 'lat': float(lat)}}
 
             layer_records.append(record)
 
-        schema = {
-            'geometry': 'Point',
-            'properties': {
-                'code': 'str',
-                'net_code': 'str',
-                'lon': 'float',
-                'lat': 'float'
-            }
-        }
+        schema = {'geometry': 'Point', 'properties': {'code': 'str', 'net_code': 'str', 'lon': 'float', 'lat': 'float'}}
 
         with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_CRS) as layer:
             layer.writerecords(layer_records)
 
-    def write_vectors(self, output_filename: str, variables: Collection[str] = None,
-                      start_time: datetime.datetime = None,
-                      end_time: datetime.datetime = None, dop_threshold: float = 0.5):
+    def write_vectors(self, output_filename: str, variables: Collection[str] = None, start_time: datetime.datetime = None, end_time: datetime.datetime = None, dop_threshold: float = 0.5):
         """
         Write HFR data to a layer of the provided output file for every hour in the given time interval.
 
@@ -250,8 +222,7 @@ class HFRadarRange:
         time_interval_selection = self.dataset.sel(time=slice(start_time, end_time))
 
         if dop_threshold is not None:
-            dop_mask = ((self.dataset['dopx'].sel(time=slice(start_time, end_time)) <= dop_threshold) & (
-                    self.dataset['dopy'].sel(time=slice(start_time, end_time)) <= dop_threshold)).values
+            dop_mask = ((self.dataset['dopx'].sel(time=slice(start_time, end_time)) <= dop_threshold) & (self.dataset['dopy'].sel(time=slice(start_time, end_time)) <= dop_threshold)).values
             time_interval_selection[~dop_mask] = numpy.nan
 
         # create dict to store features
@@ -259,8 +230,7 @@ class HFRadarRange:
 
         # create layer using OGR, then add features using QGIS
         for hfr_time in time_interval_selection['time']:
-            hfr_time = datetime.datetime.utcfromtimestamp(
-                (hfr_time.values - numpy.datetime64('1970-01-01T00:00:00Z')) / numpy.timedelta64(1, 's'))
+            hfr_time = datetime.datetime.utcfromtimestamp((hfr_time.values - numpy.datetime64('1970-01-01T00:00:00Z')) / numpy.timedelta64(1, 's'))
             layer_name = f'{hfr_time:%Y%m%dT%H%M%S}'
 
             hfr_data = time_interval_selection.sel(time=hfr_time)
@@ -272,25 +242,14 @@ class HFRadarRange:
 
             for col in range(len(self.dataset['lon'])):
                 for row in range(len(self.dataset['lat'])):
-                    data = [float(hfr_data[variable_name][row, col].values) for variable, variable_name in
-                            variables.items()]
+                    data = [float(hfr_data[variable_name][row, col].values) for variable, variable_name in variables.items()]
 
                     # stop if record has masked values
                     if not (numpy.isnan(data)).all():
                         lon = self.dataset['lon'][col]
                         lat = self.dataset['lat'][row]
 
-                        record = {
-                            'id': feature_index,
-                            'geometry': {
-                                'type': 'Point',
-                                'coordinates': (lon, lat)
-                            },
-                            'properties': {
-                                'lon': float(lon),
-                                'lat': float(lat)
-                            }
-                        }
+                        record = {'id': feature_index, 'geometry': {'type': 'Point', 'coordinates': (lon, lat)}, 'properties': {'lon': float(lon), 'lat': float(lat)}}
 
                         record['properties'].update(dict(zip(list(variables.keys()), data)))
 
@@ -300,23 +259,13 @@ class HFRadarRange:
             layers[layer_name] = layer_records
 
         # write queued features to their respective layers
-        schema = {
-            'geometry': 'Point', 'properties': {
-                'u': 'float',
-                'v': 'float',
-                'lat': 'float',
-                'lon': 'float',
-                'dop_lat': 'float',
-                'dop_lon': 'float'
-            }
-        }
+        schema = {'geometry': 'Point', 'properties': {'u': 'float', 'v': 'float', 'lat': 'float', 'lon': 'float', 'dop_lat': 'float', 'dop_lon': 'float'}}
 
         for layer_name, layer_records in layers.items():
             with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_CRS) as layer:
                 layer.writerecords(layer_records)
 
-    def write_vector(self, output_filename: str, layer_name: str = 'ssuv', variables: Collection[str] = None,
-                     start_time: datetime.datetime = None, end_time: datetime.datetime = None,
+    def write_vector(self, output_filename: str, layer_name: str = 'ssuv', variables: Collection[str] = None, start_time: datetime.datetime = None, end_time: datetime.datetime = None,
                      dop_threshold: float = 0.5):
         """
         Write average of HFR data for all hours in the given time interval to a single layer of the provided output file.
@@ -332,17 +281,10 @@ class HFRadarRange:
         if variables is None:
             variables = DATA_VARIABLES
 
-        variable_means = {variable: self.data_average(variable, start_time, end_time, dop_threshold) for
-                          variable in variables}
+        variable_means = {variable: self.data_average(variable, start_time, end_time, dop_threshold) for variable in variables}
 
         # define layer schema
-        schema = {
-            'geometry': 'Point',
-            'properties': {
-                'lon': 'float',
-                'lat': 'float'
-            }
-        }
+        schema = {'geometry': 'Point', 'properties': {'lon': 'float', 'lat': 'float'}}
 
         schema['properties'].update({variable: 'float' for variable in variables})
 
@@ -360,17 +302,7 @@ class HFRadarRange:
                     lon = self.dataset['lon'][col]
                     lat = self.dataset['lat'][row]
 
-                    record = {
-                        'id': feature_index,
-                        'geometry': {
-                            'type': 'Point',
-                            'coordinates': (lon, lat)
-                        },
-                        'properties': {
-                            'lon': float(lon),
-                            'lat': float(lat)
-                        }
-                    }
+                    record = {'id': feature_index, 'geometry': {'type': 'Point', 'coordinates': (lon, lat)}, 'properties': {'lon': float(lon), 'lat': float(lat)}}
 
                     record['properties'].update(dict(zip(variables, data)))
 
@@ -382,11 +314,8 @@ class HFRadarRange:
         with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=FIONA_CRS) as layer:
             layer.writerecords(layer_records)
 
-    def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = '',
-                      variables: Collection[str] = None,
-                      start_time: datetime.datetime = None, end_time: datetime.datetime = None,
-                      fill_value: float = LEAFLET_NODATA_VALUE,
-                      driver: str = 'GTiff', dop_threshold: float = None):
+    def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = '', variables: Collection[str] = None, start_time: datetime.datetime = None,
+                      end_time: datetime.datetime = None, fill_value: float = LEAFLET_NODATA_VALUE, driver: str = 'GTiff', dop_threshold: float = None):
         """
         Write average of HFR data for all hours in the given time interval to rasters.
 
@@ -407,8 +336,7 @@ class HFRadarRange:
         if filename_suffix is not '':
             filename_suffix = f'_{filename_suffix}'
 
-        variable_means = {variable: self.data_average(variable, start_time, end_time, dop_threshold) for
-                          variable in variables if variable not in ['dir', 'mag']}
+        variable_means = {variable: self.data_average(variable, start_time, end_time, dop_threshold) for variable in variables if variable not in ['dir', 'mag']}
 
         if 'dir' in variables or 'mag' in variables:
             if 'ssu' in variables:
@@ -435,8 +363,7 @@ class HFRadarRange:
                 'dtype': raster_data.dtype,
                 'crs': RASTERIO_CRS,
                 'transform': self.grid_transform,
-                'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
-            }
+                'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()}
 
             if driver == 'AAIGrid':
                 file_extension = 'asc'
@@ -449,21 +376,14 @@ class HFRadarRange:
                 output_lon = numpy.arange(west, east, mean_cell_length)[None, :]
                 output_lat = numpy.arange(south, north, mean_cell_length)[:, None]
 
-                raster_data = scipy.interpolate.griddata((input_lon.flatten(), input_lat.flatten()),
-                                                         raster_data.flatten(),
-                                                         (output_lon, output_lat), method='nearest',
-                                                         fill_value=fill_value).astype(
+                raster_data = scipy.interpolate.griddata((input_lon.flatten(), input_lat.flatten()), raster_data.flatten(), (output_lon, output_lat), method='nearest', fill_value=fill_value).astype(
                     raster_data.dtype)
 
                 gdal_args.update({
                     'height': raster_data.shape[0],
                     'width': raster_data.shape[1],
                     'FORCE_CELLSIZE': 'YES',
-                    'transform': rasterio.transform.from_origin(numpy.min(output_lon),
-                                                                numpy.max(output_lat),
-                                                                numpy.max(numpy.diff(output_lon)),
-                                                                numpy.max(numpy.diff(output_lon)))
-                })
+                    'transform': rasterio.transform.from_origin(numpy.min(output_lon), numpy.max(output_lat), numpy.max(numpy.diff(output_lon)), numpy.max(numpy.diff(output_lon)))})
             elif driver == 'GPKG':
                 file_extension = 'gpkg'
             else:
@@ -473,8 +393,7 @@ class HFRadarRange:
             if fill_value is not None:
                 raster_data[numpy.isnan(raster_data)] = fill_value
 
-            output_filename = os.path.join(output_dir,
-                                           f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
+            output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
 
             logging.info(f'Writing {output_filename}')
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
@@ -502,9 +421,7 @@ class HFRadarRange:
         dop_y = self.dataset['dopy'].sel(time=slice(start_time, end_time))
         return ((dop_x <= threshold) & (dop_y <= threshold)).values
 
-    def to_xarray(self, variables: Collection[str] = None, start_time: datetime.datetime = None,
-                  end_time: datetime.datetime = None,
-                  mean: bool = True, dop_threshold: float = 0.5) -> xarray.Dataset:
+    def to_xarray(self, variables: Collection[str] = None, start_time: datetime.datetime = None, end_time: datetime.datetime = None, mean: bool = True, dop_threshold: float = 0.5) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
 
@@ -529,17 +446,9 @@ class HFRadarRange:
 
         if mean:
             for variable in variables:
-                output_data = self.data_average(variable, start_time=start_time, end_time=end_time,
-                                                dop_threshold=dop_threshold)
+                output_data = self.data_average(variable, start_time=start_time, end_time=end_time, dop_threshold=dop_threshold)
 
-                output_dataset.update({
-                    variable: xarray.DataArray(output_data,
-                                               coords={
-                                                   'lat': self.dataset['lat'],
-                                                   'lon': self.dataset['lon']
-                                               },
-                                               dims=('lat', 'lon'))
-                })
+                output_dataset.update({variable: xarray.DataArray(output_data, coords={'lat': self.dataset['lat'], 'lon': self.dataset['lon']}, dims=('lat', 'lon'))})
         else:
             for variable in variables:
                 output_data = self.dataset[DATA_VARIABLES[variable]].sel(time=slice(start_time, end_time))
@@ -551,8 +460,7 @@ class HFRadarRange:
 
         return output_dataset
 
-    def to_netcdf(self, output_file: str, variables: Collection[str] = None, start_time: datetime.datetime = None,
-                  end_time: datetime.datetime = None, mean: bool = True):
+    def to_netcdf(self, output_file: str, variables: Collection[str] = None, start_time: datetime.datetime = None, end_time: datetime.datetime = None, mean: bool = True):
         """
         Writes to NetCDF file.
 

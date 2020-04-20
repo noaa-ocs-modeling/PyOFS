@@ -21,8 +21,7 @@ def diffusion(polygons: [geometry.Polygon]):
     for polygon in polygons:
         centroid = polygon.centroid
 
-        max_radius = max(centroid.distance(vertex) for vertex in
-                         (geometry.Point(point) for point in zip(*polygon.exterior.xy)))
+        max_radius = max(centroid.distance(vertex) for vertex in (geometry.Point(point) for point in zip(*polygon.exterior.xy)))
 
         radius_interval = 500
 
@@ -74,8 +73,7 @@ if __name__ == '__main__':
                 contour_areas = []
                 contour_perimeters = []
 
-                contour_records = [record for record in
-                                   filter(lambda record: record['properties']['contour'] == contour_name, contours_file)]
+                contour_records = [record for record in filter(lambda record: record['properties']['contour'] == contour_name, contours_file)]
 
                 for record in contour_records:
                     contour_datetime = datetime.datetime.strptime(record['properties']['datetime'], '%Y-%m-%dT%H:%M:%S')
@@ -85,8 +83,7 @@ if __name__ == '__main__':
                     contour_areas.append(contour_polygon.area)
                     contour_perimeters.append(contour_polygon.length)
 
-                values[contour_name][velocity_product] = pandas.DataFrame(
-                    {'datetime': contour_datetimes, 'area': contour_areas, 'perimeter': contour_perimeters})
+                values[contour_name][velocity_product] = pandas.DataFrame({'datetime': contour_datetimes, 'area': contour_areas, 'perimeter': contour_perimeters})
 
     plotting_values = {'area': '%' if plot_percentages else 'm^2', 'perimeter': '%' if plot_percentages else 'm'}
 
@@ -156,8 +153,7 @@ if __name__ == '__main__':
                 color = colors[contour_name[1]]
                 y_values = contour_values[plotting_value] / starting_value if plot_percentages else 1
                 line, = axis.plot(contour_values['datetime'], y_values, '-o', label=contour_name, color=color)
-                axis.annotate(contour_name, xy=(1, line.get_ydata()[-1]), xytext=(6, 0), color=line.get_color(),
-                              xycoords=axis.get_yaxis_transform(), textcoords="offset points", size=8, va="center")
+                axis.annotate(contour_name, xy=(1, line.get_ydata()[-1]), xytext=(6, 0), color=line.get_color(), xycoords=axis.get_yaxis_transform(), textcoords="offset points", size=8, va="center")
 
             axis.axhline(y=1 if plot_percentages else starting_value, linestyle=':', color='k', zorder=0)
 

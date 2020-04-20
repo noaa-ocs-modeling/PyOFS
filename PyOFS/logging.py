@@ -19,8 +19,7 @@ def get_logger(name: str) -> logging.Logger:
     return logger
 
 
-def create_logger(name: str, log_filename: str = None, file_level: int = logging.DEBUG, console_level: int = logging.INFO,
-                  log_format: str = None) -> logging.Logger:
+def create_logger(name: str, log_filename: str = None, file_level: int = logging.DEBUG, console_level: int = logging.INFO, log_format: str = None) -> logging.Logger:
     if log_format is None:
         log_format = DEFAULT_LOG_FORMAT
 

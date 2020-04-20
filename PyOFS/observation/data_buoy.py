@@ -24,8 +24,7 @@ import xarray
 
 from PyOFS import CRS_EPSG, DATA_DIRECTORY, utilities
 
-MEASUREMENT_VARIABLES = ['water_temperature', 'conductivity', 'salinity', 'o2_saturation', 'dissolved_oxygen', 'chlorophyll_concentration',
-                         'turbidity', 'water_ph', 'water_eh']
+MEASUREMENT_VARIABLES = ['water_temperature', 'conductivity', 'salinity', 'o2_saturation', 'dissolved_oxygen', 'chlorophyll_concentration', 'turbidity', 'water_ph', 'water_eh']
 
 RASTERIO_CRS = rasterio.crs.CRS({'init': f'epsg:{CRS_EPSG}'})
 FIONA_CRS = fiona.crs.from_epsg(CRS_EPSG)
@@ -112,8 +111,7 @@ class DataBuoyRange:
 
         # concurrently populate dictionary with datasets for each station
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            running_futures = {concurrency_pool.submit(DataBuoyDataset, station_name): station_name for station_name in
-                               self.station_names}
+            running_futures = {concurrency_pool.submit(DataBuoyDataset, station_name): station_name for station_name in self.station_names}
 
             for completed_future in futures.as_completed(running_futures):
                 station_name = running_futures[completed_future]
@@ -219,9 +217,7 @@ class DataBuoyRange:
                 'chlorophyll_concentration': 'float',
                 'turbidity': 'float',
                 'water_ph': 'float',
-                'water_eh': 'float'
-            }
-        }
+                'water_eh': 'float'}}
 
         logging.debug('Creating features...')
 
@@ -231,10 +227,7 @@ class DataBuoyRange:
             station = self.stations[station_name]
 
             record = {
-                'geometry': {
-                    'type': 'Point',
-                    'coordinates': (station.longitude, station.latitude)
-                },
+                'geometry': {'type': 'Point', 'coordinates': (station.longitude, station.latitude)},
                 'properties': {
                     'name': station_name,
                     'longitude': station.longitude,
@@ -247,9 +240,7 @@ class DataBuoyRange:
                     'chlorophyll_concentration': station_data['chlorophyll_concentration'],
                     'turbidity': station_data['turbidity'],
                     'water_ph': station_data['water_ph'],
-                    'water_eh': station_data['water_eh']
-                }
-            }
+                    'water_eh': station_data['water_eh']}}
 
             layer_records.append(record)
 
