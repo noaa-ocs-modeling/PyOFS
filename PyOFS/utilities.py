@@ -472,3 +472,12 @@ if __name__ == '__main__':
             output_file.writerecords(records)
 
     print('done')
+
+def overview_levels(shape: (int, int)) -> [int]:
+    levels = []
+    shape = numpy.array(shape)
+    factor = 2
+    while numpy.all(shape / factor > 1):
+        levels.append(factor)
+        factor *= 2
+    return levels

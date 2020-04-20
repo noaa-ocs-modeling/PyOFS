@@ -468,9 +468,7 @@ class HFRadarRange:
                 file_extension = 'gpkg'
             else:
                 file_extension = 'tiff'
-                gdal_args.update({
-                    'TILED': 'YES'
-                })
+                gdal_args.update({'TILED': 'YES', 'COMPRESSION': 'LZW', 'BIGTIFF': 'YES'})
 
             if fill_value is not None:
                 raster_data[numpy.isnan(raster_data)] = fill_value
@@ -481,6 +479,8 @@ class HFRadarRange:
             logging.info(f'Writing {output_filename}')
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(numpy.flipud(raster_data), 1)
+                output_raster.build_overviews(utilities.overview_levels(raster_data.shape), Resampling['average'])
+                output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def dop_mask(self, threshold: float, start_time: datetime.datetime = None, end_time: datetime.datetime = None):
         """

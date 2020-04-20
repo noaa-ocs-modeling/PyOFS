@@ -276,15 +276,15 @@ class RTOFSDataset:
                     file_extension = 'gpkg'
                 else:
                     file_extension = 'tiff'
-                    gdal_args.update({
-                        'TILED': 'YES'
-                    })
+                    gdal_args.update({'TILED': 'YES', 'COMPRESSION': 'LZW', 'BIGTIFF': 'YES'})
 
                 output_filename = f'{os.path.splitext(output_filename)[0]}.{file_extension}'
 
                 logging.info(f'Writing {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(variable_mean, 1)
+                    output_raster.build_overviews(utilities.overview_levels(variable_mean.shape), Resampling['average'])
+                    output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def write_raster(self, output_filename: str, variable: str, time: datetime.datetime,
                      fill_value=LEAFLET_NODATA_VALUE,
@@ -325,15 +325,15 @@ class RTOFSDataset:
                 file_extension = 'gpkg'
             else:
                 file_extension = 'tiff'
-                gdal_args.update({
-                    'TILED': 'YES'
-                })
+                gdal_args.update({'TILED': 'YES', 'COMPRESSION': 'LZW', 'BIGTIFF': 'YES'})
 
             output_filename = f'{os.path.splitext(output_filename)[0]}.{file_extension}'
 
             logging.info(f'Writing {output_filename}')
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(output_data, 1)
+                output_raster.build_overviews(utilities.overview_levels(output_data.shape), Resampling['average'])
+                output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def to_xarray(self, variables: Collection[str] = None, mean: bool = True) -> xarray.Dataset:
         """

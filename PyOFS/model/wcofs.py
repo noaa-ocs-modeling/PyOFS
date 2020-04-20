@@ -564,9 +564,7 @@ class WCOFSDataset:
                 file_extension = 'gpkg'
             else:
                 file_extension = 'tiff'
-                gdal_args.update({
-                    'TILED': 'YES'
-                })
+                gdal_args.update({'TILED': 'YES', 'COMPRESSION': 'LZW', 'BIGTIFF': 'YES'})
 
             output_filename = os.path.join(output_dir, f'wcofs_{variable}_{self.model_time:%Y%m%d}{filename_suffix}.{file_extension}')
 
@@ -576,6 +574,8 @@ class WCOFSDataset:
             logging.info(f'Writing to {output_filename}')
             with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
                 output_raster.write(masked_data, 1)
+                output_raster.build_overviews(utilities.overview_levels(masked_data.shape), Resampling['average'])
+                output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def write_vector(self, output_filename: str, layer_name: str = None, time_deltas: list = None):
         """
@@ -1256,6 +1256,7 @@ class WCOFSRange:
                         file_extension = 'gpkg'
                     else:
                         file_extension = 'tiff'
+                        gdal_args.update({'TILED': 'YES', 'COMPRESSION': 'LZW', 'BIGTIFF': 'YES'})
 
                     output_filename = os.path.join(output_dir,
                                                    f'wcofs_{variable}_{model_string}{filename_suffix}.{file_extension}')
@@ -1266,6 +1267,8 @@ class WCOFSRange:
                     logging.info(f'Writing to {output_filename}')
                     with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
                         output_raster.write(masked_data, 1)
+                        output_raster.build_overviews(utilities.overview_levels(masked_data.shape), Resampling['average'])
+                        output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def write_vector(self, output_filename: str, variables: Collection[str] = None,
                      start_time: datetime.datetime = None,

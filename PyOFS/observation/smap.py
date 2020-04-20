@@ -186,9 +186,7 @@ class SMAPDataset:
                     file_extension = 'gpkg'
                 else:
                     file_extension = 'tiff'
-                    gdal_args.update({
-                        'TILED': 'YES'
-                    })
+                    gdal_args.update({'TILED': 'YES', 'COMPRESSION': 'LZW', 'BIGTIFF': 'YES'})
 
                 output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
 
@@ -196,6 +194,8 @@ class SMAPDataset:
                 logging.info(f'Writing to {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(input_data, 1)
+                    output_raster.build_overviews(utilities.overview_levels(input_data.shape), Resampling['average'])
+                    output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def __repr__(self):
         used_params = []
