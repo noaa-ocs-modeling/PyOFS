@@ -559,8 +559,9 @@ class WCOFSDataset:
             logging.info(f'Writing to {output_filename}')
             with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
                 output_raster.write(masked_data, 1)
-                output_raster.build_overviews(utilities.overview_levels(masked_data.shape), Resampling['average'])
-                output_raster.update_tags(ns='rio_overview', resampling='average')
+                if driver == 'GTiff':
+                    output_raster.build_overviews(utilities.overview_levels(masked_data.shape), Resampling['average'])
+                    output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def write_vector(self, output_filename: str, layer_name: str = None, time_deltas: list = None):
         """
@@ -1211,8 +1212,9 @@ class WCOFSRange:
                     logging.info(f'Writing to {output_filename}')
                     with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
                         output_raster.write(masked_data, 1)
-                        output_raster.build_overviews(utilities.overview_levels(masked_data.shape), Resampling['average'])
-                        output_raster.update_tags(ns='rio_overview', resampling='average')
+                        if driver == 'GTiff':
+                            output_raster.build_overviews(utilities.overview_levels(masked_data.shape), Resampling['average'])
+                            output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def write_vector(self, output_filename: str, variables: Collection[str] = None, start_time: datetime.datetime = None, end_time: datetime.datetime = None):
         """

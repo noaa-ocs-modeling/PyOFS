@@ -346,8 +346,9 @@ class VIIRSDataset:
                 logging.info(f'Writing to {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(input_data, 1)
-                    output_raster.build_overviews(utilities.overview_levels(input_data.shape), Resampling['average'])
-                    output_raster.update_tags(ns='rio_overview', resampling='average')
+                    if driver == 'GTiff':
+                        output_raster.build_overviews(utilities.overview_levels(input_data.shape), Resampling['average'])
+                        output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def __repr__(self):
         used_params = [self.data_time.__repr__()]
@@ -614,8 +615,9 @@ class VIIRSRange:
                 logging.info(f'Writing {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(raster_data, 1)
-                    output_raster.build_overviews(utilities.overview_levels(raster_data.shape), Resampling['average'])
-                    output_raster.update_tags(ns='rio_overview', resampling='average')
+                    if driver == 'GTiff':
+                        output_raster.build_overviews(utilities.overview_levels(raster_data.shape), Resampling['average'])
+                        output_raster.update_tags(ns='rio_overview', resampling='average')
             else:
                 logging.warning(f'No {"VIIRS" if satellite is None else "VIIRS " + satellite} {variable} found between {start_time} and {end_time}.')
 
