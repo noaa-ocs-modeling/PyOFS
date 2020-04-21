@@ -8,7 +8,7 @@ Created on Jun 25, 2018
 """
 
 from collections import OrderedDict
-from datetime import datetime, timedelta, date
+from datetime import date, datetime, timedelta
 import os
 import threading
 from typing import Collection
@@ -23,7 +23,7 @@ import rasterio.warp
 from shapely import geometry
 import xarray
 
-from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, utilities
+from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, utilities
 from PyOFS.utilities import get_logger
 
 LOGGER = get_logger('PyOFS.RTOFS')
@@ -255,7 +255,7 @@ class RTOFSDataset:
                     file_extension = 'gpkg'
                 else:
                     file_extension = 'tiff'
-                    gdal_args.update({'TILED': 'YES', 'COMPRESSION': 'LZW', 'BIGTIFF': 'YES'})
+                    gdal_args.update(TIFF_CREATION_OPTIONS)
 
                 output_filename = f'{os.path.splitext(output_filename)[0]}.{file_extension}'
 
@@ -302,7 +302,7 @@ class RTOFSDataset:
                 file_extension = 'gpkg'
             else:
                 file_extension = 'tiff'
-                gdal_args.update({'TILED': 'YES', 'COMPRESSION': 'LZW', 'BIGTIFF': 'YES'})
+                gdal_args.update(TIFF_CREATION_OPTIONS)
 
             output_filename = f'{os.path.splitext(output_filename)[0]}.{file_extension}'
 

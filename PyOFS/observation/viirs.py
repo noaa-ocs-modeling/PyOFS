@@ -25,7 +25,7 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, utilities
+from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, utilities
 from PyOFS.utilities import get_logger
 
 LOGGER = get_logger('PyOFS.VIIRS')
@@ -341,7 +341,7 @@ class VIIRSDataset:
                     file_extension = 'gpkg'
                 else:
                     file_extension = 'tiff'
-                    gdal_args.update({'TILED': 'YES', 'COMPRESSION': 'LZW', 'BIGTIFF': 'YES'})
+                    gdal_args.update(TIFF_CREATION_OPTIONS)
 
                 output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
 
@@ -594,7 +594,7 @@ class VIIRSRange:
                     file_extension = 'gpkg'
                 else:
                     file_extension = 'tiff'
-                    gdal_args.update({'TILED': 'YES', 'COMPRESSION': 'LZW', 'BIGTIFF': 'YES'})
+                    gdal_args.update(TIFF_CREATION_OPTIONS)
 
                 if filename_prefix is None:
                     current_filename_prefix = f'viirs_{variable}'
