@@ -15,6 +15,7 @@ import fiona
 import fiona.crs
 import numpy
 import rasterio
+from rasterio.enums import Resampling
 import scipy.interpolate
 import xarray
 
@@ -191,7 +192,8 @@ class HFRadarRange:
             record = {
                 'id': site_index + 1,
                 'geometry': {'type': 'Point', 'coordinates': (lon, lat)},
-                'properties': {'code': site_code, 'net_code': site_network_code, 'lon': float(lon), 'lat': float(lat)}}
+                'properties': {'code': site_code, 'net_code': site_network_code, 'lon': float(lon), 'lat': float(lat)}
+            }
 
             layer_records.append(record)
 
@@ -363,7 +365,8 @@ class HFRadarRange:
                 'dtype': raster_data.dtype,
                 'crs': OUTPUT_CRS,
                 'transform': self.grid_transform,
-                'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()}
+                'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
+            }
 
             if driver == 'AAIGrid':
                 file_extension = 'asc'
@@ -383,7 +386,8 @@ class HFRadarRange:
                     'height': raster_data.shape[0],
                     'width': raster_data.shape[1],
                     'FORCE_CELLSIZE': 'YES',
-                    'transform': rasterio.transform.from_origin(numpy.min(output_lon), numpy.max(output_lat), numpy.max(numpy.diff(output_lon)), numpy.max(numpy.diff(output_lon)))})
+                    'transform': rasterio.transform.from_origin(numpy.min(output_lon), numpy.max(output_lat), numpy.max(numpy.diff(output_lon)), numpy.max(numpy.diff(output_lon)))
+                })
             elif driver == 'GPKG':
                 file_extension = 'gpkg'
             else:

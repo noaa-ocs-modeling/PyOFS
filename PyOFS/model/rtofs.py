@@ -17,6 +17,7 @@ import fiona.crs
 import numpy
 import rasterio.control
 from rasterio.crs import CRS
+from rasterio.enums import Resampling
 import rasterio.features
 import rasterio.mask
 import rasterio.warp
@@ -35,15 +36,18 @@ COORDINATE_VARIABLES = ['time', 'lev', 'lat', 'lon']
 DATASET_STRUCTURE = {
     '2ds': {
         'nowcast': {'prog': ['sss', 'sst', 'u_velocity', 'v_velocity'], 'diag': ['ssh', 'ice_coverage', 'ice_thickness']},
-        'forecast': {'prog': ['sss', 'sst', 'u_velocity', 'v_velocity'], 'diag': ['ssh', 'ice_coverage', 'ice_thickness']}},
-    '3dz': {'nowcast': {'salt': ['salinity'], 'temp': ['temperature'], 'uvel': ['u'], 'vvel': ['v']}, 'forecast': {'salt': ['salinity'], 'temp': ['temperature'], 'uvel': ['u'], 'vvel': ['v']}}}
+        'forecast': {'prog': ['sss', 'sst', 'u_velocity', 'v_velocity'], 'diag': ['ssh', 'ice_coverage', 'ice_thickness']}
+    },
+    '3dz': {'nowcast': {'salt': ['salinity'], 'temp': ['temperature'], 'uvel': ['u'], 'vvel': ['v']}, 'forecast': {'salt': ['salinity'], 'temp': ['temperature'], 'uvel': ['u'], 'vvel': ['v']}}
+}
 
 DATA_VARIABLES = {
     'sst': {'2ds': {'prog': 'sst'}, '3dz': {'temp': 'temperature'}},
     'sss': {'2ds': {'prog': 'sss'}, '3dz': {'salt': 'salinity'}},
     'ssu': {'2ds': {'prog': 'u_velocity'}, '3dz': {'uvel': 'u'}},
     'ssv': {'2ds': {'prog': 'v_velocity'}, '3dz': {'vvel': 'v'}},
-    'ssh': {'2ds': {'diag': 'ssh'}}}
+    'ssh': {'2ds': {'diag': 'ssh'}}
+}
 
 TIME_DELTAS = {'daily': range(-3, 8 + 1)}
 
@@ -243,7 +247,8 @@ class RTOFSDataset:
                     'count': 1,
                     'dtype': rasterio.float32,
                     'crs': CRS.from_dict(OUTPUT_CRS),
-                    'nodata': numpy.array([fill_value]).astype(variable_mean.dtype).item()}
+                    'nodata': numpy.array([fill_value]).astype(variable_mean.dtype).item()
+                }
 
                 output_filename = f'{filename_prefix}_{variable}_{self.model_time:%Y%m%d}_{time_delta_string}{filename_suffix}'
                 output_filename = os.path.join(output_dir, output_filename)
@@ -293,7 +298,8 @@ class RTOFSDataset:
                 'count': 1,
                 'dtype': rasterio.float32,
                 'crs': CRS.from_dict(OUTPUT_CRS),
-                'nodata': numpy.array([fill_value]).astype(output_data.dtype).item()}
+                'nodata': numpy.array([fill_value]).astype(output_data.dtype).item()
+            }
 
             if driver == 'AAIGrid':
                 file_extension = 'asc'

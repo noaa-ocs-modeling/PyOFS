@@ -19,6 +19,7 @@ import numpy
 import pyproj
 import rasterio.control
 from rasterio.crs import CRS
+from rasterio.enums import Resampling
 from rasterio.io import MemoryFile
 import rasterio.mask
 import rasterio.warp
@@ -44,7 +45,8 @@ DATA_VARIABLES = {
     'ssu': {'2ds': 'u_sur', 'avg': 'u'},
     'ssv': {'2ds': 'v_sur', 'avg': 'v'},
     'sss': {'2ds': 'salt_sur', 'avg': 'salt'},
-    'ssh': {'2ds': 'zeta', 'avg': 'zeta'}}
+    'ssh': {'2ds': 'zeta', 'avg': 'zeta'}
+}
 
 WCOFS_MODEL_HOURS = {'n': -24, 'f': 72}
 WCOFS_MODEL_RUN_HOUR = 3
@@ -530,7 +532,8 @@ class WCOFSDataset:
                 'crs': CRS.from_dict(OUTPUT_CRS),
                 'transform': grid_transform,
                 'dtype': raster_data.dtype,
-                'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()}
+                'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
+            }
 
             with MemoryFile() as memory_file:
                 with memory_file.open(driver='GTiff', **gdal_args) as memory_raster:
@@ -644,7 +647,8 @@ class WCOFSDataset:
         record = {
             'id': feature_index,
             'geometry': {'type': 'Point', 'coordinates': (float(rho_lon), float(rho_lat))},
-            'properties': {'row': row, 'col': col, 'rho_lon': float(rho_lon), 'rho_lat': float(rho_lat)}}
+            'properties': {'row': row, 'col': col, 'rho_lon': float(rho_lon), 'rho_lat': float(rho_lat)}
+        }
 
         for variable in variable_means.keys():
             record['properties'][variable] = float(variable_means[variable][row, col])
@@ -687,7 +691,8 @@ class WCOFSDataset:
                 data_array = xarray.DataArray(data_stack, coords={
                     'time': times,
                     f'{grid}_lon': ((f'{grid}_eta', f'{grid}_xi'), self.data_coordinates[grid]['lon']),
-                    f'{grid}_lat': ((f'{grid}_eta', f'{grid}_xi'), self.data_coordinates[grid]['lat'])}, dims=('time', f'{grid}_eta', f'{grid}_xi'))
+                    f'{grid}_lat': ((f'{grid}_eta', f'{grid}_xi'), self.data_coordinates[grid]['lat'])
+                }, dims=('time', f'{grid}_eta', f'{grid}_xi'))
 
             data_array.attrs['grid'] = grid
             output_dataset = output_dataset.update({variable: data_array}, inplace=True)
@@ -1183,7 +1188,8 @@ class WCOFSRange:
                         'crs': CRS.from_dict(OUTPUT_CRS),
                         'transform': grid_transform,
                         'dtype': raster_data.dtype,
-                        'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()}
+                        'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
+                    }
 
                     with MemoryFile() as memory_file:
                         with memory_file.open(driver='GTiff', **gdal_args) as memory_raster:
@@ -1277,7 +1283,8 @@ class WCOFSRange:
                     if not numpy.isnan(data).all():
                         record = {
                             'id': layer_feature_indices[model_time_string], 'geometry': {'type': 'Point', 'coordinates': (rho_lon, rho_lat)},
-                            'properties': {'lon': float(rho_lon), 'lat': float(rho_lat)}}
+                            'properties': {'lon': float(rho_lon), 'lat': float(rho_lat)}
+                        }
 
                         record['properties'].update(dict(zip(variables, data)))
 
@@ -1314,7 +1321,8 @@ class WCOFSRange:
                 data_array = xarray.DataArray(data_stack, coords={
                     'time_delta': sorted(data.keys(), reverse=True),
                     'lon': ((f'{grid}_eta', f'{grid}_xi'), self.data_coordinates[grid]['lon']),
-                    'lat': ((f'{grid}_eta', f'{grid}_xi'), self.data_coordinates[grid]['lat'])}, dims=('time_delta', f'{grid}_eta', f'{grid}_xi'))
+                    'lat': ((f'{grid}_eta', f'{grid}_xi'), self.data_coordinates[grid]['lat'])
+                }, dims=('time_delta', f'{grid}_eta', f'{grid}_xi'))
 
                 del data_stack
 

@@ -39,7 +39,8 @@ def to_netcdf(start_time: datetime, end_time: datetime, output_dir: str):
         'wcofs_u_noDA': os.path.join(output_dir, 'wcofs_u_noDA.nc'),
         'wcofs_u_DA': os.path.join(output_dir, 'wcofs_u_DA.nc'),
         'wcofs_v_noDA': os.path.join(output_dir, 'wcofs_v_noDA.nc'),
-        'wcofs_v_DA': os.path.join(output_dir, 'wcofs_v_DA.nc')}
+        'wcofs_v_DA': os.path.join(output_dir, 'wcofs_v_DA.nc')
+    }
 
     # write HFR NetCDF file if it does not exist
     if not os.path.exists(nc_filenames['hfr']):
@@ -90,7 +91,8 @@ def from_netcdf(input_dir: str) -> dict:
         'wcofs_u_noDA': os.path.join(input_dir, 'wcofs_u_noDA.nc'),
         'wcofs_u_DA': os.path.join(input_dir, 'wcofs_u_DA.nc'),
         'wcofs_v_noDA': os.path.join(input_dir, 'wcofs_v_noDA.nc'),
-        'wcofs_v_DA': os.path.join(input_dir, 'wcofs_v_DA.nc')}
+        'wcofs_v_DA': os.path.join(input_dir, 'wcofs_v_DA.nc')
+    }
 
     # load datasets from local NetCDF files
     return {dataset: xarray.open_dataset(nc_filenames[dataset]) for dataset in nc_filenames}
@@ -234,11 +236,14 @@ if __name__ == '__main__':
             'rmse': {
                 'sst': {'noDA': rmse(data['obser']['sst'], data['noDA_model']['sst'][time_delta]), 'DA': rmse(data['obser']['sst'], data['DA_model']['sst'][time_delta])},
                 'u': {'noDA': rmse(data['obser']['u'], data['noDA_model']['u'][time_delta]), 'DA': rmse(data['obser']['u'], data['DA_model']['u'][time_delta])},
-                'v': {'noDA': rmse(data['obser']['v'], data['noDA_model']['v'][time_delta]), 'DA': rmse(data['obser']['v'], data['DA_model']['v'][time_delta])}},
+                'v': {'noDA': rmse(data['obser']['v'], data['noDA_model']['v'][time_delta]), 'DA': rmse(data['obser']['v'], data['DA_model']['v'][time_delta])}
+            },
             'r_squ': {
                 'sst': {'noDA': r_squ(data['obser']['sst'], data['noDA_model']['sst'][time_delta]), 'DA': r_squ(data['obser']['sst'], data['DA_model']['sst'][time_delta])},
                 'u': {'noDA': r_squ(data['obser']['u'], data['noDA_model']['u'][time_delta]), 'DA': r_squ(data['obser']['u'], data['DA_model']['u'][time_delta])},
-                'v': {'noDA': r_squ(data['obser']['v'], data['noDA_model']['v'][time_delta]), 'DA': r_squ(data['obser']['v'], data['DA_model']['v'][time_delta])}}}
+                'v': {'noDA': r_squ(data['obser']['v'], data['noDA_model']['v'][time_delta]), 'DA': r_squ(data['obser']['v'], data['DA_model']['v'][time_delta])}
+            }
+        }
 
     for time_delta, methods in metrics.items():
         LOGGER.info(f'{time_delta}:')

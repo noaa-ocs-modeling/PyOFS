@@ -44,8 +44,10 @@ SOURCE_URLS = OrderedDict({
     'OpenDAP': OrderedDict({
         'NESDIS': 'https://www.star.nesdis.noaa.gov/thredds/dodsC',
         'JPL': 'https://podaac-opendap.jpl.nasa.gov:443/opendap/allData/ghrsst/data/GDS2/L3U',
-        'NODC': 'https://data.nodc.noaa.gov/thredds/catalog/ghrsst/L3U'}),
-    'FTP': OrderedDict({'NESDIS': 'ftp.star.nesdis.noaa.gov/pub/socd2/coastwatch/sst'})})
+        'NODC': 'https://data.nodc.noaa.gov/thredds/catalog/ghrsst/L3U'
+    }),
+    'FTP': OrderedDict({'NESDIS': 'ftp.star.nesdis.noaa.gov/pub/socd2/coastwatch/sst'})
+})
 
 
 class VIIRSDataset:
@@ -332,7 +334,8 @@ class VIIRSDataset:
                     'dtype': rasterio.float32,
                     'crs': CRS.from_dict(OUTPUT_CRS),
                     'transform': VIIRSDataset.study_area_transform,
-                    'nodata': fill_value}
+                    'nodata': fill_value
+                }
 
                 if driver == 'AAIGrid':
                     file_extension = 'asc'
@@ -585,7 +588,8 @@ class VIIRSRange:
                     'crs': OUTPUT_CRS,
                     'dtype': raster_data.dtype,
                     'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item(),
-                    'transform': VIIRSRange.study_area_transform}
+                    'transform': VIIRSRange.study_area_transform
+                }
 
                 if driver == 'AAIGrid':
                     file_extension = 'asc'

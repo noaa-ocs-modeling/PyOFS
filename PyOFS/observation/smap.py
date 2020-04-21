@@ -16,6 +16,7 @@ import fiona.crs
 import numpy
 import rasterio
 from rasterio.crs import CRS
+from rasterio.enums import Resampling
 import rasterio.features
 import shapely
 import shapely.geometry
@@ -169,7 +170,8 @@ class SMAPDataset:
                     'dtype': rasterio.float32,
                     'crs': CRS.from_dict(OUTPUT_CRS),
                     'transform': SMAPDataset.study_area_transform,
-                    'nodata': fill_value}
+                    'nodata': fill_value
+                }
 
                 if driver == 'AAIGrid':
                     file_extension = 'asc'

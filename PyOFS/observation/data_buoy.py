@@ -216,7 +216,9 @@ class DataBuoyRange:
                 'chlorophyll_concentration': 'float',
                 'turbidity': 'float',
                 'water_ph': 'float',
-                'water_eh': 'float'}}
+                'water_eh': 'float'
+            }
+        }
 
         LOGGER.debug('Creating features...')
 
