@@ -434,8 +434,13 @@ def xarray_to_geopackage(input_path: str, output_path: str, epsg: int = 4326):
     schema['properties'].update({'area': 'float', 'perimeter': 'float'})
 
     records = [{
-        'geometry': shapely.geometry.mapping(polygon), 'properties': {
-            'datetime': contour_time, 'area': transform(partial(pyproj.transform, pyproj.Proj(init=f'epsg:{epsg}'), pyproj.Proj(init='epsg:3857')), polygon).area, 'perimeter': polygon.length}} for contour_time, polygon in polygons.items()]
+        'geometry': shapely.geometry.mapping(polygon),
+        'properties': {
+            'datetime': contour_time,
+            'area': transform(partial(pyproj.transform, pyproj.Proj(init=f'epsg:{epsg}'), pyproj.Proj(init='epsg:3857')), polygon).area,
+            'perimeter': polygon.length
+        }
+    } for contour_time, polygon in polygons.items()]
 
     with fiona.open(output_path, 'w', 'GPKG', schema=schema, crs=fiona.crs.from_epsg(epsg)) as output_file:
         output_file.writerecords(records)

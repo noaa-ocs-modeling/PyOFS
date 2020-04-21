@@ -226,8 +226,11 @@ class DataBuoyRange:
             station = self.stations[station_name]
 
             record = {
-                'geometry': {'type': 'Point', 'coordinates': (station.longitude, station.latitude)
-                }, 'properties': {
+                'geometry': {
+                    'type': 'Point',
+                    'coordinates': (station.longitude, station.latitude)
+                },
+                'properties': {
                     'name': station_name,
                     'longitude': station.longitude,
                     'latitude': station.latitude,
@@ -239,7 +242,9 @@ class DataBuoyRange:
                     'chlorophyll_concentration': station_data['chlorophyll_concentration'],
                     'turbidity': station_data['turbidity'],
                     'water_ph': station_data['water_ph'],
-                    'water_eh': station_data['water_eh']}}
+                    'water_eh': station_data['water_eh']
+                }
+            }
 
             layer_records.append(record)
 

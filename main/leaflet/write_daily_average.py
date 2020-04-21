@@ -7,7 +7,7 @@ Created on Aug 21, 2018
 @author: zachary.burnett
 """
 
-from datetime import datetime, timedelta, date, time
+from datetime import date, datetime, time, timedelta
 import logging
 import os
 import sys
@@ -178,7 +178,8 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime, date], day_delt
         LOGGER.exception(f'model run date: {model_run_date}, day deltas: {day_deltas}')
 
 
-def write_wcofs(output_dir: str, model_run_date: Union[datetime, date, int, float], day_deltas: range = MODEL_DAY_DELTAS['WCOFS'], scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'), vector_variables: Collection[str] = ('dir', 'mag'), data_assimilation: bool = True, grid_size_km: int = 4,
+def write_wcofs(output_dir: str, model_run_date: Union[datetime, date, int, float], day_deltas: range = MODEL_DAY_DELTAS['WCOFS'], scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
+                vector_variables: Collection[str] = ('dir', 'mag'), data_assimilation: bool = True, grid_size_km: int = 4,
                 source_url: str = None, use_defaults: bool = True, suffix: str = None, overwrite: bool = False):
     """
     Writes daily average of model output on given date.
@@ -328,7 +329,7 @@ def write_daily_average(output_dir: str, output_date: Union[datetime, date, int,
     # write_wcofs(output_dir, output_date, day_deltas, source_url=os.path.join(DATA_DIRECTORY, 'input/wcofs/option'),
     #             use_defaults=False, suffix='exp')
     LOGGER.info('Processing WCOFS noDA...')
-    write_wcofs(output_dir, output_date, day_deltas,  data_assimilation=False)
+    write_wcofs(output_dir, output_date, day_deltas, data_assimilation=False)
     LOGGER.info(f'Wrote models to {output_dir}')
 
 
