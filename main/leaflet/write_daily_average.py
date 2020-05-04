@@ -254,10 +254,10 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime, date, int, floa
                     if data_assimilation:
                         if grid_size_km == 4:
                             existing_files = [filename for filename in existing_files if
-                                              'wcofs' in filename and time_delta_string in filename and 'noDA' in filename and (suffix in filename if suffix is not None else True)]
+                                              'wcofs' in filename and time_delta_string in filename and 'noDA' not in filename and (suffix in filename if suffix is not None else True)]
                         else:
                             existing_files = [filename for filename in existing_files if
-                                              'wcofs' in filename and time_delta_string in filename and 'noDA' in filename and (
+                                              'wcofs' in filename and time_delta_string in filename and 'noDA' not in filename and (
                                                   suffix in filename if suffix is not None else True) and f'{grid_size_km}km' in filename]
                     else:
                         if grid_size_km == 4:

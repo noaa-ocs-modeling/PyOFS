@@ -97,7 +97,9 @@ if __name__ == '__main__':
             except ftplib.error_perm:
                 pass
         if len(sizes) > 0:
+            old_path_map = path_map.copy()
             path_map = {sizes[size][0]: sizes[size][1] for size in sorted(sizes)}
+            path_map.update({input_path: output_path for input_path, output_path in old_path_map.items() if input_path not in path_map})
             del sizes
 
         # for input_path in ftp_connection.nlst(WCOFS_EXPERIMENTAL_DIRECTORY):
@@ -113,6 +115,7 @@ if __name__ == '__main__':
         #
         #     path_map[input_path] = output_path
 
+        logger.info(f'found {len(path_map)} files at FTP remote')
         for input_path, output_path in path_map.items():
             filename = os.path.basename(input_path)
 
