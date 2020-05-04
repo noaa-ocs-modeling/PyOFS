@@ -306,7 +306,6 @@ def write_daily_average(output_dir: str, output_date: Union[datetime, date, int,
     :param day_deltas: time deltas for which to write model output
     """
 
-    # write initial message
     LOGGER.info(f'Starting file conversion for {output_date}')
 
     LOGGER.info('Processing HFR SSUV...')
