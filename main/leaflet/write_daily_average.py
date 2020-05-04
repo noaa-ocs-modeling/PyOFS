@@ -159,7 +159,7 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime, date], day_delt
                     if rtofs_dataset is None and not all(any(variable in filename for filename in existing_files) for variable in list(scalar_variables) + list(vector_variables)):
                         rtofs_dataset = rtofs.RTOFSDataset(model_run_date, source='2ds', time_interval='daily')
 
-                    scalar_variables_to_write = [variable for variable in scalar_variables if not any(variable in filename for filename in existing_files)]
+                scalar_variables_to_write = [variable for variable in scalar_variables if not any(variable in filename for filename in existing_files)]
 
                 if rtofs_dataset is not None:
                     if len(scalar_variables_to_write) > 0:

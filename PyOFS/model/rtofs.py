@@ -209,19 +209,22 @@ class RTOFSDataset:
         direction = 'forecast' if time_delta >= 0 else 'nowcast'
         time_delta_string = f'{direction[0]}{abs(time_delta) + 1 if direction == "forecast" else abs(time_delta):03}'
 
-        variable_means = {variable: self.data(variable, time, crop).values for variable in variables if variable not in ['dir', 'mag']}
+        variable_means = {variable: self.data(variable, time, crop) for variable in variables if variable not in ['dir', 'mag']}
+        variable_means = {variable: variable_mean.values for variable, variable_mean in variable_means.items() if variable_mean is not None}
 
         if 'dir' in variables or 'mag' in variables:
             u_name = 'ssu'
             v_name = 'ssv'
 
             if u_name not in variable_means:
-                u_data = self.data(u_name, time, crop).values
+                u_data = self.data(u_name, time, crop)
+                u_data = u_data.values if u_data is not None else None
             else:
                 u_data = variable_means[u_name]
 
             if v_name not in variable_means:
-                v_data = self.data(v_name, time, crop).values
+                v_data = self.data(v_name, time, crop)
+                v_data = v_data.values if v_data is not None else None
             else:
                 v_data = variable_means[v_name]
 

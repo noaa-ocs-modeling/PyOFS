@@ -24,7 +24,7 @@ import shapely.wkt
 import xarray
 
 from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, utilities
-from PyOFS.utilities import get_logger
+from PyOFS.utilities import get_logger, NoDataError
 
 LOGGER = get_logger('PyOFS.SMAP')
 
@@ -61,6 +61,8 @@ class SMAPDataset:
                 break
             except Exception as error:
                 LOGGER.warning(f'{error.__class__.__name__}: {error}')
+        else:
+            raise NoDataError(f'dataset creation error: no data found in sources')
 
         # construct rectangular polygon of granule extent
         lon_min = float(self.dataset.geospatial_lon_min)
