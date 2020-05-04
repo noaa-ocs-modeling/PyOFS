@@ -23,10 +23,12 @@ import scipy.interpolate
 import shapely.geometry
 import xarray
 
+import PyOFS
+import PyOFS.utilities
+
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
-from PyOFS import utilities
-from PyOFS.utilities import get_logger
+from PyOFS import utilities, get_logger
 
 LOGGER = get_logger('PyOFS.track')
 
@@ -714,8 +716,8 @@ def create_contour(contour_center: tuple, contour_radius: float, start_time: dat
     if contour_shape == 'circle':
         return CircleContour(contour_center, contour_radius, start_time, velocity_field)
     elif contour_shape == 'square':
-        southwest_corner = utilities.translate_geographic_coordinates(contour_center, -contour_radius)
-        northeast_corner = utilities.translate_geographic_coordinates(contour_center, contour_radius)
+        southwest_corner = PyOFS.utilities.translate_geographic_coordinates(contour_center, -contour_radius)
+        northeast_corner = PyOFS.utilities.translate_geographic_coordinates(contour_center, contour_radius)
         return RectangleContour(southwest_corner[0], northeast_corner[0], southwest_corner[1], northeast_corner[1], start_time, velocity_field)
     else:
         return Particle(contour_center, start_time, velocity_field)
@@ -799,7 +801,7 @@ if __name__ == '__main__':
     LOGGER.info(f'[{datetime.now()}]: Creating velocity field...')
     if source == 'rankine':
         vortex_radius = contour_radius * 5
-        vortex_center = utilities.translate_geographic_coordinates(next(iter(contour_centers.values())), numpy.array([contour_radius * -2, contour_radius * -2]))
+        vortex_center = PyOFS.utilities.translate_geographic_coordinates(next(iter(contour_centers.values())), numpy.array([contour_radius * -2, contour_radius * -2]))
         vortex_period = timedelta(days=5)
         velocity_field = RankineVortex(vortex_center, vortex_radius, vortex_period, [time_delta for index in range(int(period / time_delta))])
 

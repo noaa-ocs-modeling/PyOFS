@@ -9,9 +9,7 @@ Created on Jun 13, 2018
 
 import datetime
 from functools import partial
-import logging
 import os
-import sys
 
 import fiona
 import fiona.crs
@@ -23,70 +21,13 @@ from shapely.geometry import shape
 from shapely.ops import transform
 import xarray
 
-DEFAULT_LOG_FORMAT = '[%(asctime)s] %(name)-11s %(levelname)-8s: %(message)s'
+from PyOFS import get_logger
 
 WGS84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
 WEB_MERCATOR = pyproj.Proj('+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs')
 
 GRAVITATIONAL_ACCELERATION = 9.80665  # meters per second squared
 SIDEREAL_ROTATION_PERIOD = datetime.timedelta(hours=23, minutes=56, seconds=4.1)
-
-
-def get_logger(name: str) -> logging.Logger:
-    logger = logging.getLogger(name)
-
-    # check if logger is already configured
-    if logger.level == logging.NOTSET and len(logger.handlers) == 0:
-        # check if logger has a parent
-        if '.' in name:
-            logger.parent = get_logger(name.rsplit('.', 1)[0])
-        else:
-            logger = create_logger(name)
-
-    return logger
-
-
-def create_logger(name: str, log_filename: str = None, file_level: int = logging.DEBUG, console_level: int = logging.INFO, log_format: str = None) -> logging.Logger:
-    if log_format is None:
-        log_format = DEFAULT_LOG_FORMAT
-
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
-
-    # remove handlers
-    for handler in [handler for handler in logger.handlers]:
-        logger.removeHandler(handler)
-
-    log_formatter = logging.Formatter(log_format)
-
-    if console_level != logging.NOTSET:
-        if console_level <= logging.INFO:
-            console_output = logging.StreamHandler(sys.stdout)
-            console_output.setFormatter(log_formatter)
-            console_output.setLevel(console_level)
-            console_output.addFilter(LoggingOutputFilter())
-            logger.addHandler(console_output)
-
-        console_errors = logging.StreamHandler(sys.stderr)
-        console_errors.setFormatter(log_formatter)
-        console_errors.setLevel(max((console_level, logging.WARNING)))
-        logger.addHandler(console_errors)
-
-    if log_filename is not None:
-        log_file = logging.FileHandler(log_filename)
-        log_file.setFormatter(log_formatter)
-        log_file.setLevel(file_level)
-        logger.addHandler(log_file)
-
-    return logger
-
-
-class LoggingOutputFilter(logging.Filter):
-    """ class to filter output from a logger to only INFO or DEBUG """
-
-    def filter(self, rec):
-        return rec.levelno in (logging.DEBUG, logging.INFO)
-
 
 LOGGER = get_logger('PyOFS.utili')
 
@@ -137,89 +78,10 @@ def round_to_day(datetime_object: datetime.datetime, direction: str = None) -> d
     return datetime_object
 
 
-def round_to_hour(datetime_object: datetime.datetime, direction: str = None) -> datetime.datetime:
-    """
-    Return given datetime rounded to the nearest hour.
-
-    :param datetime_object: datetime to round
-    :param direction: either 'ceiling' or 'floor', optional
-    :return: rounded datetime
-    """
-
-    start_of_hour = datetime_object.replace(minute=0, second=0, microsecond=0)
-    half_hour = datetime_object.replace(minute=30, second=0, microsecond=0)
-
-    if direction == 'ceiling' or datetime_object >= half_hour:
-        datetime_object = start_of_hour + datetime.timedelta(hours=1)
-    elif direction == 'floor' or datetime_object < half_hour:
-        datetime_object = start_of_hour
-
-    return datetime_object
-
-
-def round_to_ten_minutes(datetime_object: datetime.datetime) -> datetime.datetime:
-    """
-    Return given datetime rounded to the nearest ten minutes.
-
-    :param datetime_object: datetime to round
-    :return: rounded datetime
-    """
-
-    return datetime_object.replace(minute=int(round(datetime_object.minute, -1)), second=0, microsecond=0)
-
-
-def range_daily(start_time: datetime.datetime, end_time: datetime.datetime) -> list:
-    """
-    Generate range of times between given times at day intervals.
-
-    :param start_time: beginning of time interval
-    :param end_time: end of time interval
-    :return: range of datetimes
-    """
-
-    duration = end_time - start_time
-    days = duration.days
-    stride = 1 if days > 0 else -1
-
-    return [start_time + datetime.timedelta(days=day) for day in range(0, days, stride)]
-
-
 # return numpy.arange(start_time, end_time, dtype='datetime64[D]')
 
 
-def range_hourly(start_time: datetime.datetime, end_time: datetime.datetime) -> list:
-    """
-    Generate range of times between given times at hour intervals.
-
-    :param start_time: beginning of time interval
-    :param end_time: end of time interval
-    :return: range of datetimes
-    """
-
-    duration = end_time - start_time
-    hours = int(duration.total_seconds() / 3600)
-    stride = 1 if duration.days > 0 else -1
-
-    return [start_time + datetime.timedelta(hours=hour) for hour in range(0, hours, stride)]
-
-
 # return numpy.arange(start_time, end_time, dtype='datetime64[h]')
-
-
-def ten_minute_range(start_time: datetime.datetime, end_time: datetime.datetime) -> list:
-    """
-    Generate range of times between given times at ten minute intervals.
-
-    :param start_time: beginning of time interval
-    :param end_time: end of time interval
-    :return: range of datetimes
-    """
-
-    duration = end_time - start_time
-    minutes = int(duration.total_seconds() / 60)
-    stride = 10
-
-    return [start_time + datetime.timedelta(minutes=minute) for minute in range(0, minutes + 1, stride)]
 
 
 def get_masked_data(masked_constant: numpy.ma.core.MaskedConstant) -> object:
@@ -295,11 +157,6 @@ def get_first_record(vector_dataset_filename: str):
 
     with fiona.open(vector_dataset_filename, **fiona_kwargs) as vector_layer:
         return next(iter(vector_layer))
-
-
-class NoDataError(Exception):
-    """ Error for no data found. """
-    pass
 
 
 class RotatedPoleCoordinateSystem:
@@ -526,13 +383,3 @@ if __name__ == '__main__':
             output_file.writerecords(records)
 
     print('done')
-
-
-def overview_levels(shape: (int, int)) -> [int]:
-    levels = []
-    shape = numpy.array(shape)
-    factor = 2
-    while numpy.all(shape / factor > 1):
-        levels.append(factor)
-        factor *= 2
-    return levels

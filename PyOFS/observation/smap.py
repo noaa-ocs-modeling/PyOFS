@@ -23,8 +23,8 @@ import shapely.geometry
 import shapely.wkt
 import xarray
 
-from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, utilities
-from PyOFS.utilities import get_logger, NoDataError
+import PyOFS
+from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, utilities, get_logger, NoDataError
 
 LOGGER = get_logger('PyOFS.SMAP')
 
@@ -143,7 +143,7 @@ class SMAPDataset:
         if numpy.datetime64(data_time) in self.dataset['times'].values:
             return self.dataset['smap_sss'].sel(times=data_time).values
         else:
-            raise utilities.NoDataError(f'No data exists for {data_time:%Y%m%dT%H%M%S}.')
+            raise PyOFS.NoDataError(f'No data exists for {data_time:%Y%m%dT%H%M%S}.')
 
     def write_rasters(self, output_dir: str, data_time: datetime, variables: Collection[str] = tuple(['sss']), filename_prefix: str = 'smos', fill_value: float = LEAFLET_NODATA_VALUE,
                       driver: str = 'GTiff'):
@@ -191,7 +191,7 @@ class SMAPDataset:
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(input_data, 1)
                     if driver == 'GTiff':
-                        output_raster.build_overviews(utilities.overview_levels(input_data.shape), Resampling['average'])
+                        output_raster.build_overviews(PyOFS.overview_levels(input_data.shape), Resampling['average'])
                         output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def __repr__(self):

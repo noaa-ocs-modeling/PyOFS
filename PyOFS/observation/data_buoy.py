@@ -20,8 +20,8 @@ import shapely
 import shapely.geometry
 import xarray
 
-from PyOFS import CRS_EPSG, DATA_DIRECTORY, utilities
-from PyOFS.utilities import get_logger
+import PyOFS
+from PyOFS import CRS_EPSG, DATA_DIRECTORY, utilities, get_logger
 
 LOGGER = get_logger('PyOFS.NDBC')
 
@@ -57,7 +57,7 @@ class DataBuoyDataset:
             self.longitude = self.dataset['longitude'].values.item()
             self.latitude = self.dataset['latitude'].values.item()
         except:
-            raise utilities.NoDataError(f'No NDBC observation found at {self.url}')
+            raise PyOFS.NoDataError(f'No NDBC observation found at {self.url}')
 
     def geometry(self) -> shapely.geometry.Point:
         """
@@ -116,14 +116,14 @@ class DataBuoyRange:
             for completed_future in futures.as_completed(running_futures):
                 station_name = running_futures[completed_future]
 
-                if type(completed_future.exception()) is not utilities.NoDataError:
+                if type(completed_future.exception()) is not PyOFS.NoDataError:
                     result = completed_future.result()
                     self.stations[station_name] = result
 
             del running_futures
 
         if len(self.stations) == 0:
-            raise utilities.NoDataError(f'No NDBC datasets found in {self.stations}')
+            raise PyOFS.NoDataError(f'No NDBC datasets found in {self.stations}')
 
     def data(self, variables: [str], start_time: datetime, end_time: datetime) -> {str: {str: xarray.DataArray}}:
         """

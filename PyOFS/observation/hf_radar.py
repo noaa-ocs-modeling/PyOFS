@@ -19,8 +19,8 @@ from rasterio.enums import Resampling
 import scipy.interpolate
 import xarray
 
-from PyOFS import CRS_EPSG, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, utilities
-from PyOFS.utilities import get_logger
+import PyOFS
+from PyOFS import CRS_EPSG, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, get_logger
 
 LOGGER = get_logger('PyOFS.HFR')
 
@@ -84,7 +84,7 @@ class HFRadarRange:
             except OSError as error:
                 LOGGER.warning(f'{error.__class__.__name__}: {error}')
         else:
-            raise utilities.NoDataError(f'No HFR observations found between {self.start_time} and {self.end_time}')
+            raise PyOFS.NoDataError(f'No HFR observations found between {self.start_time} and {self.end_time}')
 
         raw_times = self.dataset['time']
 
@@ -403,7 +403,7 @@ class HFRadarRange:
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(numpy.flipud(raster_data), 1)
                 if driver == 'GTiff':
-                    output_raster.build_overviews(utilities.overview_levels(raster_data.shape), Resampling['average'])
+                    output_raster.build_overviews(PyOFS.overview_levels(raster_data.shape), Resampling['average'])
                     output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def dop_mask(self, threshold: float, start_time: datetime = None, end_time: datetime = None):

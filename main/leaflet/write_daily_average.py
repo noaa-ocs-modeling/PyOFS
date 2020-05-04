@@ -19,10 +19,9 @@ sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.par
 
 from main.leaflet.write_azure import sync_with_azure
 from main.leaflet import write_json
-from PyOFS import DATA_DIRECTORY, LEAFLET_NODATA_VALUE
+from PyOFS import DATA_DIRECTORY, LEAFLET_NODATA_VALUE, create_logger, NoDataError
 from PyOFS.observation import hf_radar, viirs, smap, data_buoy
 from PyOFS.model import wcofs, rtofs
-from PyOFS.utilities import create_logger, NoDataError
 
 # disable complaints from Fiona environment within conda
 logging.root.manager.loggerDict['fiona._env'].setLevel(logging.CRITICAL)

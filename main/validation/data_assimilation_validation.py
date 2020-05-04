@@ -8,8 +8,7 @@ import xarray
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
-from PyOFS.utilities import get_logger
-from PyOFS import DATA_DIRECTORY
+from PyOFS import DATA_DIRECTORY, get_logger
 from PyOFS.observation import hf_radar, viirs
 from PyOFS.model import wcofs
 

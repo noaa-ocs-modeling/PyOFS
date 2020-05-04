@@ -1,6 +1,6 @@
 import os
 
-from PyOFS.utilities import get_logger
+from PyOFS import get_logger
 
 LOGGER = get_logger('PyOFS.azure')
 

@@ -24,8 +24,8 @@ import rasterio.warp
 from shapely import geometry
 import xarray
 
-from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, utilities
-from PyOFS.utilities import get_logger
+import PyOFS
+from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, utilities, get_logger
 
 LOGGER = get_logger('PyOFS.RTOFS')
 
@@ -133,7 +133,7 @@ class RTOFSDataset:
 
             self.study_area_transform = rasterio.transform.from_origin(self.study_area_west, self.study_area_north, lon_pixel_size, lat_pixel_size)
         else:
-            raise utilities.NoDataError(f'No RTOFS datasets found for {self.model_time}.')
+            raise PyOFS.NoDataError(f'No RTOFS datasets found for {self.model_time}.')
 
     def data(self, variable: str, time: datetime, crop: bool = True) -> xarray.DataArray:
         """
@@ -271,7 +271,7 @@ class RTOFSDataset:
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(variable_mean, 1)
                     if driver == 'GTiff':
-                        output_raster.build_overviews(utilities.overview_levels(variable_mean.shape), Resampling['average'])
+                        output_raster.build_overviews(PyOFS.overview_levels(variable_mean.shape), Resampling['average'])
                         output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def write_raster(self, output_filename: str, variable: str, time: datetime, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff', crop: bool = True):
@@ -319,7 +319,7 @@ class RTOFSDataset:
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(output_data, 1)
                 if driver == 'GTiff':
-                    output_raster.build_overviews(utilities.overview_levels(output_data.shape), Resampling['average'])
+                    output_raster.build_overviews(PyOFS.overview_levels(output_data.shape), Resampling['average'])
                     output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def to_xarray(self, variables: Collection[str] = None, mean: bool = True) -> xarray.Dataset:
