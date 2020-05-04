@@ -89,6 +89,17 @@ if __name__ == '__main__':
 
             path_map[input_path] = output_path
 
+        sizes = {}
+        for input_path in path_map:
+            try:
+                size = ftp_connection.size(input_path)
+                sizes[size] = (input_path, path_map[input_path])
+            except ftplib.error_perm:
+                pass
+        if len(sizes) > 0:
+            path_map = {sizes[size][0]: sizes[size][1] for size in sorted(sizes)}
+            del sizes
+
         # for input_path in ftp_connection.nlst(WCOFS_EXPERIMENTAL_DIRECTORY):
         #     filename = os.path.basename(input_path)
         #

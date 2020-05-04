@@ -343,9 +343,9 @@ if __name__ == '__main__':
 
     start_time = datetime.now()
 
-    # from PyOFS.utilities import range_daily
+    # from PyOFS import range_daily
     #
-    # model_run_dates = range_daily(datetime(2020, 2, 27), datetime(2020, 3, 2))
+    # model_run_dates = range_daily(datetime.today(), datetime(2020, 3, 4))
     # for model_run_date in model_run_dates:
     #     write_daily_average(OUTPUT_DIRECTORY, model_run_date, day_deltas)
 
