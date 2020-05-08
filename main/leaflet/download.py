@@ -7,7 +7,7 @@ Created on Aug 9, 2018
 @author: zachary.burnett
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import ftplib
 import logging
 import os
@@ -24,6 +24,14 @@ INPUT_DIRECTORY = '/pub/outgoing/CSDL'
 OUTPUT_DIRECTORY = os.path.join(DATA_DIRECTORY, 'input')
 LOG_DIRECTORY = os.path.join(DATA_DIRECTORY, 'log')
 
+
+def previous_months(to_months: int) -> [date]:
+    months = [date.today().replace(day=1)]
+    for _ in range(to_months):
+        months.append((months[-1] - timedelta(days=1)).replace(day=1))
+    return months
+
+
 if __name__ == '__main__':
     start_time = datetime.now()
 
@@ -38,13 +46,12 @@ if __name__ == '__main__':
     mod_dir = os.path.join(wcofs_dir, 'mod')
     # experimental_dir = os.path.join(wcofs_dir, 'exp', f'{datetime.now():%Y%m}')
 
-    month_strings = [f'{datetime.now():%Y%m}', f'{datetime.now().replace(day=1) - timedelta(days=1):%Y%m}']
-    month_directories = {month_string: os.path.join(avg_dir, month_string) for month_string in month_strings}
+    month_directories = {month_string: os.path.join(avg_dir, month_string) for month_string in (f'{month:%Y%m}' for month in previous_months(6))}
 
     # create folders if they do not exist
     for directory in [OUTPUT_DIRECTORY, LOG_DIRECTORY, wcofs_dir, rtofs_dir, avg_dir, fwd_dir, obs_dir, mod_dir] + list(month_directories.values()):  # experimental_dir]:
         if not os.path.isdir(directory):
-            os.mkdir(directory)
+            os.makedirs(directory, exist_ok=True)
 
     # define log filename
     log_path = os.path.join(LOG_DIRECTORY, f'{datetime.now():%Y%m%d}_download.log')

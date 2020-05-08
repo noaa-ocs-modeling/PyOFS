@@ -214,7 +214,7 @@ if __name__ == '__main__':
 
     day_dir = os.path.join(WORKSPACE_DIR, f'{start_time:%Y%m%d}')
     if not os.path.exists(day_dir):
-        os.mkdir(day_dir)
+        os.makedirs(day_dir, exist_ok=True)
 
     to_netcdf(start_time, end_time, day_dir)
 

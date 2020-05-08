@@ -153,7 +153,7 @@ class VIIRSDataset:
                         output_dir = os.path.join(DATA_DIRECTORY, 'input', 'viirs')
 
                         if not os.path.exists(output_dir):
-                            os.mkdir(output_dir)
+                            os.makedirs(output_dir, exist_ok=True)
 
                         output_filename = os.path.join(output_dir, f'viirs_{self.data_time:%Y%m%dT%H%M}.nc')
 

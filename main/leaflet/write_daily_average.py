@@ -65,19 +65,19 @@ def write_observation(output_dir: str, observation_date: Union[datetime, date], 
         monthly_dir = os.path.join(output_dir, 'monthly_averages')
 
         if not os.path.isdir(monthly_dir):
-            os.mkdir(monthly_dir)
+            os.makedirs(monthly_dir, exist_ok=True)
 
         observation_dir = os.path.join(monthly_dir, f'{observation_date:%Y%m}')
     else:
         daily_dir = os.path.join(output_dir, 'daily_averages')
 
         if not os.path.isdir(daily_dir):
-            os.mkdir(daily_dir)
+            os.makedirs(daily_dir, exist_ok=True)
 
         observation_dir = os.path.join(daily_dir, f'{observation_date:%Y%m%d}')
 
     if not os.path.isdir(observation_dir):
-        os.mkdir(observation_dir)
+        os.makedirs(observation_dir, exist_ok=True)
 
     day_start_ndbc = day_start + timedelta(hours=2)
     day_end_ndbc = day_end + timedelta(hours=2)
@@ -138,7 +138,7 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime, date], day_delt
     for day_delta, daily_average_dir in output_dirs.items():
         # ensure output directory exists
         if not os.path.isdir(daily_average_dir):
-            os.mkdir(daily_average_dir)
+            os.makdirs(daily_average_dir, exist_ok=True)
 
     try:
         rtofs_dataset = None
@@ -208,7 +208,7 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime, date, int, floa
     for day_delta, daily_average_dir in output_dirs.items():
         # ensure output directory exists
         if not os.path.isdir(daily_average_dir):
-            os.mkdir(daily_average_dir)
+            os.makedirs(daily_average_dir, exist_ok=True)
 
     if scalar_variables is None:
         scalar_variables = []
@@ -335,7 +335,7 @@ if __name__ == '__main__':
     # create folders if they do not exist
     for dir_path in [OUTPUT_DIRECTORY, LOG_DIRECTORY]:
         if not os.path.isdir(dir_path):
-            os.mkdir(dir_path)
+            os.makedirs(dir_path, exist_ok=True)
 
     # define dates over which to collect data (dates after today are for WCOFS forecast)
     day_deltas = MODEL_DAY_DELTAS['WCOFS']
