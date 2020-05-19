@@ -174,6 +174,7 @@ class RotatedPoleCoordinateSystem:
         Convert longitude and latitude to rotated pole coordinates.
 
         :param point: unrotated coordinates
+        :param projection: projection
         :return: coordinates rotated around pole
         """
 
@@ -326,7 +327,6 @@ def rossby_deformation_radius(latitude: float) -> float:
     Get the Rossby deformation radius given a latitude and water depth.
 
     :param latitude: latitude in degrees
-    :param barotropic: whether to assume a barotropic ocean
     :return: Rossby radius
     """
 

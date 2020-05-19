@@ -457,7 +457,7 @@ class VIIRSRange:
 
         sample_dataset = next(iter(self.datasets.values()))
 
-        return (sample_dataset.netcdf_dataset.geospatial_lon_resolution, sample_dataset.netcdf_dataset.geospatial_lat_resolution)
+        return sample_dataset.netcdf_dataset.geospatial_lon_resolution, sample_dataset.netcdf_dataset.geospatial_lat_resolution
 
     def data(self, start_time: datetime = None, end_time: datetime = None, average: bool = False, correct_sses: bool = False, variables: Collection[str] = tuple('sst'),
              satellite: str = None) -> dict:

@@ -162,7 +162,7 @@ class HFRadarRange:
         :return: tuple of bounds (west, north, east, south)
         """
 
-        return (self.dataset.geospatial_lon_min, self.dataset.geospatial_lat_max, self.dataset.geospatial_lon_max, self.dataset.geospatial_lat_min)
+        return self.dataset.geospatial_lon_min, self.dataset.geospatial_lat_max, self.dataset.geospatial_lon_max, self.dataset.geospatial_lat_min
 
     def cell_size(self) -> tuple:
         """
@@ -511,7 +511,7 @@ if __name__ == '__main__':
     start_time = datetime(2019, 2, 6)
     end_time = start_time + timedelta(days=1)
 
-    hfr_range = HFRadarRange(start_time, end_time, source='UCSD')
+    hfr_range = HFRadarRange(start_time, end_time)
 
     cell = hfr_range.dataset.isel(lon=67, lat=270)
 

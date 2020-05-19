@@ -72,7 +72,7 @@ class DataBuoyDataset:
         """
         Collects data from given station in the given time interval.
 
-        :param variables: list of variable names
+        :param variable: variable name
         :param start_time: beginning of time interval
         :param end_time: end of time interval
         :return: dictionary of data from the given station over the given time interval
