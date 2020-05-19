@@ -138,7 +138,7 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime, date], day_delt
     for day_delta, daily_average_dir in output_dirs.items():
         # ensure output directory exists
         if not os.path.isdir(daily_average_dir):
-            os.makdirs(daily_average_dir, exist_ok=True)
+            os.makedirs(daily_average_dir, exist_ok=True)
 
     try:
         rtofs_dataset = None
@@ -344,7 +344,7 @@ if __name__ == '__main__':
 
     # from PyOFS import range_daily
     #
-    # model_run_dates = range_daily(datetime.today(), datetime(2020, 3, 4))
+    # model_run_dates = range_daily(datetime.today(), datetime(2020, 5, 8))
     # for model_run_date in model_run_dates:
     #     write_daily_average(OUTPUT_DIRECTORY, model_run_date, day_deltas)
 
