@@ -19,6 +19,7 @@ import fiona.crs
 import numpy
 import rasterio
 from rasterio.crs import CRS
+from rasterio.enums import Resampling
 import rasterio.features
 import shapely
 import shapely.geometry
