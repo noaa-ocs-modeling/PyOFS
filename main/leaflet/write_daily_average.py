@@ -164,12 +164,12 @@ def write_rtofs(output_dir: str, model_run_date: Union[datetime, date], day_delt
                     if len(scalar_variables_to_write) > 0:
                         rtofs_dataset.write_rasters(daily_average_dir, variables=scalar_variables_to_write, time=day_of_forecast, driver='GTiff')
                     else:
-                        LOGGER.info(f'Skipping RTOFS day {day_delta} scalar variables')
+                        LOGGER.debug(f'Skipping RTOFS day {day_delta} scalar variables')
 
                     if not all(any(vector_variable in filename for filename in existing_files) for vector_variable in vector_variables):
                         rtofs_dataset.write_rasters(daily_average_dir, variables=vector_variables, time=day_of_forecast, driver='AAIGrid')
                     else:
-                        LOGGER.info(f'Skipping RTOFS day {day_delta} uv')
+                        LOGGER.debug(f'Skipping RTOFS day {day_delta} uv')
         del rtofs_dataset
     except NoDataError as error:
         LOGGER.warning(f'{error.__class__.__name__}: {error}')
@@ -280,13 +280,13 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime, date, int, floa
                         wcofs_dataset.write_rasters(daily_average_dir, scalar_variables_to_write, filename_suffix=wcofs_filename_suffix, time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
                                                     driver='GTiff')
                     else:
-                        LOGGER.info(f'Skipping WCOFS day {day_delta} scalar variables')
+                        LOGGER.debug(f'Skipping WCOFS day {day_delta} scalar variables')
 
                     if not all(any(vector_variable in filename for filename in existing_files) for vector_variable in vector_variables):
                         wcofs_dataset.write_rasters(daily_average_dir, vector_variables, filename_suffix=wcofs_filename_suffix, time_deltas=[day_delta], fill_value=LEAFLET_NODATA_VALUE,
                                                     driver='AAIGrid')
                     else:
-                        LOGGER.info(f'Skipping WCOFS day {day_delta} uv')
+                        LOGGER.debug(f'Skipping WCOFS day {day_delta} uv')
         del wcofs_dataset
 
         if grid_size_km == 2:
@@ -353,7 +353,7 @@ if __name__ == '__main__':
 
     # from PyOFS import range_daily
     #
-    # model_run_dates = range_daily(datetime.today(), datetime(2020, 5, 8))
+    # model_run_dates = range_daily(datetime.today(), datetime.today() - timedelta(days=2))
     # for model_run_date in model_run_dates:
     #     LOGGER.info(f'Starting file conversion for {model_run_date}')
     #     write_observations(OUTPUT_DIRECTORY, model_run_date, day_deltas)
