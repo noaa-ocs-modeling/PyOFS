@@ -355,12 +355,12 @@ if __name__ == '__main__':
     #
     # model_run_dates = range_daily(datetime.today(), datetime.today() - timedelta(days=2))
     # for model_run_date in model_run_dates:
-    #     LOGGER.info(f'Starting file conversion for {model_run_date}')
+    #     LOGGER.info(f'Starting file conversion for {model_run_date:%Y%m%d}')
     #     write_observations(OUTPUT_DIRECTORY, model_run_date, day_deltas)
     #     write_models(OUTPUT_DIRECTORY, model_run_date, day_deltas)
 
     model_run_date = date.today()
-    LOGGER.info(f'Starting file conversion for {model_run_date}')
+    LOGGER.info(f'Starting file conversion for {model_run_date:%Y%m%d}')
     write_observations(OUTPUT_DIRECTORY, model_run_date, day_deltas)
     write_models(OUTPUT_DIRECTORY, model_run_date, day_deltas)
     write_models(OUTPUT_DIRECTORY, model_run_date - timedelta(days=1), day_deltas)
