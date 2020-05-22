@@ -297,9 +297,9 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime, date, int, floa
         LOGGER.exception(f'model run date: {model_run_date}, day deltas: {day_deltas}')
 
 
-def write_daily_average(output_dir: str, output_date: Union[datetime, date, int, float], day_deltas: range = MODEL_DAY_DELTAS['WCOFS']):
+def write_observations(output_dir: str, output_date: Union[datetime, date, int, float], day_deltas: range = MODEL_DAY_DELTAS['WCOFS']):
     """
-    Writes daily average of observational data and model output on given date.
+    Writes daily average of observational data on given date.
 
     :param output_dir: output directory to write files
     :param output_date: date of data run
@@ -316,8 +316,17 @@ def write_daily_average(output_dir: str, output_date: Union[datetime, date, int,
     write_observation(output_dir, output_date, 'smap')
     # LOGGER.info('Processing NDBC data...')
     # write_observation(output_dir, output_date, 'data_buoy')
-
     LOGGER.info(f'Wrote observations to {output_dir}')
+
+
+def write_models(output_dir: str, output_date: Union[datetime, date, int, float], day_deltas: range = MODEL_DAY_DELTAS['WCOFS']):
+    """
+    Writes daily average of model output on given date.
+
+    :param output_dir: output directory to write files
+    :param output_date: date of data run
+    :param day_deltas: time deltas for which to write model output
+    """
 
     LOGGER.info('Processing RTOFS...')  # RTOFS forecast is uploaded at 1700 UTC
     write_rtofs(output_dir, output_date, day_deltas)
@@ -346,10 +355,15 @@ if __name__ == '__main__':
     #
     # model_run_dates = range_daily(datetime.today(), datetime(2020, 5, 8))
     # for model_run_date in model_run_dates:
-    #     write_daily_average(OUTPUT_DIRECTORY, model_run_date, day_deltas)
+    #     LOGGER.info(f'Starting file conversion for {model_run_date}')
+    #     write_observations(OUTPUT_DIRECTORY, model_run_date, day_deltas)
+    #     write_models(OUTPUT_DIRECTORY, model_run_date, day_deltas)
 
     model_run_date = date.today()
-    write_daily_average(OUTPUT_DIRECTORY, model_run_date, day_deltas)
+    LOGGER.info(f'Starting file conversion for {model_run_date}')
+    write_observations(OUTPUT_DIRECTORY, model_run_date, day_deltas)
+    write_models(OUTPUT_DIRECTORY, model_run_date, day_deltas)
+    write_models(OUTPUT_DIRECTORY, model_run_date - timedelta(days=1), day_deltas)
 
     LOGGER.info(f'Finished writing files. Total time: {(datetime.now() - start_time).total_seconds():.2f} seconds')
 
