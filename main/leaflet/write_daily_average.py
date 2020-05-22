@@ -363,7 +363,6 @@ if __name__ == '__main__':
     LOGGER.info(f'Starting file conversion for {model_run_date:%Y%m%d}')
     write_observations(OUTPUT_DIRECTORY, model_run_date, day_deltas)
     write_models(OUTPUT_DIRECTORY, model_run_date, day_deltas)
-    write_models(OUTPUT_DIRECTORY, model_run_date - timedelta(days=1), day_deltas)
 
     LOGGER.info(f'Finished writing files. Total time: {(datetime.now() - start_time).total_seconds():.2f} seconds')
 
