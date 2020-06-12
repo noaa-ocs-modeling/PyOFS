@@ -19,6 +19,7 @@ import numpy
 import pyproj
 import rasterio.control
 from rasterio.crs import CRS
+from rasterio.enums import Resampling
 from rasterio.io import MemoryFile
 import rasterio.mask
 import rasterio.warp
@@ -26,8 +27,8 @@ from scipy import interpolate
 import shapely.geometry
 import xarray
 
-from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, utilities
-from PyOFS.utilities import get_logger
+import PyOFS
+from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, utilities, get_logger
 
 LOGGER = get_logger('PyOFS.WCOFS')
 
@@ -44,7 +45,8 @@ DATA_VARIABLES = {
     'ssu': {'2ds': 'u_sur', 'avg': 'u'},
     'ssv': {'2ds': 'v_sur', 'avg': 'v'},
     'sss': {'2ds': 'salt_sur', 'avg': 'salt'},
-    'ssh': {'2ds': 'zeta', 'avg': 'zeta'}}
+    'ssh': {'2ds': 'zeta', 'avg': 'zeta'}
+}
 
 WCOFS_MODEL_HOURS = {'n': -24, 'f': 72}
 WCOFS_MODEL_RUN_HOUR = 3
@@ -254,7 +256,7 @@ class WCOFSDataset:
 
                         WCOFSDataset.grid_bounds[grid_name] = (west, north, east, south)
         else:
-            raise utilities.NoDataError(f'No WCOFS datasets found for {self.model_time} at the given time deltas ({self.time_deltas}).')
+            raise PyOFS.NoDataError(f'No WCOFS datasets found for {self.model_time} at the given time deltas ({self.time_deltas}).')
 
     def bounds(self, variable: str = 'psi') -> tuple:
         """
@@ -530,7 +532,8 @@ class WCOFSDataset:
                 'crs': CRS.from_dict(OUTPUT_CRS),
                 'transform': grid_transform,
                 'dtype': raster_data.dtype,
-                'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()}
+                'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
+            }
 
             with MemoryFile() as memory_file:
                 with memory_file.open(driver='GTiff', **gdal_args) as memory_raster:
@@ -562,7 +565,7 @@ class WCOFSDataset:
             with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
                 output_raster.write(masked_data, 1)
                 if driver == 'GTiff':
-                    output_raster.build_overviews(utilities.overview_levels(masked_data.shape), Resampling['average'])
+                    output_raster.build_overviews(PyOFS.overview_levels(masked_data.shape), Resampling['average'])
                     output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def write_vector(self, output_filename: str, layer_name: str = None, time_deltas: list = None):
@@ -644,7 +647,8 @@ class WCOFSDataset:
         record = {
             'id': feature_index,
             'geometry': {'type': 'Point', 'coordinates': (float(rho_lon), float(rho_lat))},
-            'properties': {'row': row, 'col': col, 'rho_lon': float(rho_lon), 'rho_lat': float(rho_lat)}}
+            'properties': {'row': row, 'col': col, 'rho_lon': float(rho_lon), 'rho_lat': float(rho_lat)}
+        }
 
         for variable in variable_means.keys():
             record['properties'][variable] = float(variable_means[variable][row, col])
@@ -687,7 +691,8 @@ class WCOFSDataset:
                 data_array = xarray.DataArray(data_stack, coords={
                     'time': times,
                     f'{grid}_lon': ((f'{grid}_eta', f'{grid}_xi'), self.data_coordinates[grid]['lon']),
-                    f'{grid}_lat': ((f'{grid}_eta', f'{grid}_xi'), self.data_coordinates[grid]['lat'])}, dims=('time', f'{grid}_eta', f'{grid}_xi'))
+                    f'{grid}_lat': ((f'{grid}_eta', f'{grid}_xi'), self.data_coordinates[grid]['lat'])
+                }, dims=('time', f'{grid}_eta', f'{grid}_xi'))
 
             data_array.attrs['grid'] = grid
             output_dataset = output_dataset.update({variable: data_array}, inplace=True)
@@ -772,15 +777,15 @@ class WCOFSRange:
             self.start_time = utilities.round_to_day(start_time)
             self.end_time = utilities.round_to_day(end_time)
         else:
-            self.start_time = utilities.round_to_hour(start_time)
-            self.end_time = utilities.round_to_hour(end_time)
+            self.start_time = PyOFS.round_to_hour(start_time)
+            self.end_time = PyOFS.round_to_hour(end_time)
 
         LOGGER.info(f'Collecting WCOFS stack between {self.start_time} and {self.end_time}...')
 
         # get all possible model dates that could overlap with the given time interval
         overlapping_start_time = self.start_time - timedelta(hours=WCOFS_MODEL_HOURS['f'] - 24)
         overlapping_end_time = self.end_time + timedelta(hours=-WCOFS_MODEL_HOURS['n'] - 24)
-        model_dates = utilities.range_daily(utilities.round_to_day(overlapping_start_time, 'floor'), utilities.round_to_day(overlapping_end_time, 'ceiling'))
+        model_dates = PyOFS.range_daily(utilities.round_to_day(overlapping_start_time, 'floor'), utilities.round_to_day(overlapping_end_time, 'ceiling'))
 
         self.datasets = {}
 
@@ -856,7 +861,7 @@ class WCOFSRange:
             for completed_future in futures.as_completed(running_futures):
                 model_date = running_futures[completed_future]
 
-                if type(completed_future.exception()) is not utilities.NoDataError:
+                if type(completed_future.exception()) is not PyOFS.NoDataError:
                     result = completed_future.result()
                     self.datasets[model_date] = result
 
@@ -869,7 +874,7 @@ class WCOFSRange:
             self.data_coordinates = WCOFSDataset.data_coordinates
             self.variable_grids = WCOFSDataset.variable_grids
         else:
-            raise utilities.NoDataError(f'No WCOFS datasets found between {self.start_time} and {self.end_time}.')
+            raise PyOFS.NoDataError(f'No WCOFS datasets found between {self.start_time} and {self.end_time}.')
 
     def data(self, variable: str, model_time: datetime, time_delta: int) -> numpy.array:
         """
@@ -943,9 +948,9 @@ class WCOFSRange:
         end_time = end_time if end_time is not None else self.end_time
 
         if self.source == 'avg':
-            time_range = utilities.range_daily(utilities.round_to_day(start_time), utilities.round_to_day(end_time))
+            time_range = PyOFS.range_daily(utilities.round_to_day(start_time), utilities.round_to_day(end_time))
         else:
-            time_range = utilities.range_hourly(utilities.round_to_hour(start_time), utilities.round_to_hour(end_time))
+            time_range = PyOFS.range_hourly(PyOFS.round_to_hour(start_time), PyOFS.round_to_hour(end_time))
 
         output_data = {}
 
@@ -1183,7 +1188,8 @@ class WCOFSRange:
                         'crs': CRS.from_dict(OUTPUT_CRS),
                         'transform': grid_transform,
                         'dtype': raster_data.dtype,
-                        'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()}
+                        'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
+                    }
 
                     with MemoryFile() as memory_file:
                         with memory_file.open(driver='GTiff', **gdal_args) as memory_raster:
@@ -1215,7 +1221,7 @@ class WCOFSRange:
                     with rasterio.open(output_filename, mode='w', driver=driver, **gdal_args) as output_raster:
                         output_raster.write(masked_data, 1)
                         if driver == 'GTiff':
-                            output_raster.build_overviews(utilities.overview_levels(masked_data.shape), Resampling['average'])
+                            output_raster.build_overviews(PyOFS.overview_levels(masked_data.shape), Resampling['average'])
                             output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def write_vector(self, output_filename: str, variables: Collection[str] = None, start_time: datetime = None, end_time: datetime = None):
@@ -1277,7 +1283,8 @@ class WCOFSRange:
                     if not numpy.isnan(data).all():
                         record = {
                             'id': layer_feature_indices[model_time_string], 'geometry': {'type': 'Point', 'coordinates': (rho_lon, rho_lat)},
-                            'properties': {'lon': float(rho_lon), 'lat': float(rho_lat)}}
+                            'properties': {'lon': float(rho_lon), 'lat': float(rho_lat)}
+                        }
 
                         record['properties'].update(dict(zip(variables, data)))
 
@@ -1314,7 +1321,8 @@ class WCOFSRange:
                 data_array = xarray.DataArray(data_stack, coords={
                     'time_delta': sorted(data.keys(), reverse=True),
                     'lon': ((f'{grid}_eta', f'{grid}_xi'), self.data_coordinates[grid]['lon']),
-                    'lat': ((f'{grid}_eta', f'{grid}_xi'), self.data_coordinates[grid]['lat'])}, dims=('time_delta', f'{grid}_eta', f'{grid}_xi'))
+                    'lat': ((f'{grid}_eta', f'{grid}_xi'), self.data_coordinates[grid]['lat'])
+                }, dims=('time_delta', f'{grid}_eta', f'{grid}_xi'))
 
                 del data_stack
 
@@ -1325,9 +1333,9 @@ class WCOFSRange:
                 grid = self.variable_grids[variable]
 
                 if self.source == 'avg':
-                    model_times = utilities.range_daily(utilities.round_to_day(self.start_time), utilities.round_to_day(self.end_time))
+                    model_times = PyOFS.range_daily(utilities.round_to_day(self.start_time), utilities.round_to_day(self.end_time))
                 else:
-                    model_times = utilities.range_hourly(utilities.round_to_hour(self.start_time), utilities.round_to_hour(self.end_time))
+                    model_times = PyOFS.range_hourly(PyOFS.round_to_hour(self.start_time), PyOFS.round_to_hour(self.end_time))
 
                 data = {}
                 time_deltas = None

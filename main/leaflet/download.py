@@ -7,7 +7,7 @@ Created on Aug 9, 2018
 @author: zachary.burnett
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta, date
 import ftplib
 import logging
 import os
@@ -15,23 +15,30 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
-from PyOFS.utilities import create_logger
-from PyOFS import DATA_DIRECTORY
+from PyOFS import DATA_DIRECTORY, create_logger
 
 TIDEPOOL_URL = 'tidepool.nos.noaa.gov'
-INPUT_DIR = '/pub/outgoing/CSDL'
-# WCOFS_EXPERIMENTAL_DIR = '/pub/outgoing/CSDL/testssh'
+INPUT_DIRECTORY = '/pub/outgoing/CSDL'
+# WCOFS_EXPERIMENTAL_DIRECTORY = '/pub/outgoing/CSDL/testssh'
 
-OUTPUT_DIR = os.path.join(DATA_DIRECTORY, 'input')
-LOG_DIR = os.path.join(DATA_DIRECTORY, 'log')
+OUTPUT_DIRECTORY = os.path.join(DATA_DIRECTORY, 'input')
+LOG_DIRECTORY = os.path.join(DATA_DIRECTORY, 'log')
+
+
+def previous_months(to_months: int) -> [date]:
+    months = [date.today().replace(day=1)]
+    for _ in range(to_months):
+        months.append((months[-1] - timedelta(days=1)).replace(day=1))
+    return months
+
 
 if __name__ == '__main__':
     start_time = datetime.now()
 
     num_downloads = 0
 
-    wcofs_dir = os.path.join(OUTPUT_DIR, 'wcofs')
-    rtofs_dir = os.path.join(OUTPUT_DIR, 'rtofs')
+    wcofs_dir = os.path.join(OUTPUT_DIRECTORY, 'wcofs')
+    rtofs_dir = os.path.join(OUTPUT_DIRECTORY, 'rtofs')
 
     avg_dir = os.path.join(wcofs_dir, 'avg')
     fwd_dir = os.path.join(wcofs_dir, 'fwd')
@@ -39,16 +46,15 @@ if __name__ == '__main__':
     mod_dir = os.path.join(wcofs_dir, 'mod')
     # experimental_dir = os.path.join(wcofs_dir, 'exp', f'{datetime.now():%Y%m}')
 
-    month_string = f'{datetime.now():%Y%m}'
-    month_dir = os.path.join(avg_dir, month_string)
+    month_directories = {month_string: os.path.join(avg_dir, month_string) for month_string in (f'{month:%Y%m}' for month in previous_months(6))}
 
     # create folders if they do not exist
-    for directory in [OUTPUT_DIR, LOG_DIR, wcofs_dir, rtofs_dir, avg_dir, fwd_dir, obs_dir, mod_dir, month_dir]:  # experimental_dir]:
+    for directory in [OUTPUT_DIRECTORY, LOG_DIRECTORY, wcofs_dir, rtofs_dir, avg_dir, fwd_dir, obs_dir, mod_dir] + list(month_directories.values()):  # experimental_dir]:
         if not os.path.isdir(directory):
-            os.mkdir(directory)
+            os.makedirs(directory, exist_ok=True)
 
     # define log filename
-    log_path = os.path.join(LOG_DIR, f'{datetime.now():%Y%m%d}_download.log')
+    log_path = os.path.join(LOG_DIRECTORY, f'{datetime.now():%Y%m%d}_download.log')
 
     # check whether logfile exists
     log_exists = os.path.exists(log_path)
@@ -63,7 +69,7 @@ if __name__ == '__main__':
         ftp_connection.login()
 
         path_map = {}
-        for input_path in ftp_connection.nlst(INPUT_DIR):
+        for input_path in ftp_connection.nlst(INPUT_DIRECTORY):
             filename = os.path.basename(input_path)
 
             if 'rtofs' in filename:
@@ -78,16 +84,32 @@ if __name__ == '__main__':
                     output_path = os.path.join(obs_dir, filename)
                 elif 'mod' in filename:
                     output_path = os.path.join(mod_dir, filename)
-                elif month_string in filename:
-                    output_path = os.path.join(month_dir, filename)
                 else:
-                    output_path = os.path.join(avg_dir, filename)
+                    for month_string, month_directory in month_directories.items():
+                        if month_string in filename:
+                            output_path = os.path.join(month_directory, filename)
+                            break
+                    else:
+                        output_path = os.path.join(avg_dir, filename)
             else:
-                output_path = os.path.join(OUTPUT_DIR, filename)
+                output_path = os.path.join(OUTPUT_DIRECTORY, filename)
 
             path_map[input_path] = output_path
 
-        # for input_path in ftp_connection.nlst(WCOFS_EXPERIMENTAL_DIR):
+        sizes = {}
+        for input_path in path_map:
+            try:
+                size = ftp_connection.size(input_path)
+                sizes[size] = (input_path, path_map[input_path])
+            except ftplib.error_perm:
+                pass
+        if len(sizes) > 0:
+            old_path_map = path_map.copy()
+            path_map = {sizes[size][0]: sizes[size][1] for size in sorted(sizes)}
+            path_map.update({input_path: output_path for input_path, output_path in old_path_map.items() if input_path not in path_map})
+            del sizes
+
+        # for input_path in ftp_connection.nlst(WCOFS_EXPERIMENTAL_DIRECTORY):
         #     filename = os.path.basename(input_path)
         #
         #     if 'wcofs' in filename:
@@ -100,6 +122,7 @@ if __name__ == '__main__':
         #
         #     path_map[input_path] = output_path
 
+        logger.info(f'found {len(path_map)} files at FTP remote')
         for input_path, output_path in path_map.items():
             filename = os.path.basename(input_path)
 

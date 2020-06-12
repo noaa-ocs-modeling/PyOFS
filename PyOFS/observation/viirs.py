@@ -19,14 +19,15 @@ import fiona.crs
 import numpy
 import rasterio
 from rasterio.crs import CRS
+from rasterio.enums import Resampling
 import rasterio.features
 import shapely
 import shapely.geometry
 import shapely.wkt
 import xarray
 
-from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, utilities
-from PyOFS.utilities import get_logger
+import PyOFS
+from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, utilities, get_logger
 
 LOGGER = get_logger('PyOFS.VIIRS')
 
@@ -44,8 +45,10 @@ SOURCE_URLS = OrderedDict({
     'OpenDAP': OrderedDict({
         'NESDIS': 'https://www.star.nesdis.noaa.gov/thredds/dodsC',
         'JPL': 'https://podaac-opendap.jpl.nasa.gov:443/opendap/allData/ghrsst/data/GDS2/L3U',
-        'NODC': 'https://data.nodc.noaa.gov/thredds/catalog/ghrsst/L3U'}),
-    'FTP': OrderedDict({'NESDIS': 'ftp.star.nesdis.noaa.gov/pub/socd2/coastwatch/sst'})})
+        'NODC': 'https://data.nodc.noaa.gov/thredds/catalog/ghrsst/L3U'
+    }),
+    'FTP': OrderedDict({'NESDIS': 'ftp.star.nesdis.noaa.gov/pub/socd2/coastwatch/sst'})
+})
 
 
 class VIIRSDataset:
@@ -74,7 +77,7 @@ class VIIRSDataset:
             data_time = datetime.now()
 
         # round minute to nearest 10 minutes (VIIRS data interval)
-        self.data_time = utilities.round_to_ten_minutes(data_time)
+        self.data_time = PyOFS.round_to_ten_minutes(data_time)
 
         self.satellite = satellite
 
@@ -103,7 +106,7 @@ class VIIRSDataset:
 
         # TODO N20 does not yet have a reanalysis archive on NESDIS (as of March 8th, 2019)
         if self.satellite.upper() == 'N20' and not self.near_real_time:
-            raise utilities.NoDataError(f'{self.satellite.upper()} does not yet have a reanalysis archive')
+            raise PyOFS.NoDataError(f'{self.satellite.upper()} does not yet have a reanalysis archive')
 
         for source, source_url in SOURCE_URLS['OpenDAP'].items():
             url = source_url
@@ -151,7 +154,7 @@ class VIIRSDataset:
                         output_dir = os.path.join(DATA_DIRECTORY, 'input', 'viirs')
 
                         if not os.path.exists(output_dir):
-                            os.mkdir(output_dir)
+                            os.makedirs(output_dir, exist_ok=True)
 
                         output_filename = os.path.join(output_dir, f'viirs_{self.data_time:%Y%m%dT%H%M}.nc')
 
@@ -176,7 +179,7 @@ class VIIRSDataset:
                     break
 
         if self.url is None:
-            raise utilities.NoDataError(f'No VIIRS observation found at {self.data_time} UTC.')
+            raise PyOFS.NoDataError(f'No VIIRS observation found at {self.data_time} UTC.')
 
         # construct rectangular polygon of granule extent
         if 'geospatial_bounds' in self.dataset.attrs:
@@ -332,7 +335,8 @@ class VIIRSDataset:
                     'dtype': rasterio.float32,
                     'crs': CRS.from_dict(OUTPUT_CRS),
                     'transform': VIIRSDataset.study_area_transform,
-                    'nodata': fill_value}
+                    'nodata': fill_value
+                }
 
                 if driver == 'AAIGrid':
                     file_extension = 'asc'
@@ -350,7 +354,7 @@ class VIIRSDataset:
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(input_data, 1)
                     if driver == 'GTiff':
-                        output_raster.build_overviews(utilities.overview_levels(input_data.shape), Resampling['average'])
+                        output_raster.build_overviews(PyOFS.overview_levels(input_data.shape), Resampling['average'])
                         output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def __repr__(self):
@@ -440,10 +444,10 @@ class VIIRSRange:
 
                 LOGGER.debug(f'VIIRS data was found in {len(self.datasets)} passes.')
             else:
-                raise utilities.NoDataError(f'No VIIRS datasets found between {self.start_time} UTC and {self.end_time} UTC.')
+                raise PyOFS.NoDataError(f'No VIIRS datasets found between {self.start_time} UTC and {self.end_time} UTC.')
 
         else:
-            raise utilities.NoDataError(f'There are no VIIRS passes between {self.start_time} UTC and {self.end_time} UTC.')
+            raise PyOFS.NoDataError(f'There are no VIIRS passes between {self.start_time} UTC and {self.end_time} UTC.')
 
     def cell_size(self) -> tuple:
         """
@@ -454,7 +458,7 @@ class VIIRSRange:
 
         sample_dataset = next(iter(self.datasets.values()))
 
-        return (sample_dataset.netcdf_dataset.geospatial_lon_resolution, sample_dataset.netcdf_dataset.geospatial_lat_resolution)
+        return sample_dataset.netcdf_dataset.geospatial_lon_resolution, sample_dataset.netcdf_dataset.geospatial_lat_resolution
 
     def data(self, start_time: datetime = None, end_time: datetime = None, average: bool = False, correct_sses: bool = False, variables: Collection[str] = tuple('sst'),
              satellite: str = None) -> dict:
@@ -585,7 +589,8 @@ class VIIRSRange:
                     'crs': OUTPUT_CRS,
                     'dtype': raster_data.dtype,
                     'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item(),
-                    'transform': VIIRSRange.study_area_transform}
+                    'transform': VIIRSRange.study_area_transform
+                }
 
                 if driver == 'AAIGrid':
                     file_extension = 'asc'
@@ -619,7 +624,7 @@ class VIIRSRange:
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(raster_data, 1)
                     if driver == 'GTiff':
-                        output_raster.build_overviews(utilities.overview_levels(raster_data.shape), Resampling['average'])
+                        output_raster.build_overviews(PyOFS.overview_levels(raster_data.shape), Resampling['average'])
                         output_raster.update_tags(ns='rio_overview', resampling='average')
             else:
                 LOGGER.warning(f'No {"VIIRS" if satellite is None else "VIIRS " + satellite} {variable} found between {start_time} and {end_time}.')
@@ -700,12 +705,12 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
     :param version: ACSPO Version number (2.40 - 2.41)
     """
 
-    start_time = utilities.round_to_ten_minutes(start_time)
-    end_time = utilities.round_to_ten_minutes(start_time + (VIIRS_PERIOD * num_periods))
+    start_time = PyOFS.round_to_ten_minutes(start_time)
+    end_time = PyOFS.round_to_ten_minutes(start_time + (VIIRS_PERIOD * num_periods))
 
     LOGGER.info(f'Getting pass times between {start_time:%Y-%m-%d %H:%M:%S} and {end_time:%Y-%m-%d %H:%M:%S}')
 
-    datetime_range = utilities.ten_minute_range(start_time, end_time)
+    datetime_range = PyOFS.ten_minute_range(start_time, end_time)
 
     # construct polygon from the first record in layer
     study_area_polygon = shapely.geometry.Polygon(utilities.get_first_record(study_area_polygon_filename)['geometry']['coordinates'][0])
@@ -739,7 +744,7 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
 
                 # if we get to here, break and continue to the next datetime
                 break
-            except utilities.NoDataError as error:
+            except PyOFS.NoDataError as error:
                 LOGGER.warning(f'{error.__class__.__name__}: {error}')
         else:
             LOGGER.warning(f'{current_time:%Y%m%dT%H%M%S}: missing observation across all cycles')

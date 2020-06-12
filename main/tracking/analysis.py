@@ -18,7 +18,8 @@ import pandas
 from shapely import geometry
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
-from PyOFS.utilities import get_logger
+
+from PyOFS import get_logger, DATA_DIRECTORY
 
 LOGGER = get_logger('PyOFS.track')
 
@@ -40,8 +41,6 @@ if __name__ == '__main__':
     from pandas.plotting import register_matplotlib_converters
 
     register_matplotlib_converters()
-
-    from PyOFS import DATA_DIRECTORY
 
     plot_dir = r"R:\documents\plots"
     contour_starting_radius = 50000

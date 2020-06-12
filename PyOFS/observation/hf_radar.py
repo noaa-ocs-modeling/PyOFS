@@ -15,11 +15,12 @@ import fiona
 import fiona.crs
 import numpy
 import rasterio
+from rasterio.enums import Resampling
 import scipy.interpolate
 import xarray
 
-from PyOFS import CRS_EPSG, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, utilities
-from PyOFS.utilities import get_logger
+import PyOFS
+from PyOFS import CRS_EPSG, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, get_logger
 
 LOGGER = get_logger('PyOFS.HFR')
 
@@ -83,7 +84,7 @@ class HFRadarRange:
             except OSError as error:
                 LOGGER.warning(f'{error.__class__.__name__}: {error}')
         else:
-            raise utilities.NoDataError(f'No HFR observations found between {self.start_time} and {self.end_time}')
+            raise PyOFS.NoDataError(f'No HFR observations found between {self.start_time} and {self.end_time}')
 
         raw_times = self.dataset['time']
 
@@ -161,7 +162,7 @@ class HFRadarRange:
         :return: tuple of bounds (west, north, east, south)
         """
 
-        return (self.dataset.geospatial_lon_min, self.dataset.geospatial_lat_max, self.dataset.geospatial_lon_max, self.dataset.geospatial_lat_min)
+        return self.dataset.geospatial_lon_min, self.dataset.geospatial_lat_max, self.dataset.geospatial_lon_max, self.dataset.geospatial_lat_min
 
     def cell_size(self) -> tuple:
         """
@@ -191,7 +192,8 @@ class HFRadarRange:
             record = {
                 'id': site_index + 1,
                 'geometry': {'type': 'Point', 'coordinates': (lon, lat)},
-                'properties': {'code': site_code, 'net_code': site_network_code, 'lon': float(lon), 'lat': float(lat)}}
+                'properties': {'code': site_code, 'net_code': site_network_code, 'lon': float(lon), 'lat': float(lat)}
+            }
 
             layer_records.append(record)
 
@@ -363,7 +365,8 @@ class HFRadarRange:
                 'dtype': raster_data.dtype,
                 'crs': OUTPUT_CRS,
                 'transform': self.grid_transform,
-                'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()}
+                'nodata': numpy.array([fill_value]).astype(raster_data.dtype).item()
+            }
 
             if driver == 'AAIGrid':
                 file_extension = 'asc'
@@ -383,7 +386,8 @@ class HFRadarRange:
                     'height': raster_data.shape[0],
                     'width': raster_data.shape[1],
                     'FORCE_CELLSIZE': 'YES',
-                    'transform': rasterio.transform.from_origin(numpy.min(output_lon), numpy.max(output_lat), numpy.max(numpy.diff(output_lon)), numpy.max(numpy.diff(output_lon)))})
+                    'transform': rasterio.transform.from_origin(numpy.min(output_lon), numpy.max(output_lat), numpy.max(numpy.diff(output_lon)), numpy.max(numpy.diff(output_lon)))
+                })
             elif driver == 'GPKG':
                 file_extension = 'gpkg'
             else:
@@ -399,7 +403,7 @@ class HFRadarRange:
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(numpy.flipud(raster_data), 1)
                 if driver == 'GTiff':
-                    output_raster.build_overviews(utilities.overview_levels(raster_data.shape), Resampling['average'])
+                    output_raster.build_overviews(PyOFS.overview_levels(raster_data.shape), Resampling['average'])
                     output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def dop_mask(self, threshold: float, start_time: datetime = None, end_time: datetime = None):
@@ -507,7 +511,7 @@ if __name__ == '__main__':
     start_time = datetime(2019, 2, 6)
     end_time = start_time + timedelta(days=1)
 
-    hfr_range = HFRadarRange(start_time, end_time, source='UCSD')
+    hfr_range = HFRadarRange(start_time, end_time)
 
     cell = hfr_range.dataset.isel(lon=67, lat=270)
 

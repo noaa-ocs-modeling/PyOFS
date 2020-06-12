@@ -13,8 +13,8 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
-from PyOFS.utilities import get_logger
 from main.leaflet import write_json
+from PyOFS import get_logger, DATA_DIRECTORY
 
 LOGGER = get_logger('PyOFS.check')
 
@@ -71,8 +71,6 @@ def check_files(input_dir: str) -> dict:
 
 
 if __name__ == '__main__':
-    from PyOFS import DATA_DIRECTORY
-
     missing_files = check_files(os.path.join(DATA_DIRECTORY, 'output'))
 
     print(missing_files)

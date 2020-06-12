@@ -14,8 +14,7 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
-from PyOFS import DATA_DIRECTORY
-from PyOFS.utilities import get_logger
+from PyOFS import DATA_DIRECTORY, get_logger
 
 LOGGER = get_logger('PyOFS.JSON')
 

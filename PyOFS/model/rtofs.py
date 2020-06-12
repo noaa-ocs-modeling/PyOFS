@@ -17,14 +17,15 @@ import fiona.crs
 import numpy
 import rasterio.control
 from rasterio.crs import CRS
+from rasterio.enums import Resampling
 import rasterio.features
 import rasterio.mask
 import rasterio.warp
 from shapely import geometry
 import xarray
 
-from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, utilities
-from PyOFS.utilities import get_logger
+import PyOFS
+from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, utilities, get_logger
 
 LOGGER = get_logger('PyOFS.RTOFS')
 
@@ -35,15 +36,18 @@ COORDINATE_VARIABLES = ['time', 'lev', 'lat', 'lon']
 DATASET_STRUCTURE = {
     '2ds': {
         'nowcast': {'prog': ['sss', 'sst', 'u_velocity', 'v_velocity'], 'diag': ['ssh', 'ice_coverage', 'ice_thickness']},
-        'forecast': {'prog': ['sss', 'sst', 'u_velocity', 'v_velocity'], 'diag': ['ssh', 'ice_coverage', 'ice_thickness']}},
-    '3dz': {'nowcast': {'salt': ['salinity'], 'temp': ['temperature'], 'uvel': ['u'], 'vvel': ['v']}, 'forecast': {'salt': ['salinity'], 'temp': ['temperature'], 'uvel': ['u'], 'vvel': ['v']}}}
+        'forecast': {'prog': ['sss', 'sst', 'u_velocity', 'v_velocity'], 'diag': ['ssh', 'ice_coverage', 'ice_thickness']}
+    },
+    '3dz': {'nowcast': {'salt': ['salinity'], 'temp': ['temperature'], 'uvel': ['u'], 'vvel': ['v']}, 'forecast': {'salt': ['salinity'], 'temp': ['temperature'], 'uvel': ['u'], 'vvel': ['v']}}
+}
 
 DATA_VARIABLES = {
     'sst': {'2ds': {'prog': 'sst'}, '3dz': {'temp': 'temperature'}},
     'sss': {'2ds': {'prog': 'sss'}, '3dz': {'salt': 'salinity'}},
     'ssu': {'2ds': {'prog': 'u_velocity'}, '3dz': {'uvel': 'u'}},
     'ssv': {'2ds': {'prog': 'v_velocity'}, '3dz': {'vvel': 'v'}},
-    'ssh': {'2ds': {'diag': 'ssh'}}}
+    'ssh': {'2ds': {'diag': 'ssh'}}
+}
 
 TIME_DELTAS = {'daily': range(-3, 8 + 1)}
 
@@ -129,7 +133,7 @@ class RTOFSDataset:
 
             self.study_area_transform = rasterio.transform.from_origin(self.study_area_west, self.study_area_north, lon_pixel_size, lat_pixel_size)
         else:
-            raise utilities.NoDataError(f'No RTOFS datasets found for {self.model_time}.')
+            raise PyOFS.NoDataError(f'No RTOFS datasets found for {self.model_time}.')
 
     def data(self, variable: str, time: datetime, crop: bool = True) -> xarray.DataArray:
         """
@@ -205,19 +209,22 @@ class RTOFSDataset:
         direction = 'forecast' if time_delta >= 0 else 'nowcast'
         time_delta_string = f'{direction[0]}{abs(time_delta) + 1 if direction == "forecast" else abs(time_delta):03}'
 
-        variable_means = {variable: self.data(variable, time, crop).values for variable in variables if variable not in ['dir', 'mag']}
+        variable_means = {variable: self.data(variable, time, crop) for variable in variables if variable not in ['dir', 'mag']}
+        variable_means = {variable: variable_mean.values for variable, variable_mean in variable_means.items() if variable_mean is not None}
 
         if 'dir' in variables or 'mag' in variables:
             u_name = 'ssu'
             v_name = 'ssv'
 
             if u_name not in variable_means:
-                u_data = self.data(u_name, time, crop).values
+                u_data = self.data(u_name, time, crop)
+                u_data = u_data.values if u_data is not None else None
             else:
                 u_data = variable_means[u_name]
 
             if v_name not in variable_means:
-                v_data = self.data(v_name, time, crop).values
+                v_data = self.data(v_name, time, crop)
+                v_data = v_data.values if v_data is not None else None
             else:
                 v_data = variable_means[v_name]
 
@@ -243,7 +250,8 @@ class RTOFSDataset:
                     'count': 1,
                     'dtype': rasterio.float32,
                     'crs': CRS.from_dict(OUTPUT_CRS),
-                    'nodata': numpy.array([fill_value]).astype(variable_mean.dtype).item()}
+                    'nodata': numpy.array([fill_value]).astype(variable_mean.dtype).item()
+                }
 
                 output_filename = f'{filename_prefix}_{variable}_{self.model_time:%Y%m%d}_{time_delta_string}{filename_suffix}'
                 output_filename = os.path.join(output_dir, output_filename)
@@ -263,7 +271,7 @@ class RTOFSDataset:
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(variable_mean, 1)
                     if driver == 'GTiff':
-                        output_raster.build_overviews(utilities.overview_levels(variable_mean.shape), Resampling['average'])
+                        output_raster.build_overviews(PyOFS.overview_levels(variable_mean.shape), Resampling['average'])
                         output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def write_raster(self, output_filename: str, variable: str, time: datetime, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff', crop: bool = True):
@@ -293,7 +301,8 @@ class RTOFSDataset:
                 'count': 1,
                 'dtype': rasterio.float32,
                 'crs': CRS.from_dict(OUTPUT_CRS),
-                'nodata': numpy.array([fill_value]).astype(output_data.dtype).item()}
+                'nodata': numpy.array([fill_value]).astype(output_data.dtype).item()
+            }
 
             if driver == 'AAIGrid':
                 file_extension = 'asc'
@@ -310,7 +319,7 @@ class RTOFSDataset:
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                 output_raster.write(output_data, 1)
                 if driver == 'GTiff':
-                    output_raster.build_overviews(utilities.overview_levels(output_data.shape), Resampling['average'])
+                    output_raster.build_overviews(PyOFS.overview_levels(output_data.shape), Resampling['average'])
                     output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def to_xarray(self, variables: Collection[str] = None, mean: bool = True) -> xarray.Dataset:

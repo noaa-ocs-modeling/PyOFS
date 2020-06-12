@@ -16,14 +16,15 @@ import fiona.crs
 import numpy
 import rasterio
 from rasterio.crs import CRS
+from rasterio.enums import Resampling
 import rasterio.features
 import shapely
 import shapely.geometry
 import shapely.wkt
 import xarray
 
-from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, utilities
-from PyOFS.utilities import get_logger
+import PyOFS
+from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, utilities, get_logger, NoDataError
 
 LOGGER = get_logger('PyOFS.SMAP')
 
@@ -60,6 +61,8 @@ class SMAPDataset:
                 break
             except Exception as error:
                 LOGGER.warning(f'{error.__class__.__name__}: {error}')
+        else:
+            raise NoDataError(f'dataset creation error: no data found in sources')
 
         # construct rectangular polygon of granule extent
         lon_min = float(self.dataset.geospatial_lon_min)
@@ -140,7 +143,7 @@ class SMAPDataset:
         if numpy.datetime64(data_time) in self.dataset['times'].values:
             return self.dataset['smap_sss'].sel(times=data_time).values
         else:
-            raise utilities.NoDataError(f'No data exists for {data_time:%Y%m%dT%H%M%S}.')
+            raise PyOFS.NoDataError(f'No data exists for {data_time:%Y%m%dT%H%M%S}.')
 
     def write_rasters(self, output_dir: str, data_time: datetime, variables: Collection[str] = tuple(['sss']), filename_prefix: str = 'smos', fill_value: float = LEAFLET_NODATA_VALUE,
                       driver: str = 'GTiff'):
@@ -169,7 +172,8 @@ class SMAPDataset:
                     'dtype': rasterio.float32,
                     'crs': CRS.from_dict(OUTPUT_CRS),
                     'transform': SMAPDataset.study_area_transform,
-                    'nodata': fill_value}
+                    'nodata': fill_value
+                }
 
                 if driver == 'AAIGrid':
                     file_extension = 'asc'
@@ -187,7 +191,7 @@ class SMAPDataset:
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(input_data, 1)
                     if driver == 'GTiff':
-                        output_raster.build_overviews(utilities.overview_levels(input_data.shape), Resampling['average'])
+                        output_raster.build_overviews(PyOFS.overview_levels(input_data.shape), Resampling['average'])
                         output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def __repr__(self):
