@@ -129,6 +129,10 @@ class VectorField:
 
 
 class RankineVortex(VectorField):
+    """
+    Time-invariant circular vector field moving in solid-body rotation (like a turntable).
+    """
+
     def __init__(self, center: (float, float), radius: float, period: timedelta, time_deltas: numpy.array):
         """
         Construct a 2-dimensional solid rotating disk surrounded by inverse falloff of tangential velocity.
@@ -259,6 +263,10 @@ class VectorDataset(VectorField):
 
 
 class ROMSGridVectorDataset(VectorField):
+    """
+    Vector field of a ROMS grid with arbitrary definition. Offers interpolation to derive velocity at any given point.
+    """
+
     def __init__(self, u: numpy.array, v: numpy.array, u_x: numpy.array, u_y: numpy.array, v_x: numpy.array, v_y: numpy.array, times: numpy.array, grid_angles: xarray.DataArray):
         """
         Create new velocity field from given observation.
@@ -413,7 +421,7 @@ class Particle:
             self.delta_vector = delta_vector
             self.delta_t = delta_t
 
-        def __add__(self, other):
+        def __add__(self, other: 'ParticleDelta') -> 'ParticleDelta':
             return self.__class__(self.delta_vector + other.delta_vector, self.delta_t + other.delta_t)
 
     def step(self, delta_t: timedelta = None, order: int = 1):
@@ -500,24 +508,24 @@ class Particle:
 
         return axis.plot(*pyproj.transform(utilities.WEB_MERCATOR, utilities.WGS84, *zip(*self.locations[locations])), linestyle='--', marker='o', **kwargs)
 
-    def __add__(self, particle_delta: ParticleDelta):
+    def __add__(self, particle_delta: ParticleDelta) -> 'Particle':
         new_particle = Particle(self.coordinates() + particle_delta.delta_vector, self.time + particle_delta.delta_t, self.field)
         new_particle.locations = self.locations
         return new_particle
 
-    def __sub__(self, other):
+    def __sub__(self, other) -> 'ParticleDelta':
         return self.ParticleDelta(self.coordinates() - other.coordinates(), self.time - other.time)
 
     def __str__(self) -> str:
         return f'{self.time} {self.coordinates(utilities.WGS84)} -> {self.vector}'
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str(self)
 
 
 class ParticleContour:
     """
-    Contour of points within a velocity field.
+    Contour of particles within a velocity field.
     """
 
     def __init__(self, points: [(float, float)], time: datetime, field: VectorField, interval: float = 500, projection: pyproj.Proj = None):
@@ -670,9 +678,10 @@ class RectangleContour(ParticleContour):
             'sw': pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, west_lon, south_lat),
             'nw': pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, west_lon, north_lat),
             'ne': pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, east_lon, north_lat),
-            'se': pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, east_lon, south_lat)}
-        points = []
+            'se': pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, east_lon, south_lat)
+        }
 
+        points = []
         for corner_name, corner in corners.items():
             points.append(pyproj.transform(utilities.WEB_MERCATOR, utilities.WGS84, *corner))
 
@@ -720,6 +729,16 @@ def create_contour(contour_center: tuple, contour_radius: float, start_time: dat
 
 
 def track_contour(contour: ParticleContour, timestep: timedelta, steps: int, intermediate_timestep: timedelta = None) -> {datetime: shapely.geometry.Polygon}:
+    """
+    Create a history of the given contour over a period of time.
+
+    :param contour: starting contour
+    :param timestep: total time interval over which to track
+    :param steps: number of intervals
+    :param intermediate_timestep: individual time interval to track
+    :return: mapping of datetimes to contour geometries
+    """
+
     polygons = {contour.time: contour.geometry()}
 
     if intermediate_timestep is None or intermediate_timestep > timestep:
@@ -740,7 +759,7 @@ def track_contour(contour: ParticleContour, timestep: timedelta, steps: int, int
 
 def interpolate_contour(points: numpy.array, interval: float, method: str = 'linear') -> numpy.array:
     """
-    Interpolate along an arbitrary polygon to enforce a regular interval between points.
+    Calculate a set of points along an arbitrary polygon to enforce a regular interval between particles.
 
     :param points: array of x and y values of starting polygon
     :param interval: desired interval between points in the output polygon
