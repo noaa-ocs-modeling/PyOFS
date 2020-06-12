@@ -32,10 +32,11 @@ class NoDataError(Exception):
     pass
 
 
-DEFAULT_LOG_FORMAT = '[%(asctime)s] %(name)-11s %(levelname)-8s: %(message)s'
-
-
-def get_logger(name: str) -> logging.Logger:
+def get_logger(name: str, log_filename: str = None, file_level: int = None, console_level: int = None, log_format: str = None) -> logging.Logger:
+    if file_level is None:
+        file_level = logging.DEBUG
+    if console_level is None:
+        console_level = logging.INFO
     logger = logging.getLogger(name)
 
     # check if logger is already configured
@@ -44,51 +45,37 @@ def get_logger(name: str) -> logging.Logger:
         if '.' in name:
             logger.parent = get_logger(name.rsplit('.', 1)[0])
         else:
-            logger = create_logger(name)
+            # otherwise create a new split-console logger
+            logger.setLevel(logging.DEBUG)
+            if console_level != logging.NOTSET:
+                if console_level <= logging.INFO:
+                    class LoggingOutputFilter(logging.Filter):
+                        def filter(self, rec):
+                            return rec.levelno in (logging.DEBUG, logging.INFO)
 
-    return logger
+                    console_output = logging.StreamHandler(sys.stdout)
+                    console_output.setLevel(console_level)
+                    console_output.addFilter(LoggingOutputFilter())
+                    logger.addHandler(console_output)
 
-
-def create_logger(name: str, log_filename: str = None, file_level: int = logging.DEBUG, console_level: int = logging.INFO, log_format: str = None) -> logging.Logger:
-    if log_format is None:
-        log_format = DEFAULT_LOG_FORMAT
-
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
-
-    # remove handlers
-    for handler in [handler for handler in logger.handlers]:
-        logger.removeHandler(handler)
-
-    log_formatter = logging.Formatter(log_format)
-
-    if console_level != logging.NOTSET:
-        if console_level <= logging.INFO:
-            console_output = logging.StreamHandler(sys.stdout)
-            console_output.setFormatter(log_formatter)
-            console_output.setLevel(console_level)
-            console_output.addFilter(LoggingOutputFilter())
-            logger.addHandler(console_output)
-
-        console_errors = logging.StreamHandler(sys.stderr)
-        console_errors.setFormatter(log_formatter)
-        console_errors.setLevel(max((console_level, logging.WARNING)))
-        logger.addHandler(console_errors)
+                console_errors = logging.StreamHandler(sys.stderr)
+                console_errors.setLevel(max((console_level, logging.WARNING)))
+                logger.addHandler(console_errors)
 
     if log_filename is not None:
-        log_file = logging.FileHandler(log_filename)
-        log_file.setFormatter(log_formatter)
-        log_file.setLevel(file_level)
-        logger.addHandler(log_file)
+        file_handler = logging.FileHandler(log_filename)
+        file_handler.setLevel(file_level)
+        for existing_file_handler in [handler for handler in logger.handlers if type(handler) is logging.FileHandler]:
+            logger.removeHandler(existing_file_handler)
+        logger.addHandler(file_handler)
+
+    if log_format is None:
+        log_format = '[%(asctime)s] %(name)-15s %(levelname)-8s: %(message)s'
+    log_formatter = logging.Formatter(log_format)
+    for handler in logger.handlers:
+        handler.setFormatter(log_formatter)
 
     return logger
-
-
-class LoggingOutputFilter(logging.Filter):
-    """ class to filter output from a logger to only INFO or DEBUG """
-
-    def filter(self, rec):
-        return rec.levelno in (logging.DEBUG, logging.INFO)
 
 
 def round_to_hour(datetime_object: datetime.datetime, direction: str = None) -> datetime.datetime:
