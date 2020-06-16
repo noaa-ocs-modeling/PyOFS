@@ -17,7 +17,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.par
 
 from PyOFS import DATA_DIRECTORY, get_logger
 
-TIDEPOOL_URL = 'ftp://137.75.111.166'
+TIDEPOOL_URL = '137.75.111.166'
 INPUT_DIRECTORY = '/pub/outgoing/CSDL'
 # WCOFS_EXPERIMENTAL_DIRECTORY = '/pub/outgoing/CSDL/testssh'
 
