@@ -7,7 +7,7 @@ Created on Aug 9, 2018
 @author: zachary.burnett
 """
 
-from datetime import datetime, timedelta, date
+from datetime import date, datetime, timedelta
 import ftplib
 import logging
 import os
@@ -17,7 +17,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.par
 
 from PyOFS import DATA_DIRECTORY, create_logger
 
-TIDEPOOL_URL = 'tidepool.nos.noaa.gov'
+TIDEPOOL_URL = 'ftp://137.75.111.166'
 INPUT_DIRECTORY = '/pub/outgoing/CSDL'
 # WCOFS_EXPERIMENTAL_DIRECTORY = '/pub/outgoing/CSDL/testssh'
 
