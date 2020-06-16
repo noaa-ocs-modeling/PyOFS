@@ -15,7 +15,7 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
-from PyOFS import DATA_DIRECTORY, create_logger
+from PyOFS import DATA_DIRECTORY, get_logger
 
 TIDEPOOL_URL = 'ftp://137.75.111.166'
 INPUT_DIRECTORY = '/pub/outgoing/CSDL'
@@ -59,7 +59,7 @@ if __name__ == '__main__':
     # check whether logfile exists
     log_exists = os.path.exists(log_path)
 
-    logger = create_logger('download', log_path, file_level=logging.INFO, console_level=logging.DEBUG)
+    logger = get_logger('download', log_path, file_level=logging.INFO, console_level=logging.DEBUG)
 
     # write initial message
     logger.info('Starting FTP transfer...')

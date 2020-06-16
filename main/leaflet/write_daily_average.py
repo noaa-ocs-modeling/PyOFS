@@ -19,7 +19,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.par
 
 from main.leaflet.write_azure import sync_with_azure
 from main.leaflet import write_json
-from PyOFS import DATA_DIRECTORY, LEAFLET_NODATA_VALUE, create_logger, NoDataError
+from PyOFS import DATA_DIRECTORY, LEAFLET_NODATA_VALUE, NoDataError, get_logger
 from PyOFS.observation import hf_radar, viirs, smap, data_buoy
 from PyOFS.model import wcofs, rtofs
 
@@ -38,7 +38,7 @@ STUDY_AREA_TO_UTC = timedelta(hours=-datetime.now(pytz.timezone(STUDY_AREA_TIMEZ
 # range of day deltas that models reach
 MODEL_DAY_DELTAS = {'WCOFS': range(-1, 3), 'RTOFS': range(-3, 9)}
 
-LOGGER = create_logger('PyOFS', LOG_FILENAME, file_level=logging.INFO, console_level=logging.INFO)
+LOGGER = get_logger('PyOFS', LOG_FILENAME, file_level=logging.INFO, console_level=logging.INFO)
 
 
 def write_observation(output_dir: str, observation_date: Union[datetime, date], observation: str):
