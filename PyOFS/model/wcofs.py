@@ -450,7 +450,7 @@ class WCOFSDataset:
                 if v_data is not None:
                     variable_means[v_name] = v_data
 
-        LOGGER.debug('parallel data aggregation took {(datetime.now() - start_time).total_seconds():.2f} seconds')
+        LOGGER.debug(f'parallel data aggregation took {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds')
 
         start_time = datetime.now()
 
@@ -507,7 +507,7 @@ class WCOFSDataset:
                     if v_name not in variables:
                         del interpolated_data[v_name]
 
-            LOGGER.debug(f'parallel grid interpolation took {(datetime.now() - start_time).total_seconds():.2f} seconds')
+            LOGGER.debug(f'parallel grid interpolation took {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds')
 
         # write interpolated grids to raster files
         for variable, variable_data in interpolated_data.items():
@@ -593,7 +593,7 @@ class WCOFSDataset:
 
             del running_futures
 
-        LOGGER.debug(f'parallel data aggregation took {(datetime.now() - start_time).total_seconds(): .2f} seconds')
+        LOGGER.debug(f'parallel data aggregation took {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds')
 
         schema = {'geometry': 'Point', 'properties': {'row': 'int', 'col': 'int', 'rho_lon': 'float', 'rho_lat': 'float'}}
 
@@ -626,7 +626,7 @@ class WCOFSDataset:
                 if result is not None:
                     layer_records.append(result)
 
-        LOGGER.debug(f'creating records took {(datetime.now() - start_time).total_seconds():.2f} seconds')
+        LOGGER.debug(f'creating records took {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds')
 
         start_time = datetime.now()
 
@@ -636,7 +636,7 @@ class WCOFSDataset:
         with fiona.open(output_filename, 'w', driver='GPKG', schema=schema, crs=OUTPUT_CRS, layer=layer_name) as output_vector_file:
             output_vector_file.writerecords(layer_records)
 
-        LOGGER.debug(f'writing records took {(datetime.now() - start_time).total_seconds():.2f} seconds')
+        LOGGER.debug(f'writing records took {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds')
 
     @staticmethod
     def _create_fiona_record(variable_means, row, col, feature_index):
@@ -799,8 +799,8 @@ class WCOFSRange:
                     start_duration = self.start_time - model_date
                     end_duration = self.end_time - model_date
 
-                    start_day = round(start_duration.total_seconds() / (60 * 60 * 24))
-                    end_day = round(end_duration.total_seconds() / (60 * 60 * 24))
+                    start_day = round(start_duration / timedelta(hours=1))
+                    end_day = round(end_duration / timedelta(hours=1))
 
                     if start_day <= WCOFS_MODEL_HOURS['n'] / 24:
                         start_day = round(WCOFS_MODEL_HOURS['n'] / 24)
@@ -828,13 +828,13 @@ class WCOFSRange:
                     start_duration = self.start_time - model_time
                     end_duration = self.end_time - model_time
 
-                    start_hour = round(start_duration.total_seconds() / (60 * 60))
+                    start_hour = round(start_duration / timedelta(hours=1))
                     if start_hour <= WCOFS_MODEL_HOURS['n']:
                         start_hour = WCOFS_MODEL_HOURS['n']
                     elif start_hour >= WCOFS_MODEL_HOURS['f']:
                         start_hour = WCOFS_MODEL_HOURS['f']
 
-                    end_hour = round(end_duration.total_seconds() / (60 * 60))
+                    end_hour = round(end_duration / timedelta(hours=1))
                     if end_hour <= WCOFS_MODEL_HOURS['n']:
                         end_hour = WCOFS_MODEL_HOURS['n']
                     elif end_hour >= WCOFS_MODEL_HOURS['f']:
@@ -907,11 +907,11 @@ class WCOFSRange:
                 if self.source == 'avg':
                     # get current day index
                     time_difference = input_time - day
-                    time_delta = round(time_difference.total_seconds() / (60 * 60 * 24))
+                    time_delta = round(time_difference / timedelta(days=1))
                 else:
                     # get current hour index
                     time_difference = input_time - day.replace(hour=3, minute=0, second=0)
-                    time_delta = round(time_difference.total_seconds() / (60 * 60))
+                    time_delta = round(time_difference / timedelta(hours=1))
 
                 if time_delta in dataset.time_deltas:
                     future = concurrency_pool.submit(dataset.data, variable, time_delta)
@@ -1099,7 +1099,7 @@ class WCOFSRange:
             if v_name not in variable_data_stack_averages:
                 variable_data_stack_averages[v_name] = self.data_averages(v_name, start_time, end_time)
 
-        LOGGER.debug('parallel data aggregation took {(datetime.now() - start_time).total_seconds(): .2=f} seconds')
+        LOGGER.debug(f'parallel data aggregation took {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds')
 
         start_time = datetime.now()
 
@@ -1161,7 +1161,7 @@ class WCOFSRange:
             if v_name not in variables:
                 del interpolated_data[v_name]
 
-        LOGGER.debug('parallel grid interpolation took {(datetime.now() - start_time).total_seconds(): .2f} seconds')
+        LOGGER.debug(f'parallel grid interpolation took {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds')
 
         # write interpolated grids to raster files
         for variable, variable_data_stack in interpolated_data.items():
@@ -1252,7 +1252,7 @@ class WCOFSRange:
 
             del running_futures
 
-        LOGGER.debug('parallel data aggregation took {(datetime.now() - start_time).total_seconds(): .2f} seconds')
+        LOGGER.debug(f'parallel data aggregation took {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds')
 
         model_time_strings = [model_time for model_time in next(iter(variable_data_stack_averages.values())).keys()]
 

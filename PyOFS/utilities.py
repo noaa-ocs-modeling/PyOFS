@@ -7,7 +7,7 @@ Created on Jun 13, 2018
 @author: zachary.burnett
 """
 
-import datetime
+from datetime import datetime, timedelta
 from functools import partial
 import os
 
@@ -27,7 +27,7 @@ WGS84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
 WEB_MERCATOR = pyproj.Proj('+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs')
 
 GRAVITATIONAL_ACCELERATION = 9.80665  # meters per second squared
-SIDEREAL_ROTATION_PERIOD = datetime.timedelta(hours=23, minutes=56, seconds=4.1)
+SIDEREAL_ROTATION_PERIOD = timedelta(hours=23, minutes=56, seconds=4.1)
 
 LOGGER = get_logger('PyOFS.utili')
 
@@ -58,7 +58,7 @@ def copy_xarray(input_path: str, output_path: str) -> xarray.Dataset:
     return output_dataset
 
 
-def round_to_day(datetime_object: datetime.datetime, direction: str = None) -> datetime.datetime:
+def round_to_day(datetime_object: datetime, direction: str = None) -> datetime:
     """
     Return given datetime rounded to the nearest day.
 
@@ -71,7 +71,7 @@ def round_to_day(datetime_object: datetime.datetime, direction: str = None) -> d
     half_day = datetime_object.replace(hour=12, minute=0, second=0, microsecond=0)
 
     if direction == 'ceiling' or (direction is None and datetime_object >= half_day):
-        datetime_object = start_of_day + datetime.timedelta(days=1)
+        datetime_object = start_of_day + timedelta(days=1)
     elif direction == 'floor' or (direction is None and datetime_object < half_day):
         datetime_object = start_of_day
 
@@ -137,15 +137,15 @@ def write_gpkg_subdataset(input_data: numpy.array, output_filename: str, layer_n
         output_raster.write(input_data.astype(dtype), 1)
 
 
-def datetime64_to_time(datetime64: numpy.datetime64) -> datetime.datetime:
+def datetime64_to_time(datetime64: numpy.datetime64) -> datetime:
     """
-    Convert numpy.datetime64 object to native Python datetime.datetime object
+    Convert numpy.datetime64 object to native Python datetime object
 
     :param datetime64: numpy datetime
     :return: python datetime
     """
 
-    return datetime.datetime.fromtimestamp(datetime64.values.astype(datetime.datetime) * 1e-9)
+    return datetime.fromtimestamp(datetime64.values.astype(datetime) * 1e-9)
 
 
 def get_first_record(vector_dataset_filename: str):
@@ -333,7 +333,7 @@ def rossby_deformation_radius(latitude: float) -> float:
     oceanic_speed_of_sound = 1500  # meters per second
     oceanic_potential_density = 1025  # kilograms per cubic meter
 
-    coriolis_frequency = numpy.sin(latitude * numpy.pi / 180) * 4 * numpy.pi / SIDEREAL_ROTATION_PERIOD.total_seconds()
+    coriolis_frequency = numpy.sin(latitude * numpy.pi / 180) * 4 * numpy.pi / SIDEREAL_ROTATION_PERIOD / timedelta(seconds=1)
 
     brunt_vaisala_frequency = numpy.sqrt(GRAVITATIONAL_ACCELERATION / oceanic_potential_density)
     scale_height = oceanic_speed_of_sound ** 2 / GRAVITATIONAL_ACCELERATION

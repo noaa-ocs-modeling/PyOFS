@@ -33,7 +33,7 @@ REFERENCE_DIRECTORY = os.path.join(DATA_DIRECTORY, 'reference')
 
 # offset from study area to UTC
 STUDY_AREA_TIMEZONE = 'US/Pacific'
-STUDY_AREA_TO_UTC = timedelta(hours=-datetime.now(pytz.timezone(STUDY_AREA_TIMEZONE)).utcoffset().total_seconds() / 3600)
+STUDY_AREA_TO_UTC = timedelta(hours=-datetime.now(pytz.timezone(STUDY_AREA_TIMEZONE)).utcoffset() / timedelta(hours=1))
 
 # range of day deltas that models reach
 MODEL_DAY_DELTAS = {'WCOFS': range(-1, 3), 'RTOFS': range(-3, 9)}
@@ -364,7 +364,7 @@ if __name__ == '__main__':
     write_observations(OUTPUT_DIRECTORY, model_run_date, day_deltas)
     write_models(OUTPUT_DIRECTORY, model_run_date, day_deltas)
 
-    LOGGER.info(f'Finished writing files. Total time: {(datetime.now() - start_time).total_seconds():.2f} seconds')
+    LOGGER.info(f'Finished writing files. Total time: {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds')
 
     start_time = datetime.now()
 
@@ -377,6 +377,6 @@ if __name__ == '__main__':
     sync_with_azure(files_json_filename, f'{azure_blob_url}/reference/files.json', credentials)
     sync_with_azure(OUTPUT_DIRECTORY, f'{azure_blob_url}/output', credentials)
 
-    LOGGER.info(f'Finished uploading files. Total time: {(datetime.now() - start_time).total_seconds():.2f} seconds')
+    LOGGER.info(f'Finished uploading files. Total time: {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds')
 
     print('done')

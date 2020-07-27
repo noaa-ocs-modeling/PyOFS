@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime, timedelta
 import logging
 import os
 import sys
@@ -78,7 +78,7 @@ def get_logger(name: str, log_filename: str = None, file_level: int = None, cons
     return logger
 
 
-def round_to_hour(datetime_object: datetime.datetime, direction: str = None) -> datetime.datetime:
+def round_to_hour(datetime_object: datetime, direction: str = None) -> datetime:
     """
     Return given datetime rounded to the nearest hour.
 
@@ -91,14 +91,14 @@ def round_to_hour(datetime_object: datetime.datetime, direction: str = None) -> 
     half_hour = datetime_object.replace(minute=30, second=0, microsecond=0)
 
     if direction == 'ceiling' or datetime_object >= half_hour:
-        datetime_object = start_of_hour + datetime.timedelta(hours=1)
+        datetime_object = start_of_hour + timedelta(hours=1)
     elif direction == 'floor' or datetime_object < half_hour:
         datetime_object = start_of_hour
 
     return datetime_object
 
 
-def round_to_ten_minutes(datetime_object: datetime.datetime) -> datetime.datetime:
+def round_to_ten_minutes(datetime_object: datetime) -> datetime:
     """
     Return given datetime rounded to the nearest ten minutes.
 
@@ -109,7 +109,7 @@ def round_to_ten_minutes(datetime_object: datetime.datetime) -> datetime.datetim
     return datetime_object.replace(minute=int(round(datetime_object.minute, -1)), second=0, microsecond=0)
 
 
-def range_daily(start_time: datetime.datetime, end_time: datetime.datetime) -> list:
+def range_daily(start_time: datetime, end_time: datetime) -> list:
     """
     Generate range of times between given times at day intervals.
 
@@ -122,10 +122,10 @@ def range_daily(start_time: datetime.datetime, end_time: datetime.datetime) -> l
     days = duration.days
     stride = 1 if days > 0 else -1
 
-    return [start_time + datetime.timedelta(days=day) for day in range(0, days, stride)]
+    return [start_time + timedelta(days=day) for day in range(0, days, stride)]
 
 
-def range_hourly(start_time: datetime.datetime, end_time: datetime.datetime) -> list:
+def range_hourly(start_time: datetime, end_time: datetime) -> list:
     """
     Generate range of times between given times at hour intervals.
 
@@ -135,13 +135,13 @@ def range_hourly(start_time: datetime.datetime, end_time: datetime.datetime) -> 
     """
 
     duration = end_time - start_time
-    hours = int(duration.total_seconds() / 3600)
+    hours = int(duration / timedelta(hours=1))
     stride = 1 if duration.days > 0 else -1
 
-    return [start_time + datetime.timedelta(hours=hour) for hour in range(0, hours, stride)]
+    return [start_time + timedelta(hours=hour) for hour in range(0, hours, stride)]
 
 
-def ten_minute_range(start_time: datetime.datetime, end_time: datetime.datetime) -> list:
+def ten_minute_range(start_time: datetime, end_time: datetime) -> list:
     """
     Generate range of times between given times at ten minute intervals.
 
@@ -151,10 +151,10 @@ def ten_minute_range(start_time: datetime.datetime, end_time: datetime.datetime)
     """
 
     duration = end_time - start_time
-    minutes = int(duration.total_seconds() / 60)
+    minutes = int(duration / timedelta(minutes=1))
     stride = 10
 
-    return [start_time + datetime.timedelta(minutes=minute) for minute in range(0, minutes + 1, stride)]
+    return [start_time + timedelta(minutes=minute) for minute in range(0, minutes + 1, stride)]
 
 
 def overview_levels(shape: (int, int)) -> [int]:

@@ -739,8 +739,8 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
                         # get duration from current cycle start
                         cycle_duration = cycle_time - (start_time + cycle_offset)
 
-                        LOGGER.info(f'{cycle_time:%Y%m%dT%H%M%S} {cycle_duration.total_seconds()}: valid scene (checked {cycle_index + 1} cycle(s))')
-                        lines.append(f'{cycle_time:%Y%m%dT%H%M%S},{cycle_duration.total_seconds()}')
+                        LOGGER.info(f'{cycle_time:%Y%m%dT%H%M%S} {cycle_duration / timedelta(seconds=1)}: valid scene (checked {cycle_index + 1} cycle(s))')
+                        lines.append(f'{cycle_time:%Y%m%dT%H%M%S},{cycle_duration / timedelta(seconds=1)}')
 
                 # if we get to here, break and continue to the next datetime
                 break

@@ -63,7 +63,7 @@ if __name__ == '__main__':
         source = 'wcofs_qck' if 'modeled' in velocity_product else 'wcofs_qck_geostrophic'
 
         input_path = os.path.join(DATA_DIRECTORY, 'output', 'test', 'contours.gpkg')
-        layer_name = f'{source}_{start_time:%Y%m%dT%H%M%S}_{(start_time + period):"%Y%m%dT%H%M%S"}_{int(time_delta.total_seconds() / 3600)}h'
+        layer_name = f'{source}_{start_time:%Y%m%dT%H%M%S}_{(start_time + period):"%Y%m%dT%H%M%S"}_{int(time_delta / timedelta(hours=1))}h'
 
         LOGGER.info(f'[{datetime.now()}]: Reading {input_path}...')
         with fiona.open(input_path, layer=layer_name) as contours_file:

@@ -135,7 +135,7 @@ if __name__ == '__main__':
                     with open(output_path, 'wb') as output_file:
                         try:
                             ftp_connection.retrbinary(f'RETR {input_path}', output_file.write)
-                            logger.info(f'Copied "{input_path}" to "{output_path}" ({(datetime.now() - current_start_time).total_seconds():.2f}s, {os.stat(output_path).st_size / 1000} KB)')
+                            logger.info(f'Copied "{input_path}" to "{output_path}" ({(datetime.now() - current_start_time) / timedelta(seconds=1):.2f}s, {os.stat(output_path).st_size / 1000} KB)')
                             num_downloads += 1
                         except Exception as error:
                             logger.exception(f'input path: {input_path}, {output_path}: {output_path}')
@@ -143,7 +143,7 @@ if __name__ == '__main__':
                     # only write 'file exists' message on the first run of the day
                     logger.log(logging.DEBUG if log_exists else logging.INFO, f'Destination file already exists: "{output_path}", {os.stat(output_path).st_size / 1000} KB')
 
-    logger.info(f'Downloaded {num_downloads} files. Total time: {(datetime.now() - start_time).total_seconds():.2f} seconds')
+    logger.info(f'Downloaded {num_downloads} files. Total time: {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds')
 
     print('done')
 

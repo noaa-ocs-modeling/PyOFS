@@ -205,7 +205,7 @@ class RTOFSDataset:
         if self.time_interval == 'daily':
             time = time.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        time_delta = int((time - self.model_time).total_seconds() / (24 * 60 * 60))
+        time_delta = int((time - self.model_time) / timedelta(days=1))
         direction = 'forecast' if time_delta >= 0 else 'nowcast'
         time_delta_string = f'{direction[0]}{abs(time_delta) + 1 if direction == "forecast" else abs(time_delta):03}'
 

@@ -50,7 +50,7 @@ class VectorField:
         if type(time_delta) is int:
             time_delta *= 1e-9
         elif type(time_delta) is timedelta:
-            time_delta = int(time_delta.total_seconds())
+            time_delta = int(time_delta / timedelta(seconds=1))
 
         self.delta_t = timedelta(seconds=time_delta)
 
@@ -144,7 +144,7 @@ class RankineVortex(VectorField):
 
         self.center = numpy.array(pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, *center))
         self.radius = radius
-        self.angular_velocity = 2 * math.pi / period.total_seconds()
+        self.angular_velocity = 2 * math.pi / (period / timedelta(seconds=1))
 
         super().__init__(time_deltas)
 
@@ -435,7 +435,7 @@ class Particle:
         if delta_t is None:
             delta_t = self.field.delta_t
 
-        delta_seconds = delta_t.total_seconds()
+        delta_seconds = delta_t / timedelta(seconds=1)
 
         if order > 0 and not any(numpy.isnan(self.vector)):
             k_1 = delta_seconds * self.field[self.coordinates(), self.time]
@@ -567,7 +567,7 @@ class ParticleContour:
         if delta_t is None:
             delta_t = self.field.delta_t
 
-        delta_seconds = delta_t.total_seconds()
+        delta_seconds = delta_t / timedelta(seconds=1)
 
         if order > 0:
             k_1 = delta_seconds * self.field[self.vertices, self.time]
@@ -804,7 +804,7 @@ if __name__ == '__main__':
     maximum_timestep = timedelta(hours=4)
 
     output_path = os.path.join(DATA_DIRECTORY, 'output', 'test', 'contours.gpkg')
-    layer_name = f'{source}_{start_time:%Y%m%dT%H%M%S}_{(start_time + period):%Y%m%dT%H%M%S}_{int(time_delta.total_seconds() / 3600)}h'
+    layer_name = f'{source}_{start_time:%Y%m%dT%H%M%S}_{(start_time + period):%Y%m%dT%H%M%S}_{int(time_delta / timedelta(hours=1))}h'
 
     LOGGER.info(f'[{datetime.now()}]: Started processing...')
 
@@ -836,7 +836,7 @@ if __name__ == '__main__':
                 vector_dataset = rtofs.RTOFSDataset(start_time).to_xarray(variables=('ssu', 'ssv'), mean=False)
                 vector_dataset.to_netcdf(data_path)
             elif source.upper() == 'WCOFS':
-                source = 'avg' if time_delta.total_seconds() / 3600 / 24 >= 1 else '2ds'
+                source = 'avg' if time_delta / timedelta(days=1) >= 1 else '2ds'
 
                 vector_dataset = wcofs.WCOFSDataset(start_time, source).to_xarray(variables=('ssu', 'ssv', 'angle'))
                 vector_dataset.to_netcdf(data_path)
@@ -872,7 +872,7 @@ if __name__ == '__main__':
                             rho_lon = u_lon = v_lon = input_dataset['lon_rho'].values
                             rho_lat = u_lat = v_lat = input_dataset['lat_rho'].values
 
-                        # coriolis_frequencies = 4 * math.pi / sidereal_rotation_period.total_seconds() * numpy.sin(#     input_dataset['lat_rho'].values * math.pi / 180)
+                        # coriolis_frequencies = 4 * math.pi / sidereal_rotation_period / timedelta(seconds=1) * numpy.sin(input_dataset['lat_rho'].values * math.pi / 180)
 
                         coriolis_frequencies = input_dataset['f']
                         delta_x_reciprocal = input_dataset['pn']
