@@ -17,7 +17,7 @@ import pytz
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
-from main.leaflet.write_azure import sync_with_azure
+from main.leaflet.write_azure import upload_to_azure
 from main.leaflet import write_json
 from PyOFS import DATA_DIRECTORY, LEAFLET_NODATA_VALUE, NoDataError, get_logger
 from PyOFS.observation import hf_radar, viirs, smap, data_buoy
@@ -374,8 +374,10 @@ if __name__ == '__main__':
     with open(os.path.join(DATA_DIRECTORY, 'azure_credentials.txt')) as credentials_file:
         azure_blob_url, credentials = (line.strip('\n') for line in credentials_file.readlines())
 
-    sync_with_azure(files_json_filename, f'{azure_blob_url}/reference/files.json', credentials)
-    sync_with_azure(OUTPUT_DIRECTORY, f'{azure_blob_url}/output', credentials)
+    azcopy_path = r"C:\Working\azcopy.exe"
+
+    upload_to_azure(files_json_filename, f'{azure_blob_url}/reference/files.json', credentials, overwrite=True, azcopy_path=azcopy_path)
+    upload_to_azure(OUTPUT_DIRECTORY, f'{azure_blob_url}/output', credentials, azcopy_path=azcopy_path)
 
     LOGGER.info(f'Finished uploading files. Total time: {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds')
 
