@@ -73,4 +73,7 @@ def check_files(input_dir: str) -> dict:
 if __name__ == '__main__':
     missing_files = check_files(os.path.join(DATA_DIRECTORY, 'output'))
 
-    print(missing_files)
+    for missing_file_date, current_missing_files in missing_files.items():
+        print(f'{missing_file_date} - {len(current_missing_files)} files missing: ({current_missing_files})')
+
+    print('done')
