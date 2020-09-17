@@ -221,7 +221,7 @@ def write_wcofs(output_dir: str, model_run_date: Union[datetime, date, int, floa
         if data_assimilation:
             wcofs_string = 'wcofs'
         else:
-            wcofs_string = 'wcofs4'
+            wcofs_string = 'wcofs-free'
     else:
         grid_filename = wcofs.WCOFS_2KM_GRID_FILENAME
         wcofs_string = 'wcofs2'
@@ -351,7 +351,9 @@ if __name__ == '__main__':
 
     start_time = datetime.now()
 
-    # model_run_dates = range_daily(datetime.today(), datetime(2020, 8, 2))
+    # from PyOFS import range_daily
+    #
+    # model_run_dates = range_daily(datetime.today(), datetime(2020, 6, 19))
     # for model_run_date in model_run_dates:
     #     LOGGER.info(f'Starting file conversion for {model_run_date:%Y%m%d}')
     #     write_observations(OUTPUT_DIRECTORY, model_run_date, day_deltas)
