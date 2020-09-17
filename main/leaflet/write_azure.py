@@ -41,7 +41,7 @@ if __name__ == '__main__':
     with open(r"D:\data\azure_credentials.txt") as credentials_file:
         azure_blob_url, credentials = (line.strip('\n') for line in credentials_file.readlines())
 
-    upload_to_azure(os.path.join(local_data_path, 'reference'), f'{azure_blob_url}/reference', credentials, overwrite=True, azcopy_path=azcopy_path)
+    upload_to_azure(os.path.join(local_data_path, 'reference/files.json'), f'{azure_blob_url}/reference/files.json', credentials, overwrite=True, azcopy_path=azcopy_path)
     sync_with_azure(os.path.join(local_data_path, 'output'), f'{azure_blob_url}/output', credentials, azcopy_path=azcopy_path)
 
     print('done')
