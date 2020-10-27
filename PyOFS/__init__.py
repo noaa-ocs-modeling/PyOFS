@@ -18,9 +18,6 @@ else:
 # default nodata value used by leaflet-geotiff renderer
 LEAFLET_NODATA_VALUE = -9999.0
 
-# # for development branch
-DATA_DIRECTORY = DATA_DIRECTORY / 'develop'
-
 # using relative values with the PREDICTOR option will break rendering in Leaflet.CanvasLayer.Field
 TIFF_CREATION_OPTIONS = {
     'TILED': 'YES',

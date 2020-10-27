@@ -37,7 +37,7 @@ VIIRS_START_TIME = datetime.strptime('2012-03-01 00:10:00', '%Y-%m-%d %H:%M:%S')
 VIIRS_PERIOD = timedelta(days=16)
 
 PASS_TIMES_FILENAME = DATA_DIRECTORY / 'reference' / 'viirs_pass_times.txt'
-STUDY_AREA_POLYGON_FILENAME = DATA_DIRECTORY, 'reference' / 'wcofs.gpkg:study_area'
+STUDY_AREA_POLYGON_FILENAME = DATA_DIRECTORY / 'reference' / 'wcofs.gpkg:study_area'
 
 OUTPUT_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
