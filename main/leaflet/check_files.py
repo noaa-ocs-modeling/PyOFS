@@ -17,7 +17,10 @@ from PyOFS import get_logger, DATA_DIRECTORY
 LOGGER = get_logger('PyOFS.check')
 
 observations = {'hfr': ['dir', 'mag'], 'viirs': ['sst']}
-models = {'wcofs': ['dir', 'mag', 'sst', 'ssh', 'sss'], 'rtofs': ['dir', 'mag', 'sst', 'ssh', 'sss']}
+models = {
+    'wcofs': ['dir', 'mag', 'sst', 'ssh', 'sss'],
+    'rtofs': ['dir', 'mag', 'sst', 'ssh', 'sss'],
+}
 time_deltas = ['n001', 'f001', 'f002', 'f003']
 
 
@@ -75,6 +78,8 @@ if __name__ == '__main__':
     missing_files = check_files(DATA_DIRECTORY / 'output')
 
     for missing_file_date, current_missing_files in missing_files.items():
-        print(f'{missing_file_date} - {len(current_missing_files)} files missing: ({current_missing_files})')
+        print(
+            f'{missing_file_date} - {len(current_missing_files)} files missing: ({current_missing_files})'
+        )
 
     print('done')

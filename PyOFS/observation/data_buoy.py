@@ -26,12 +26,22 @@ from PyOFS import CRS_EPSG, DATA_DIRECTORY, utilities, get_logger
 
 LOGGER = get_logger('PyOFS.NDBC')
 
-MEASUREMENT_VARIABLES = ['water_temperature', 'conductivity', 'salinity', 'o2_saturation', 'dissolved_oxygen', 'chlorophyll_concentration', 'turbidity', 'water_ph', 'water_eh']
+MEASUREMENT_VARIABLES = [
+    'water_temperature',
+    'conductivity',
+    'salinity',
+    'o2_saturation',
+    'dissolved_oxygen',
+    'chlorophyll_concentration',
+    'turbidity',
+    'water_ph',
+    'water_eh',
+]
 
 OUTPUT_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
-STUDY_AREA_POLYGON_FILENAME = DATA_DIRECTORY / r"reference\wcofs.gpkg:study_area"
-WCOFS_NDBC_STATIONS_FILENAME = DATA_DIRECTORY / r"reference\ndbc_stations.txt"
+STUDY_AREA_POLYGON_FILENAME = DATA_DIRECTORY / r'reference\wcofs.gpkg:study_area'
+WCOFS_NDBC_STATIONS_FILENAME = DATA_DIRECTORY / r'reference\ndbc_stations.txt'
 
 CATALOG_URL = 'https://dods.ndbc.noaa.gov/thredds/catalog/data/ocean/catalog.html'
 SOURCE_URL = 'https://dods.ndbc.noaa.gov/thredds/dodsC/data/ocean'
@@ -100,9 +110,13 @@ class DataBuoyRange:
 
         if stations is None:
             with requests.get(CATALOG_URL) as station_catalog:
-                self.station_names = re.findall("href='(.*?)/catalog.html'", station_catalog.text)
+                self.station_names = re.findall(
+                    "href='(.*?)/catalog.html'", station_catalog.text
+                )
         elif type(stations) is str:
-            self.station_names = list(numpy.genfromtxt(WCOFS_NDBC_STATIONS_FILENAME, dtype='str'))
+            self.station_names = list(
+                numpy.genfromtxt(WCOFS_NDBC_STATIONS_FILENAME, dtype='str')
+            )
         else:
             self.station_names = stations
 
@@ -112,7 +126,10 @@ class DataBuoyRange:
 
         # concurrently populate dictionary with datasets for each station
         with futures.ThreadPoolExecutor() as concurrency_pool:
-            running_futures = {concurrency_pool.submit(DataBuoyDataset, station_name): station_name for station_name in self.station_names}
+            running_futures = {
+                concurrency_pool.submit(DataBuoyDataset, station_name): station_name
+                for station_name in self.station_names
+            }
 
             for completed_future in futures.as_completed(running_futures):
                 station_name = running_futures[completed_future]
@@ -126,7 +143,9 @@ class DataBuoyRange:
         if len(self.stations) == 0:
             raise PyOFS.NoDataError(f'No NDBC datasets found in {self.stations}')
 
-    def data(self, variables: [str], start_time: datetime, end_time: datetime) -> {str: {str: xarray.DataArray}}:
+    def data(
+            self, variables: [str], start_time: datetime, end_time: datetime
+    ) -> {str: {str: xarray.DataArray}}:
         """
         Get data of given variables within given time interval.
 
@@ -142,11 +161,15 @@ class DataBuoyRange:
             output_data[station_name] = {}
 
             for variable in variables:
-                output_data[station_name][variable] = station.data(variable, start_time, end_time)
+                output_data[station_name][variable] = station.data(
+                    variable, start_time, end_time
+                )
 
         return output_data
 
-    def data_average(self, variables: [str], start_time: datetime, end_time: datetime) -> {str: {str: float}}:
+    def data_average(
+            self, variables: [str], start_time: datetime, end_time: datetime
+    ) -> {str: {str: float}}:
         """
         Get data of given variables within given time interval.
 
@@ -162,11 +185,19 @@ class DataBuoyRange:
             output_data[station_name] = {}
 
             for variable in variables:
-                output_data[station_name][variable] = float(station.data(variable, start_time, end_time).mean('time', skipna=True))
+                output_data[station_name][variable] = float(
+                    station.data(variable, start_time, end_time).mean('time', skipna=True)
+                )
 
         return output_data
 
-    def write_vector(self, output_filename: PathLike, start_time: datetime, end_time: datetime, variables: [str] = None):
+    def write_vector(
+            self,
+            output_filename: PathLike,
+            start_time: datetime,
+            end_time: datetime,
+            variables: [str] = None,
+    ):
         """
         Write average of buoy data for all hours in the given time interval to a single layer of the provided output file.
 
@@ -205,7 +236,8 @@ class DataBuoyRange:
         #                 station_data[station_name][station_running_futures[completed_future]] = result
 
         schema = {
-            'geometry': 'Point', 'properties': {
+            'geometry': 'Point',
+            'properties': {
                 'name': 'str',
                 'longitude': 'float',
                 'latitude': 'float',
@@ -217,8 +249,8 @@ class DataBuoyRange:
                 'chlorophyll_concentration': 'float',
                 'turbidity': 'float',
                 'water_ph': 'float',
-                'water_eh': 'float'
-            }
+                'water_eh': 'float',
+            },
         }
 
         LOGGER.debug('Creating features...')
@@ -231,7 +263,7 @@ class DataBuoyRange:
             record = {
                 'geometry': {
                     'type': 'Point',
-                    'coordinates': (station.longitude, station.latitude)
+                    'coordinates': (station.longitude, station.latitude),
                 },
                 'properties': {
                     'name': station_name,
@@ -245,14 +277,18 @@ class DataBuoyRange:
                     'chlorophyll_concentration': station_data['chlorophyll_concentration'],
                     'turbidity': station_data['turbidity'],
                     'water_ph': station_data['water_ph'],
-                    'water_eh': station_data['water_eh']
-                }
+                    'water_eh': station_data['water_eh'],
+                },
             }
 
             layer_records.append(record)
 
-        LOGGER.info(f'Writing to {output_filename}{":" + layer_name if layer_name is not None else ""}')
-        with fiona.open(output_filename, 'w', 'GPKG', schema, OUTPUT_CRS, layer=layer_name) as output_layer:
+        LOGGER.info(
+            f'Writing to {output_filename}{":" + layer_name if layer_name is not None else ""}'
+        )
+        with fiona.open(
+                output_filename, 'w', 'GPKG', schema, OUTPUT_CRS, layer=layer_name
+        ) as output_layer:
             output_layer.writerecords(layer_records)
 
     def __repr__(self):
@@ -284,7 +320,9 @@ def check_station(dataset: xarray.Dataset, study_area_polygon_filename: PathLike
         study_area_polygon_filename = Path(study_area_polygon_filename)
 
     # construct polygon from the first record in the layer
-    study_area_polygon = shapely.geometry.Polygon(utilities.get_first_record(study_area_polygon_filename)['geometry']['coordinates'][0])
+    study_area_polygon = shapely.geometry.Polygon(
+        utilities.get_first_record(study_area_polygon_filename)['geometry']['coordinates'][0]
+    )
 
     lon = dataset['longitude'][:]
     lat = dataset['latitude'][:]
@@ -303,6 +341,10 @@ if __name__ == '__main__':
     date_interval_string = f'{start_time:%m%d%H}_{end_time:%m%d%H}'
 
     ndbc_range = DataBuoyRange(wcofs_stations)
-    ndbc_range.write_vector(output_dir / f'ndbc.gpkg:NDBC_{date_interval_string}', start_time=start_time, end_time=end_time)
+    ndbc_range.write_vector(
+        output_dir / f'ndbc.gpkg:NDBC_{date_interval_string}',
+        start_time=start_time,
+        end_time=end_time,
+    )
 
     print('done')

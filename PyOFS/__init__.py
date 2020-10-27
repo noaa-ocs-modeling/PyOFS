@@ -13,7 +13,7 @@ CRS_EPSG = 4326
 if 'OFS_DATA' in os.environ:
     DATA_DIRECTORY = Path(os.environ['OFS_DATA'])
 else:
-    DATA_DIRECTORY = Path(r"C:\data\OFS")
+    DATA_DIRECTORY = Path(r'C:\data\OFS')
 
 # default nodata value used by leaflet-geotiff renderer
 LEAFLET_NODATA_VALUE = -9999.0
@@ -23,12 +23,13 @@ TIFF_CREATION_OPTIONS = {
     'TILED': 'YES',
     'COMPRESS': 'DEFLATE',
     'NUM_THREADS': 'ALL_CPUS',
-    'BIGTIFF': 'IF_SAFER'
+    'BIGTIFF': 'IF_SAFER',
 }
 
 
 class NoDataError(Exception):
     """ Error for no data found. """
+
     pass
 
 
@@ -145,7 +146,9 @@ def round_to_ten_minutes(datetime_object: datetime) -> datetime:
     :return: rounded datetime
     """
 
-    return datetime_object.replace(minute=int(round(datetime_object.minute, -1)), second=0, microsecond=0)
+    return datetime_object.replace(
+        minute=int(round(datetime_object.minute, -1)), second=0, microsecond=0
+    )
 
 
 def range_daily(start_time: datetime, end_time: datetime) -> list:

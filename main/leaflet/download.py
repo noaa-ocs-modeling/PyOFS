@@ -47,10 +47,24 @@ if __name__ == '__main__':
     mod_dir = wcofs_dir / 'mod'
     # experimental_dir = wcofs_dir / 'exp' / f'{datetime.now():%Y%m}'
 
-    month_directories = {month_string: avg_dir / month_string for month_string in (f'{month:%Y%m}' for month in previous_months(6))}
+    month_directories = {
+        month_string: avg_dir / month_string
+        for month_string in (f'{month:%Y%m}' for month in previous_months(6))
+    }
 
     # create folders if they do not exist
-    for directory in [OUTPUT_DIRECTORY, LOG_DIRECTORY, wcofs_dir, rtofs_dir, avg_dir, fwd_dir, obs_dir, mod_dir] + list(month_directories.values()):  # experimental_dir]:
+    for directory in [
+                         OUTPUT_DIRECTORY,
+                         LOG_DIRECTORY,
+                         wcofs_dir,
+                         rtofs_dir,
+                         avg_dir,
+                         fwd_dir,
+                         obs_dir,
+                         mod_dir,
+                     ] + list(
+        month_directories.values()
+    ):  # experimental_dir]:
         if not directory.exists():
             os.makedirs(directory, exist_ok=True)
 
@@ -60,7 +74,9 @@ if __name__ == '__main__':
     # check whether logfile exists
     log_exists = log_path.exists()
 
-    logger = get_logger('download', log_path, file_level=logging.INFO, console_level=logging.DEBUG)
+    logger = get_logger(
+        'download', log_path, file_level=logging.INFO, console_level=logging.DEBUG
+    )
 
     # write initial message
     logger.info('Starting FTP transfer...')
@@ -107,7 +123,13 @@ if __name__ == '__main__':
         if len(sizes) > 0:
             old_path_map = path_map.copy()
             path_map = {sizes[size][0]: sizes[size][1] for size in sorted(sizes)}
-            path_map.update({input_path: output_path for input_path, output_path in old_path_map.items() if input_path not in path_map})
+            path_map.update(
+                {
+                    input_path: output_path
+                    for input_path, output_path in old_path_map.items()
+                    if input_path not in path_map
+                }
+            )
             del sizes
 
         # for input_path in ftp_connection.nlst(WCOFS_EXPERIMENTAL_DIRECTORY):
@@ -136,15 +158,24 @@ if __name__ == '__main__':
                     with open(output_path, 'wb') as output_file:
                         try:
                             ftp_connection.retrbinary(f'RETR {input_path}', output_file.write)
-                            logger.info(f'Copied "{input_path}" to "{output_path}" ({(datetime.now() - current_start_time) / timedelta(seconds=1):.2f}s, {os.stat(output_path).st_size / 1000} KB)')
+                            logger.info(
+                                f'Copied "{input_path}" to "{output_path}" ({(datetime.now() - current_start_time) / timedelta(seconds=1):.2f}s, {os.stat(output_path).st_size / 1000} KB)'
+                            )
                             num_downloads += 1
                         except Exception as error:
-                            logger.exception(f'input path: {input_path}, {output_path}: {output_path}')
+                            logger.exception(
+                                f'input path: {input_path}, {output_path}: {output_path}'
+                            )
                 else:
                     # only write 'file exists' message on the first run of the day
-                    logger.log(logging.DEBUG if log_exists else logging.INFO, f'Destination file already exists: "{output_path}", {os.stat(output_path).st_size / 1000} KB')
+                    logger.log(
+                        logging.DEBUG if log_exists else logging.INFO,
+                        f'Destination file already exists: "{output_path}", {os.stat(output_path).st_size / 1000} KB',
+                    )
 
-    logger.info(f'Downloaded {num_downloads} files. Total time: {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds')
+    logger.info(
+        f'Downloaded {num_downloads} files. Total time: {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds'
+    )
 
     print('done')
 

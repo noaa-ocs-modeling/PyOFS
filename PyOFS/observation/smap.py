@@ -25,7 +25,15 @@ import shapely.wkt
 import xarray
 
 import PyOFS
-from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, TIFF_CREATION_OPTIONS, utilities, get_logger, NoDataError
+from PyOFS import (
+    CRS_EPSG,
+    DATA_DIRECTORY,
+    LEAFLET_NODATA_VALUE,
+    TIFF_CREATION_OPTIONS,
+    utilities,
+    get_logger,
+    NoDataError,
+)
 
 LOGGER = get_logger('PyOFS.SMAP')
 
@@ -33,7 +41,15 @@ STUDY_AREA_POLYGON_FILENAME = DATA_DIRECTORY / 'reference' / 'wcofs.gpkg:study_a
 
 OUTPUT_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
-SOURCE_URLS = OrderedDict({'OpenDAP': OrderedDict({'JPL': 'https://thredds.jpl.nasa.gov/thredds/dodsC/ncml_aggregation/SalinityDensity/smap/aggregate__SMAP_JPL_L3_SSS_CAP_MONTHLY_V42.ncml', })})
+SOURCE_URLS = OrderedDict(
+    {
+        'OpenDAP': OrderedDict(
+            {
+                'JPL': 'https://thredds.jpl.nasa.gov/thredds/dodsC/ncml_aggregation/SalinityDensity/smap/aggregate__SMAP_JPL_L3_SSS_CAP_MONTHLY_V42.ncml',
+            }
+        )
+    }
+)
 
 
 class SMAPDataset:
@@ -75,11 +91,36 @@ class SMAPDataset:
         lat_max = float(self.dataset.geospatial_lat_max)
 
         if lon_min < lon_max:
-            self.data_extent = shapely.geometry.Polygon([(lon_min, lat_max), (lon_max, lat_max), (lon_max, lat_min), (lon_min, lat_min)])
+            self.data_extent = shapely.geometry.Polygon(
+                [
+                    (lon_min, lat_max),
+                    (lon_max, lat_max),
+                    (lon_max, lat_min),
+                    (lon_min, lat_min),
+                ]
+            )
         else:
             # geospatial bounds cross the antimeridian, so we create a multipolygon
-            self.data_extent = shapely.geometry.MultiPolygon([shapely.geometry.Polygon([(lon_min, lat_max), (180, lat_max), (180, lat_min), (lon_min, lat_min)]),
-                                                              shapely.geometry.Polygon([(-180, lat_max), (lon_max, lat_max), (lon_max, lat_min), (-180, lat_min)])])
+            self.data_extent = shapely.geometry.MultiPolygon(
+                [
+                    shapely.geometry.Polygon(
+                        [
+                            (lon_min, lat_max),
+                            (180, lat_max),
+                            (180, lat_min),
+                            (lon_min, lat_min),
+                        ]
+                    ),
+                    shapely.geometry.Polygon(
+                        [
+                            (-180, lat_max),
+                            (lon_max, lat_max),
+                            (lon_max, lat_min),
+                            (-180, lat_min),
+                        ]
+                    ),
+                ]
+            )
 
         lon_pixel_size = numpy.mean(numpy.diff(self.dataset['longitude'].values))
         lat_pixel_size = numpy.mean(numpy.diff(self.dataset['latitude'].values))
@@ -87,17 +128,37 @@ class SMAPDataset:
         if SMAPDataset.study_area_extent is None:
             # get first record in layer
             SMAPDataset.study_area_extent = shapely.geometry.MultiPolygon(
-                [shapely.geometry.Polygon(polygon[0]) for polygon in utilities.get_first_record(self.study_area_polygon_filename)['geometry']['coordinates']])
+                [
+                    shapely.geometry.Polygon(polygon[0])
+                    for polygon in utilities.get_first_record(
+                    self.study_area_polygon_filename
+                )['geometry']['coordinates']
+                ]
+            )
 
             SMAPDataset.study_area_bounds = SMAPDataset.study_area_extent.bounds
-            SMAPDataset.study_area_transform = rasterio.transform.from_origin(SMAPDataset.study_area_bounds[0], SMAPDataset.study_area_bounds[3], lon_pixel_size, lat_pixel_size)
+            SMAPDataset.study_area_transform = rasterio.transform.from_origin(
+                SMAPDataset.study_area_bounds[0],
+                SMAPDataset.study_area_bounds[3],
+                lon_pixel_size,
+                lat_pixel_size,
+            )
 
         if SMAPDataset.study_area_bounds is not None:
-            self.dataset = self.dataset.sel(longitude=slice(SMAPDataset.study_area_bounds[0], SMAPDataset.study_area_bounds[2]),
-                                            latitude=slice(SMAPDataset.study_area_bounds[3], SMAPDataset.study_area_bounds[1]))
+            self.dataset = self.dataset.sel(
+                longitude=slice(
+                    SMAPDataset.study_area_bounds[0], SMAPDataset.study_area_bounds[2]
+                ),
+                latitude=slice(
+                    SMAPDataset.study_area_bounds[3], SMAPDataset.study_area_bounds[1]
+                ),
+            )
 
         if SMAPDataset.study_area_coordinates is None:
-            SMAPDataset.study_area_coordinates = {'lon': self.dataset['longitude'], 'lat': self.dataset['latitude']}
+            SMAPDataset.study_area_coordinates = {
+                'lon': self.dataset['longitude'],
+                'lat': self.dataset['latitude'],
+            }
 
     def bounds(self) -> tuple:
         """
@@ -149,8 +210,15 @@ class SMAPDataset:
         else:
             raise PyOFS.NoDataError(f'No data exists for {data_time:%Y%m%dT%H%M%S}.')
 
-    def write_rasters(self, output_dir: PathLike, data_time: datetime, variables: Collection[str] = tuple(['sss']), filename_prefix: str = 'smos', fill_value: float = LEAFLET_NODATA_VALUE,
-                      driver: str = 'GTiff'):
+    def write_rasters(
+            self,
+            output_dir: PathLike,
+            data_time: datetime,
+            variables: Collection[str] = tuple(['sss']),
+            filename_prefix: str = 'smos',
+            fill_value: float = LEAFLET_NODATA_VALUE,
+            driver: str = 'GTiff',
+    ):
         """
         Write SMOS rasters to file using data from given variables.
 
@@ -179,7 +247,7 @@ class SMAPDataset:
                     'dtype': rasterio.float32,
                     'crs': CRS.from_dict(OUTPUT_CRS),
                     'transform': SMAPDataset.study_area_transform,
-                    'nodata': fill_value
+                    'nodata': fill_value,
                 }
 
                 if driver == 'AAIGrid':
@@ -198,7 +266,9 @@ class SMAPDataset:
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
                     output_raster.write(input_data, 1)
                     if driver == 'GTiff':
-                        output_raster.build_overviews(PyOFS.overview_levels(input_data.shape), Resampling['average'])
+                        output_raster.build_overviews(
+                            PyOFS.overview_levels(input_data.shape), Resampling['average']
+                        )
                         output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def __repr__(self):

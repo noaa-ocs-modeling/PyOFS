@@ -58,4 +58,6 @@ def dir_structure_to_json(input_dir: PathLike, json_path: PathLike):
 
 
 if __name__ == '__main__':
-    dir_structure_to_json(DATA_DIRECTORY / 'output', DATA_DIRECTORY / 'reference' / 'files.json')
+    dir_structure_to_json(
+        DATA_DIRECTORY / 'output', DATA_DIRECTORY / 'reference' / 'files.json'
+    )
