@@ -12,7 +12,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 from main.leaflet.write_azure import upload_to_azure, sync_with_azure
 from main.leaflet import write_json
-from PyOFS import DATA_DIRECTORY, LEAFLET_NODATA_VALUE, NoDataError, get_logger
+from PyOFS import AZURE_CREDENTIALS_FILENAME, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, NoDataError, get_logger
 from PyOFS.observation import hf_radar, viirs, smap, data_buoy
 from PyOFS.model import wcofs, rtofs
 
@@ -531,7 +531,7 @@ if __name__ == '__main__':
     files_json_filename = REFERENCE_DIRECTORY / 'files.json'
     write_json.dir_structure_to_json(OUTPUT_DIRECTORY, files_json_filename)
 
-    with open(DATA_DIRECTORY.parent / 'azure_credentials.txt') as credentials_file:
+    with open(AZURE_CREDENTIALS_FILENAME) as credentials_file:
         azure_blob_url, credentials = (
             line.strip('\n') for line in credentials_file.readlines()
         )
