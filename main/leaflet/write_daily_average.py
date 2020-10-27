@@ -531,7 +531,7 @@ if __name__ == '__main__':
     files_json_filename = REFERENCE_DIRECTORY / 'files.json'
     write_json.dir_structure_to_json(OUTPUT_DIRECTORY, files_json_filename)
 
-    with open(DATA_DIRECTORY / 'azure_credentials.txt') as credentials_file:
+    with open(DATA_DIRECTORY.parent / 'azure_credentials.txt') as credentials_file:
         azure_blob_url, credentials = (
             line.strip('\n') for line in credentials_file.readlines()
         )
