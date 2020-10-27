@@ -1,38 +1,45 @@
 from datetime import datetime, timedelta
 import logging
 import os
+from os import PathLike
+from pathlib import Path
 import sys
+from typing import Union
 
 import numpy
 
 CRS_EPSG = 4326
 
 if 'OFS_DATA' in os.environ:
-    DATA_DIRECTORY = os.environ['OFS_DATA']
+    DATA_DIRECTORY = Path(os.environ['OFS_DATA'])
 else:
-    DATA_DIRECTORY = r"C:\data\OFS"
+    DATA_DIRECTORY = Path(r'C:\data\OFS')
 
 # default nodata value used by leaflet-geotiff renderer
 LEAFLET_NODATA_VALUE = -9999.0
-
-# # for development branch
-# DATA_DIRECTORY = os.path.join(DATA_DIRECTORY, 'develop')
 
 # using relative values with the PREDICTOR option will break rendering in Leaflet.CanvasLayer.Field
 TIFF_CREATION_OPTIONS = {
     'TILED': 'YES',
     'COMPRESS': 'DEFLATE',
     'NUM_THREADS': 'ALL_CPUS',
-    'BIGTIFF': 'IF_SAFER'
+    'BIGTIFF': 'IF_SAFER',
 }
 
 
 class NoDataError(Exception):
     """ Error for no data found. """
+
     pass
 
 
-def get_logger(name: str, log_filename: str = None, file_level: int = None, console_level: int = None, log_format: str = None) -> logging.Logger:
+def get_logger(
+        name: str,
+        log_filename: PathLike = None,
+        file_level: int = None,
+        console_level: int = None,
+        log_format: str = None,
+) -> logging.Logger:
     if file_level is None:
         file_level = logging.DEBUG
     if console_level is None:
@@ -49,6 +56,7 @@ def get_logger(name: str, log_filename: str = None, file_level: int = None, cons
             logger.setLevel(logging.DEBUG)
             if console_level != logging.NOTSET:
                 if console_level <= logging.INFO:
+
                     class LoggingOutputFilter(logging.Filter):
                         def filter(self, rec):
                             return rec.levelno in (logging.DEBUG, logging.INFO)
@@ -65,7 +73,9 @@ def get_logger(name: str, log_filename: str = None, file_level: int = None, cons
     if log_filename is not None:
         file_handler = logging.FileHandler(log_filename)
         file_handler.setLevel(file_level)
-        for existing_file_handler in [handler for handler in logger.handlers if type(handler) is logging.FileHandler]:
+        for existing_file_handler in [
+            handler for handler in logger.handlers if type(handler) is logging.FileHandler
+        ]:
             logger.removeHandler(existing_file_handler)
         logger.addHandler(file_handler)
 
@@ -76,6 +86,36 @@ def get_logger(name: str, log_filename: str = None, file_level: int = None, cons
         handler.setFormatter(log_formatter)
 
     return logger
+
+
+def split_layer_filename(filename: PathLike) -> (Path, Union[str, int]):
+    if not isinstance(filename, Path):
+        filename = Path(filename)
+    name = filename.name
+    if ':' in name:
+        name, layer = str(filename).rsplit(':', 1)
+        filename = filename.parent / name
+        try:
+            layer = int(layer)
+        except ValueError:
+            pass
+    else:
+        layer = None
+
+    return filename, layer
+
+
+def repository_root(path: PathLike = None) -> Path:
+    if path is None:
+        path = __file__
+    if not isinstance(path, Path):
+        path = Path(path)
+    if path.is_file():
+        path = path.parent
+    if '.git' in (child.name for child in path.iterdir()) or path == path.parent:
+        return path
+    else:
+        return repository_root(path.parent)
 
 
 def round_to_hour(datetime_object: datetime, direction: str = None) -> datetime:
@@ -106,7 +146,9 @@ def round_to_ten_minutes(datetime_object: datetime) -> datetime:
     :return: rounded datetime
     """
 
-    return datetime_object.replace(minute=int(round(datetime_object.minute, -1)), second=0, microsecond=0)
+    return datetime_object.replace(
+        minute=int(round(datetime_object.minute, -1)), second=0, microsecond=0
+    )
 
 
 def range_daily(start_time: datetime, end_time: datetime) -> list:

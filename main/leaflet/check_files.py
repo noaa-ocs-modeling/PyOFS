@@ -8,10 +8,8 @@ Created on Apr 10, 2019
 """
 
 from datetime import datetime, timedelta
-import os
-import sys
-
-sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
+from os import PathLike
+from pathlib import Path
 
 from main.leaflet import write_json
 from PyOFS import get_logger, DATA_DIRECTORY
@@ -19,11 +17,17 @@ from PyOFS import get_logger, DATA_DIRECTORY
 LOGGER = get_logger('PyOFS.check')
 
 observations = {'hfr': ['dir', 'mag'], 'viirs': ['sst']}
-models = {'wcofs': ['dir', 'mag', 'sst', 'ssh', 'sss'], 'rtofs': ['dir', 'mag', 'sst', 'ssh', 'sss']}
+models = {
+    'wcofs': ['dir', 'mag', 'sst', 'ssh', 'sss'],
+    'rtofs': ['dir', 'mag', 'sst', 'ssh', 'sss'],
+}
 time_deltas = ['n001', 'f001', 'f002', 'f003']
 
 
-def check_files(input_dir: str) -> dict:
+def check_files(input_dir: PathLike) -> dict:
+    if not isinstance(input_dir, Path):
+        input_dir = Path(input_dir)
+
     missing_files = {}
 
     structure = write_json.get_directory_structure(input_dir)
@@ -71,9 +75,11 @@ def check_files(input_dir: str) -> dict:
 
 
 if __name__ == '__main__':
-    missing_files = check_files(os.path.join(DATA_DIRECTORY, 'output'))
+    missing_files = check_files(DATA_DIRECTORY / 'output')
 
     for missing_file_date, current_missing_files in missing_files.items():
-        print(f'{missing_file_date} - {len(current_missing_files)} files missing: ({current_missing_files})')
+        print(
+            f'{missing_file_date} - {len(current_missing_files)} files missing: ({current_missing_files})'
+        )
 
     print('done')
