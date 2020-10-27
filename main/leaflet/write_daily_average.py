@@ -19,10 +19,10 @@ from PyOFS.model import wcofs, rtofs
 # disable complaints from Fiona environment within conda
 logging.root.manager.loggerDict['fiona._env'].setLevel(logging.CRITICAL)
 
-LOG_DIRECTORY = Path(DATA_DIRECTORY) / 'log'
-LOG_FILENAME = Path(LOG_DIRECTORY) / f'{datetime.now():%Y%m%d}_conversion.log'
-OUTPUT_DIRECTORY = Path(DATA_DIRECTORY) / 'output'
-REFERENCE_DIRECTORY = Path(DATA_DIRECTORY) / 'reference'
+LOG_DIRECTORY = DATA_DIRECTORY / 'log'
+LOG_FILENAME = LOG_DIRECTORY / f'{datetime.now():%Y%m%d}_conversion.log'
+OUTPUT_DIRECTORY = DATA_DIRECTORY / 'output'
+REFERENCE_DIRECTORY = DATA_DIRECTORY / 'reference'
 
 # offset from study area to UTC
 STUDY_AREA_TIMEZONE = 'US/Pacific'
