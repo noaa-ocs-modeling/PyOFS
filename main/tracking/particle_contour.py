@@ -1,12 +1,3 @@
-# coding=utf-8
-"""
-Data utility functions.
-
-Created on Feb 27, 2019
-
-@author: zachary.burnett
-"""
-
 from concurrent import futures
 from datetime import datetime, timedelta
 import math

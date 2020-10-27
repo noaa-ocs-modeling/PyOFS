@@ -1,12 +1,3 @@
-# coding=utf-8
-"""
-FTP pulldown of custom WCOFS data slices (2 and 4 kilometer non-DA).
-
-Created on Aug 9, 2018
-
-@author: zachary.burnett
-"""
-
 from datetime import date, datetime, timedelta
 import ftplib
 import logging
@@ -14,7 +5,7 @@ import os
 from pathlib import Path
 import sys
 
-sys.path.append(Path(__file__).parent.parent.parent)
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from PyOFS import DATA_DIRECTORY, get_logger
 

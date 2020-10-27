@@ -1,12 +1,3 @@
-# coding=utf-8
-"""
-Sea surface temperature rasters from VIIRS (aboard Suomi NPP).
-
-Created on Jun 13, 2018
-
-@author: zachary.burnett
-"""
-
 from collections import OrderedDict
 from concurrent import futures
 from datetime import datetime, timedelta

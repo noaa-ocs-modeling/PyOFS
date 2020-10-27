@@ -1,12 +1,3 @@
-# coding=utf-8
-"""
-High Frequency Radar stations measuring water surface speed on the West Coast.
-
-Created on Jun 13, 2018
-
-@author: zachary.burnett
-"""
-
 from datetime import datetime, timedelta
 from os import PathLike
 from pathlib import Path

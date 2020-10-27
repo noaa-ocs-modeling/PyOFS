@@ -1,12 +1,3 @@
-# coding=utf-8
-"""
-Data utility functions.
-
-Created on Jun 13, 2018
-
-@author: zachary.burnett
-"""
-
 from datetime import datetime, timedelta
 from functools import partial
 from os import PathLike

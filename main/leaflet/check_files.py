@@ -1,12 +1,3 @@
-# coding=utf-8
-"""
-Check existence of files.
-
-Created on Apr 10, 2019
-
-@author: zachary.burnett
-"""
-
 from datetime import datetime, timedelta
 from os import PathLike
 from pathlib import Path

@@ -1,12 +1,3 @@
-# coding=utf-8
-"""
-National Data Buoy Center moorings.
-
-Created on Aug 1, 2018
-
-@author: zachary.burnett
-"""
-
 from concurrent import futures
 from datetime import datetime
 from os import PathLike

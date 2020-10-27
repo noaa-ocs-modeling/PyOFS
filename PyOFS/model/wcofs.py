@@ -1,12 +1,3 @@
-# coding=utf-8
-"""
-WCOFS model output data collection and transformation by interpolation onto Cartesian grid.
-
-Created on Jun 25, 2018
-
-@author: zachary.burnett
-"""
-
 from concurrent import futures
 from datetime import date, datetime, timedelta
 import os

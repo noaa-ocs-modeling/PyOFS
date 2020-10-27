@@ -1,12 +1,3 @@
-# coding=utf-8
-"""
-Data utility functions.
-
-Created on Feb 27, 2019
-
-@author: zachary.burnett
-"""
-
 from datetime import datetime, timedelta
 from pathlib import Path
 

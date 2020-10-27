@@ -1,12 +1,3 @@
-# coding=utf-8
-"""
-RTOFS model output data collection and transformation by interpolation onto Cartesian grid.
-
-Created on Jun 25, 2018
-
-@author: zachary.burnett
-"""
-
 from collections import OrderedDict
 from datetime import date, datetime, timedelta
 from os import PathLike

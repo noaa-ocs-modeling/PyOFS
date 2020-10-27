@@ -1,12 +1,3 @@
-# coding=utf-8
-"""
-Sea surface salinity rasters from ESA SMOS.
-
-Created on Feb 6, 2019
-
-@author: zachary.burnett
-"""
-
 from collections import OrderedDict
 from datetime import datetime
 from os import PathLike

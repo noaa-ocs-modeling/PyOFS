@@ -1,12 +1,3 @@
-# coding=utf-8
-"""
-Daily average WCOFS source data.
-
-Created on Aug 21, 2018
-
-@author: zachary.burnett
-"""
-
 from datetime import date, datetime, time, timedelta
 import logging
 import os
@@ -17,7 +8,7 @@ from typing import Collection, Union
 
 import pytz
 
-sys.path.append(Path(__file__).resolve().parent.parent.parent)
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 from main.leaflet.write_azure import upload_to_azure, sync_with_azure
 from main.leaflet import write_json

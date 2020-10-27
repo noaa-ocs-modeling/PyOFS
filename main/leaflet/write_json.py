@@ -1,12 +1,3 @@
-# coding=utf-8
-"""
-Create JSON of directory structure.
-
-Created on Aug 30, 2018
-
-@author: zachary.burnett
-"""
-
 import functools
 import json
 import os
@@ -14,7 +5,7 @@ from os import PathLike
 from pathlib import Path
 import sys
 
-sys.path.append(Path(__file__).resolve().parent.parent.parent)
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 from PyOFS import DATA_DIRECTORY, get_logger
 
