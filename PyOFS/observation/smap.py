@@ -20,10 +20,10 @@ from PyOFS import (
     CRS_EPSG,
     DATA_DIRECTORY,
     LEAFLET_NODATA_VALUE,
-    TIFF_CREATION_OPTIONS,
-    utilities,
-    get_logger,
     NoDataError,
+    TIFF_CREATION_OPTIONS,
+    get_logger,
+    utilities,
 )
 
 LOGGER = get_logger('PyOFS.SMAP')
@@ -202,13 +202,13 @@ class SMAPDataset:
             raise PyOFS.NoDataError(f'No data exists for {data_time:%Y%m%dT%H%M%S}.')
 
     def write_rasters(
-            self,
-            output_dir: PathLike,
-            data_time: datetime,
-            variables: Collection[str] = tuple(['sss']),
-            filename_prefix: str = 'smos',
-            fill_value: float = LEAFLET_NODATA_VALUE,
-            driver: str = 'GTiff',
+        self,
+        output_dir: PathLike,
+        data_time: datetime,
+        variables: Collection[str] = tuple(['sss']),
+        filename_prefix: str = 'smos',
+        fill_value: float = LEAFLET_NODATA_VALUE,
+        driver: str = 'GTiff',
     ):
         """
         Write SMOS rasters to file using data from given variables.

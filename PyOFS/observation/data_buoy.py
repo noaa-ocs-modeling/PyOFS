@@ -13,7 +13,7 @@ import shapely.geometry
 import xarray
 
 import PyOFS
-from PyOFS import CRS_EPSG, DATA_DIRECTORY, utilities, get_logger
+from PyOFS import CRS_EPSG, DATA_DIRECTORY, get_logger, utilities
 
 LOGGER = get_logger('PyOFS.NDBC')
 
@@ -135,7 +135,7 @@ class DataBuoyRange:
             raise PyOFS.NoDataError(f'No NDBC datasets found in {self.stations}')
 
     def data(
-            self, variables: [str], start_time: datetime, end_time: datetime
+        self, variables: [str], start_time: datetime, end_time: datetime
     ) -> {str: {str: xarray.DataArray}}:
         """
         Get data of given variables within given time interval.
@@ -159,7 +159,7 @@ class DataBuoyRange:
         return output_data
 
     def data_average(
-            self, variables: [str], start_time: datetime, end_time: datetime
+        self, variables: [str], start_time: datetime, end_time: datetime
     ) -> {str: {str: float}}:
         """
         Get data of given variables within given time interval.
@@ -183,11 +183,11 @@ class DataBuoyRange:
         return output_data
 
     def write_vector(
-            self,
-            output_filename: PathLike,
-            start_time: datetime,
-            end_time: datetime,
-            variables: [str] = None,
+        self,
+        output_filename: PathLike,
+        start_time: datetime,
+        end_time: datetime,
+        variables: [str] = None,
     ):
         """
         Write average of buoy data for all hours in the given time interval to a single layer of the provided output file.
@@ -278,7 +278,7 @@ class DataBuoyRange:
             f'Writing to {output_filename}{":" + layer_name if layer_name is not None else ""}'
         )
         with fiona.open(
-                output_filename, 'w', 'GPKG', schema, OUTPUT_CRS, layer=layer_name
+            output_filename, 'w', 'GPKG', schema, OUTPUT_CRS, layer=layer_name
         ) as output_layer:
             output_layer.writerecords(layer_records)
 

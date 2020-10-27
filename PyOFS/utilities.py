@@ -81,7 +81,7 @@ def get_masked_data(masked_constant: numpy.ma.core.MaskedConstant) -> object:
     """
 
     if 'MaskedConstant' in str(type(masked_constant)) or 'MaskedArray' in str(
-            type(masked_constant)
+        type(masked_constant)
     ):
         return masked_constant.data
     else:
@@ -89,16 +89,16 @@ def get_masked_data(masked_constant: numpy.ma.core.MaskedConstant) -> object:
 
 
 def write_gpkg_subdataset(
-        input_data: numpy.array,
-        output_filename: PathLike,
-        height: int,
-        width: int,
-        dtype: str,
-        crs: rasterio.crs.CRS,
-        transform: rasterio.Affine,
-        nodata: float,
-        overwrite: bool = False,
-        **kwargs,
+    input_data: numpy.array,
+    output_filename: PathLike,
+    height: int,
+    width: int,
+    dtype: str,
+    crs: rasterio.crs.CRS,
+    transform: rasterio.Affine,
+    nodata: float,
+    overwrite: bool = False,
+    **kwargs,
 ):
     """
     Write input array to a raster layer in a geopackage.
@@ -124,21 +124,21 @@ def write_gpkg_subdataset(
     with rasterio.Env(OGR_GPKG_FOREIGN_KEY_CHECK='NO'):
         try:
             with rasterio.open(
-                    output_filename,
-                    'w',
-                    driver='GPKG',
-                    height=height,
-                    width=width,
-                    count=1,
-                    dtype=dtype,
-                    crs=crs,
-                    transform=transform,
-                    nodata=nodata,
-                    raster_table=layer_name,
-                    raster_identifier=layer_name,
-                    raster_description=layer_name,
-                    append_subdataset='YES',
-                    **kwargs,
+                output_filename,
+                'w',
+                driver='GPKG',
+                height=height,
+                width=width,
+                count=1,
+                dtype=dtype,
+                crs=crs,
+                transform=transform,
+                nodata=nodata,
+                raster_table=layer_name,
+                raster_identifier=layer_name,
+                raster_description=layer_name,
+                append_subdataset='YES',
+                **kwargs,
             ) as output_raster:
                 output_raster.write(input_data.astype(dtype), 1)
 
@@ -152,20 +152,20 @@ def write_gpkg_subdataset(
 
     # if error with appending, erase entire observation and append as new
     with rasterio.open(
-            output_filename,
-            'w',
-            driver='GPKG',
-            height=height,
-            width=width,
-            count=1,
-            dtype=dtype,
-            crs=crs,
-            transform=transform,
-            nodata=nodata,
-            raster_table=layer_name,
-            raster_identifier=layer_name,
-            raster_description=layer_name,
-            **kwargs,
+        output_filename,
+        'w',
+        driver='GPKG',
+        height=height,
+        width=width,
+        count=1,
+        dtype=dtype,
+        crs=crs,
+        transform=transform,
+        nodata=nodata,
+        raster_table=layer_name,
+        raster_identifier=layer_name,
+        raster_description=layer_name,
+        **kwargs,
     ) as output_raster:
         output_raster.write(input_data.astype(dtype), 1)
 
@@ -206,7 +206,7 @@ class RotatedPoleCoordinateSystem:
         self.pole = pole if type(pole) is numpy.array else numpy.array(pole)
 
     def rotate_coordinates(
-            self, point: numpy.array, projection: pyproj.Proj = None
+        self, point: numpy.array, projection: pyproj.Proj = None
     ) -> numpy.array:
         """
         Convert longitude and latitude to rotated pole coordinates.
@@ -290,10 +290,10 @@ class RotatedPoleCoordinateSystem:
 
     @staticmethod
     def find_pole(
-            points: numpy.array,
-            starting_pole: numpy.array,
-            samples: int = 10,
-            sample_radius: float = 1,
+        points: numpy.array,
+        starting_pole: numpy.array,
+        samples: int = 10,
+        sample_radius: float = 1,
     ) -> numpy.array:
         """
         Find pole given points with the same rotated latitude.
@@ -380,7 +380,7 @@ def xarray_to_geopackage(input_path: str, output_path: str, epsg: int = 4326):
     ]
 
     with fiona.open(
-            output_path, 'w', 'GPKG', schema=schema, crs=fiona.crs.from_epsg(epsg)
+        output_path, 'w', 'GPKG', schema=schema, crs=fiona.crs.from_epsg(epsg)
     ) as output_file:
         output_file.writerecords(records)
 
@@ -401,8 +401,8 @@ def geodetic_radius(latitude: float) -> float:
 
     return numpy.sqrt(
         (
-                (semimajor_radius ** 2 * cosine_latitude) ** 2
-                + (semiminor_radius ** 2 + sine_latitude) ** 2
+            (semimajor_radius ** 2 * cosine_latitude) ** 2
+            + (semiminor_radius ** 2 + sine_latitude) ** 2
         )
         / ((semimajor_radius * cosine_latitude) ** 2 + (semiminor_radius + sine_latitude) ** 2)
     )
@@ -420,11 +420,11 @@ def rossby_deformation_radius(latitude: float) -> float:
     oceanic_potential_density = 1025  # kilograms per cubic meter
 
     coriolis_frequency = (
-            numpy.sin(latitude * numpy.pi / 180)
-            * 4
-            * numpy.pi
-            / SIDEREAL_ROTATION_PERIOD
-            / timedelta(seconds=1)
+        numpy.sin(latitude * numpy.pi / 180)
+        * 4
+        * numpy.pi
+        / SIDEREAL_ROTATION_PERIOD
+        / timedelta(seconds=1)
     )
 
     brunt_vaisala_frequency = numpy.sqrt(
@@ -487,12 +487,12 @@ if __name__ == '__main__':
         schema['properties'].update({'area': 'float', 'perimeter': 'float'})
 
         with fiona.open(
-                geopackage_path,
-                'w',
-                'GPKG',
-                schema=schema,
-                crs=fiona.crs.from_epsg(3857),
-                layer=f'{layer_name}_copy',
+            geopackage_path,
+            'w',
+            'GPKG',
+            schema=schema,
+            crs=fiona.crs.from_epsg(3857),
+            layer=f'{layer_name}_copy',
         ) as output_file:
             output_file.writerecords(records)
 

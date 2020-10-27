@@ -26,8 +26,8 @@ from PyOFS import (
     DATA_DIRECTORY,
     LEAFLET_NODATA_VALUE,
     TIFF_CREATION_OPTIONS,
-    utilities,
     get_logger,
+    utilities,
 )
 
 LOGGER = get_logger('PyOFS.WCOFS')
@@ -91,16 +91,16 @@ class WCOFSDataset:
     angle = None
 
     def __init__(
-            self,
-            model_date: datetime = None,
-            source: str = None,
-            time_deltas: list = None,
-            x_size: float = None,
-            y_size: float = None,
-            grid_filename: PathLike = None,
-            source_url: str = None,
-            wcofs_string: str = 'wcofs',
-            use_defaults: bool = True,
+        self,
+        model_date: datetime = None,
+        source: str = None,
+        time_deltas: list = None,
+        x_size: float = None,
+        y_size: float = None,
+        grid_filename: PathLike = None,
+        source_url: str = None,
+        wcofs_string: str = 'wcofs',
+        use_defaults: bool = True,
     ):
         """
         Creates new observation object from datetime and given model parameters.
@@ -177,7 +177,7 @@ class WCOFSDataset:
             if self.source == 'avg':
                 for day in self.time_deltas:
                     if (day < 0 and -1 in self.datasets.keys()) or (
-                            day >= 0 and 1 in self.datasets.keys()
+                        day >= 0 and 1 in self.datasets.keys()
                     ):
                         continue
 
@@ -221,8 +221,8 @@ class WCOFSDataset:
                         variable_names[source_variables[self.source]] = data_variable
 
                     for (
-                            netcdf_variable_name,
-                            netcdf_variable,
+                        netcdf_variable_name,
+                        netcdf_variable,
                     ) in sample_dataset.data_vars.items():
                         if 'location' in netcdf_variable.attrs:
                             grid_name = GRID_LOCATIONS[netcdf_variable.location]
@@ -445,16 +445,16 @@ class WCOFSDataset:
         return variable_data
 
     def write_rasters(
-            self,
-            output_dir: PathLike,
-            variables: Collection[str] = None,
-            filename_suffix: str = None,
-            time_deltas: list = None,
-            study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME,
-            x_size: float = 0.04,
-            y_size: float = 0.04,
-            fill_value=LEAFLET_NODATA_VALUE,
-            driver: str = 'GTiff',
+        self,
+        output_dir: PathLike,
+        variables: Collection[str] = None,
+        filename_suffix: str = None,
+        time_deltas: list = None,
+        study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME,
+        x_size: float = 0.04,
+        y_size: float = 0.04,
+        fill_value=LEAFLET_NODATA_VALUE,
+        driver: str = 'GTiff',
     ):
         """
         Write averaged raster data of given variables to given output directory.
@@ -611,7 +611,7 @@ class WCOFSDataset:
 
                     # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
                     interpolated_data['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (
-                            180 / numpy.pi
+                        180 / numpy.pi
                     )
                     interpolated_data['mag'] = numpy.sqrt(u_data ** 2 + v_data ** 2)
 
@@ -675,8 +675,8 @@ class WCOFSDataset:
                 gdal_args.update(TIFF_CREATION_OPTIONS)
 
             output_filename = (
-                    output_dir
-                    / f'wcofs_{variable}_{self.model_time:%Y%m%d}{filename_suffix}.{file_extension}'
+                output_dir
+                / f'wcofs_{variable}_{self.model_time:%Y%m%d}{filename_suffix}.{file_extension}'
             )
 
             if output_filename.exists():
@@ -684,7 +684,7 @@ class WCOFSDataset:
 
             LOGGER.info(f'Writing to {output_filename}')
             with rasterio.open(
-                    output_filename, mode='w', driver=driver, **gdal_args
+                output_filename, mode='w', driver=driver, **gdal_args
             ) as output_raster:
                 output_raster.write(masked_data, 1)
                 if driver == 'GTiff':
@@ -694,7 +694,7 @@ class WCOFSDataset:
                     output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def write_vector(
-            self, output_filename: PathLike, layer_name: str = None, time_deltas: list = None
+        self, output_filename: PathLike, layer_name: str = None, time_deltas: list = None
     ):
         """
         Write average of surface velocity vector data for all hours in the given time interval to the provided output file.
@@ -782,12 +782,12 @@ class WCOFSDataset:
 
         # create layer
         with fiona.open(
-                output_filename,
-                'w',
-                driver='GPKG',
-                schema=schema,
-                crs=OUTPUT_CRS,
-                layer=layer_name,
+            output_filename,
+            'w',
+            driver='GPKG',
+            schema=schema,
+            crs=OUTPUT_CRS,
+            layer=layer_name,
         ) as output_vector_file:
             output_vector_file.writerecords(layer_records)
 
@@ -818,7 +818,7 @@ class WCOFSDataset:
         return record
 
     def to_xarray(
-            self, variables: Collection[str] = None, native_grid: bool = False
+        self, variables: Collection[str] = None, native_grid: bool = False
     ) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
@@ -899,7 +899,7 @@ class WCOFSDataset:
         return output_dataset
 
     def to_netcdf(
-            self, output_file: str, variables: Collection[str] = None, native_grid: bool = False
+        self, output_file: str, variables: Collection[str] = None, native_grid: bool = False
     ):
         """
         Writes to NetCDF file.
@@ -953,16 +953,16 @@ class WCOFSRange:
     """
 
     def __init__(
-            self,
-            start_time: datetime,
-            end_time: datetime,
-            source: str = None,
-            time_deltas: list = None,
-            x_size: float = None,
-            y_size: float = None,
-            grid_filename: PathLike = None,
-            source_url: str = None,
-            wcofs_string: str = 'wcofs',
+        self,
+        start_time: datetime,
+        end_time: datetime,
+        source: str = None,
+        time_deltas: list = None,
+        x_size: float = None,
+        y_size: float = None,
+        grid_filename: PathLike = None,
+        source_url: str = None,
+        wcofs_string: str = 'wcofs',
     ):
         """
         Create range of WCOFS datasets from the given time interval.
@@ -1169,7 +1169,7 @@ class WCOFSRange:
         return output_data
 
     def data_stacks(
-            self, variable: str, start_time: datetime = None, end_time: datetime = None
+        self, variable: str, start_time: datetime = None, end_time: datetime = None
     ) -> dict:
         """
         Return dictionary of data for each model run within the given variable and datetime.
@@ -1215,7 +1215,7 @@ class WCOFSRange:
         return output_data
 
     def data_averages(
-            self, variable: str, start_time: datetime = None, end_time: datetime = None
+        self, variable: str, start_time: datetime = None, end_time: datetime = None
     ) -> dict:
         """
         Collect averaged data for every time index in given time interval.
@@ -1262,17 +1262,17 @@ class WCOFSRange:
         return output_data
 
     def write_rasters(
-            self,
-            output_dir: PathLike,
-            variables: Collection[str] = None,
-            filename_suffix: str = None,
-            start_time: datetime = None,
-            end_time: datetime = None,
-            study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME,
-            x_size: float = 0.04,
-            y_size: float = 0.04,
-            fill_value=LEAFLET_NODATA_VALUE,
-            driver: str = 'GTiff',
+        self,
+        output_dir: PathLike,
+        variables: Collection[str] = None,
+        filename_suffix: str = None,
+        start_time: datetime = None,
+        end_time: datetime = None,
+        study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME,
+        x_size: float = 0.04,
+        y_size: float = 0.04,
+        fill_value=LEAFLET_NODATA_VALUE,
+        driver: str = 'GTiff',
     ):
         """
         Write raster data of given variables to given output directory, averaged over given time interval.
@@ -1435,7 +1435,7 @@ class WCOFSRange:
 
                 # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
                 interpolated_data['dir'][model_string] = (
-                                                                 numpy.arctan2(u_data, v_data) + numpy.pi
+                                                             numpy.arctan2(u_data, v_data) + numpy.pi
                                                          ) * (180 / numpy.pi)
                 interpolated_data['mag'][model_string] = numpy.sqrt(
                     numpy.square(u_data) + numpy.square(v_data)
@@ -1505,8 +1505,8 @@ class WCOFSRange:
                         gdal_args.update(TIFF_CREATION_OPTIONS)
 
                     output_filename = (
-                            output_dir
-                            / f'wcofs_{variable}_{model_string}{filename_suffix}.{file_extension}'
+                        output_dir
+                        / f'wcofs_{variable}_{model_string}{filename_suffix}.{file_extension}'
                     )
 
                     if output_filename.exists():
@@ -1514,7 +1514,7 @@ class WCOFSRange:
 
                     LOGGER.info(f'Writing to {output_filename}')
                     with rasterio.open(
-                            output_filename, mode='w', driver=driver, **gdal_args
+                        output_filename, mode='w', driver=driver, **gdal_args
                     ) as output_raster:
                         output_raster.write(masked_data, 1)
                         if driver == 'GTiff':
@@ -1524,11 +1524,11 @@ class WCOFSRange:
                             output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def write_vector(
-            self,
-            output_filename: PathLike,
-            variables: Collection[str] = None,
-            start_time: datetime = None,
-            end_time: datetime = None,
+        self,
+        output_filename: PathLike,
+        variables: Collection[str] = None,
+        start_time: datetime = None,
+        end_time: datetime = None,
     ):
         """
         Write average of surface velocity vector data for all hours in the given time interval to a single layer of the provided output file.
@@ -1619,17 +1619,17 @@ class WCOFSRange:
         for layer_name, layer_records in layers.items():
             LOGGER.info(f'Writing {output_filename}:{layer_name}')
             with fiona.open(
-                    output_filename,
-                    'w',
-                    driver='GPKG',
-                    schema=schema,
-                    crs=OUTPUT_CRS,
-                    layer=layer_name,
+                output_filename,
+                'w',
+                driver='GPKG',
+                schema=schema,
+                crs=OUTPUT_CRS,
+                layer=layer_name,
             ) as layer:
                 layer.writerecords(layer_records)
 
     def to_xarray(
-            self, variables: Collection[str] = None, mean: bool = True
+        self, variables: Collection[str] = None, mean: bool = True
     ) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
@@ -1735,7 +1735,7 @@ class WCOFSRange:
         return output_dataset
 
     def to_netcdf(
-            self, output_file: str, variables: Collection[str] = None, mean: bool = True
+        self, output_file: str, variables: Collection[str] = None, mean: bool = True
     ):
         """
         Writes to NetCDF file.
@@ -1772,12 +1772,12 @@ class WCOFSRange:
 
 
 def interpolate_grid(
-        input_lon: numpy.array,
-        input_lat: numpy.array,
-        input_data: numpy.array,
-        output_lon: numpy.array,
-        output_lat: numpy.array,
-        method: str = 'nearest',
+    input_lon: numpy.array,
+    input_lat: numpy.array,
+    input_data: numpy.array,
+    output_lon: numpy.array,
+    output_lat: numpy.array,
+    method: str = 'nearest',
 ) -> numpy.array:
     """
     Interpolate the given data onto a coordinate grid.
@@ -1824,7 +1824,7 @@ def reset_dataset_grid():
 
 
 def write_convex_hull(
-        netcdf_dataset: xarray.Dataset, output_filename: PathLike, grid_name: str = 'psi'
+    netcdf_dataset: xarray.Dataset, output_filename: PathLike, grid_name: str = 'psi'
 ):
     """
     Extract the convex hull from the coordinate values of the given WCOFS NetCDF observation, and write it to a file.
@@ -1867,7 +1867,7 @@ def write_convex_hull(
     schema = {'geometry': 'Polygon', 'properties': {'name': 'str'}}
 
     with fiona.open(
-            output_filename, 'w', 'GPKG', schema=schema, crs=OUTPUT_CRS, layer=layer_name
+        output_filename, 'w', 'GPKG', schema=schema, crs=OUTPUT_CRS, layer=layer_name
     ) as vector_file:
         vector_file.write(
             {'properties': {'name': layer_name}, 'geometry': shapely.geometry.mapping(polygon)}

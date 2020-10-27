@@ -6,12 +6,12 @@ LOGGER = get_logger('PyOFS.azure')
 
 
 def upload_to_azure(
-        local_path: str,
-        remote_path: str,
-        credentials: str,
-        overwrite: bool = False,
-        azcopy_path: str = None,
-        **kwargs,
+    local_path: str,
+    remote_path: str,
+    credentials: str,
+    overwrite: bool = False,
+    azcopy_path: str = None,
+    **kwargs,
 ):
     LOGGER.info(f'Uploading {local_path} to {remote_path}')
 
@@ -30,7 +30,7 @@ def upload_to_azure(
 
 
 def sync_with_azure(
-        local_path: str, remote_path: str, credentials: str, azcopy_path: str = None, **kwargs
+    local_path: str, remote_path: str, credentials: str, azcopy_path: str = None, **kwargs
 ):
     LOGGER.info(f'Synchronizing {local_path} with {remote_path}')
 

@@ -25,8 +25,8 @@ from PyOFS import (
     DATA_DIRECTORY,
     LEAFLET_NODATA_VALUE,
     TIFF_CREATION_OPTIONS,
-    utilities,
     get_logger,
+    utilities,
 )
 
 LOGGER = get_logger('PyOFS.VIIRS')
@@ -66,12 +66,12 @@ class VIIRSDataset:
     study_area_coordinates = None
 
     def __init__(
-            self,
-            data_time: datetime = None,
-            satellite: str = 'NPP',
-            study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME,
-            algorithm: str = 'OSPO',
-            version: str = None,
+        self,
+        data_time: datetime = None,
+        satellite: str = 'NPP',
+        study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME,
+        algorithm: str = 'OSPO',
+        version: str = None,
     ):
         """
         Retrieve VIIRS NetCDF observation from NOAA with given datetime.
@@ -375,13 +375,13 @@ class VIIRSDataset:
         return sses_data
 
     def write_rasters(
-            self,
-            output_dir: PathLike,
-            variables: Collection[str] = ('sst', 'sses'),
-            filename_prefix: str = 'viirs',
-            fill_value: float = LEAFLET_NODATA_VALUE,
-            driver: str = 'GTiff',
-            correct_sses: bool = False,
+        self,
+        output_dir: PathLike,
+        variables: Collection[str] = ('sst', 'sses'),
+        filename_prefix: str = 'viirs',
+        fill_value: float = LEAFLET_NODATA_VALUE,
+        driver: str = 'GTiff',
+        correct_sses: bool = False,
     ):
         """
         Write VIIRS rasters to file using data from given variables.
@@ -469,14 +469,14 @@ class VIIRSRange:
     study_area_index_bounds = None
 
     def __init__(
-            self,
-            start_time: datetime,
-            end_time: datetime,
-            satellites: list = ('NPP', 'N20'),
-            study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME,
-            pass_times_filename: PathLike = PASS_TIMES_FILENAME,
-            algorithm: str = 'OSPO',
-            version: str = None,
+        self,
+        start_time: datetime,
+        end_time: datetime,
+        satellites: list = ('NPP', 'N20'),
+        study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME,
+        pass_times_filename: PathLike = PASS_TIMES_FILENAME,
+        algorithm: str = 'OSPO',
+        version: str = None,
     ):
         """
         Collect VIIRS datasets within time interval.
@@ -581,13 +581,13 @@ class VIIRSRange:
         )
 
     def data(
-            self,
-            start_time: datetime = None,
-            end_time: datetime = None,
-            average: bool = False,
-            correct_sses: bool = False,
-            variables: Collection[str] = tuple('sst'),
-            satellite: str = None,
+        self,
+        start_time: datetime = None,
+        end_time: datetime = None,
+        average: bool = False,
+        correct_sses: bool = False,
+        variables: Collection[str] = tuple('sst'),
+        satellite: str = None,
     ) -> dict:
         """
         Get VIIRS data (either overlapped or averaged) from the given time interval.
@@ -666,14 +666,14 @@ class VIIRSRange:
         return variables_data
 
     def write_rasters(
-            self,
-            output_dir: PathLike,
-            variables: Collection[str] = ('sst', 'sses'),
-            filename_prefix: str = 'viirs',
-            fill_value: float = None,
-            driver: str = 'GTiff',
-            correct_sses: bool = False,
-            satellite: str = None,
+        self,
+        output_dir: PathLike,
+        variables: Collection[str] = ('sst', 'sses'),
+        filename_prefix: str = 'viirs',
+        fill_value: float = None,
+        driver: str = 'GTiff',
+        correct_sses: bool = False,
+        satellite: str = None,
     ):
         """
         Write individual VIIRS rasters to directory.
@@ -707,18 +707,18 @@ class VIIRSRange:
                     )
 
     def write_raster(
-            self,
-            output_dir: PathLike,
-            filename_prefix: str = None,
-            filename_suffix: str = None,
-            start_time: datetime = None,
-            end_time: datetime = None,
-            average: bool = False,
-            fill_value: float = LEAFLET_NODATA_VALUE,
-            driver: str = 'GTiff',
-            correct_sses: bool = False,
-            variables: Collection[str] = tuple(['sst']),
-            satellite: str = None,
+        self,
+        output_dir: PathLike,
+        filename_prefix: str = None,
+        filename_suffix: str = None,
+        start_time: datetime = None,
+        end_time: datetime = None,
+        average: bool = False,
+        fill_value: float = LEAFLET_NODATA_VALUE,
+        driver: str = 'GTiff',
+        correct_sses: bool = False,
+        variables: Collection[str] = tuple(['sst']),
+        satellite: str = None,
     ):
 
         """
@@ -797,8 +797,8 @@ class VIIRSRange:
                     current_filename_suffix = filename_suffix
 
                 output_filename = (
-                        output_dir
-                        / f'{current_filename_prefix}_{current_filename_suffix}.{file_extension}'
+                    output_dir
+                    / f'{current_filename_prefix}_{current_filename_suffix}.{file_extension}'
                 )
 
                 LOGGER.info(f'Writing {output_filename}')
@@ -815,11 +815,11 @@ class VIIRSRange:
                 )
 
     def to_xarray(
-            self,
-            variables: Collection[str] = ('sst', 'sses'),
-            mean: bool = True,
-            correct_sses: bool = False,
-            satellites: list = None,
+        self,
+        variables: Collection[str] = ('sst', 'sses'),
+        mean: bool = True,
+        correct_sses: bool = False,
+        satellites: list = None,
     ) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
@@ -879,12 +879,12 @@ class VIIRSRange:
         return output_dataset
 
     def to_netcdf(
-            self,
-            output_file: str,
-            variables: Collection[str] = None,
-            mean: bool = True,
-            correct_sses: bool = False,
-            satellites: list = None,
+        self,
+        output_file: str,
+        variables: Collection[str] = None,
+        mean: bool = True,
+        correct_sses: bool = False,
+        satellites: list = None,
     ):
         """
         Writes to NetCDF file.
@@ -921,13 +921,13 @@ class VIIRSRange:
 
 
 def store_viirs_pass_times(
-        satellite: str,
-        study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME,
-        start_time: datetime = VIIRS_START_TIME,
-        output_filename: str = PASS_TIMES_FILENAME,
-        num_periods: int = 1,
-        algorithm: str = 'STAR',
-        version: str = '2.40',
+    satellite: str,
+    study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME,
+    start_time: datetime = VIIRS_START_TIME,
+    output_filename: str = PASS_TIMES_FILENAME,
+    num_periods: int = 1,
+    algorithm: str = 'STAR',
+    version: str = '2.40',
 ):
     """
     Compute VIIRS pass times from the given start date along the number of periods specified.
@@ -1008,9 +1008,9 @@ def store_viirs_pass_times(
 
 
 def get_pass_times(
-        start_time: datetime,
-        end_time: datetime,
-        pass_times_filename: PathLike = PASS_TIMES_FILENAME,
+    start_time: datetime,
+    end_time: datetime,
+    pass_times_filename: PathLike = PASS_TIMES_FILENAME,
 ):
     """
     Retreive array of datetimes of VIIRS passes within the given time interval, given initial period durations.

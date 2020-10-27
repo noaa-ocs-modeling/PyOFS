@@ -37,7 +37,7 @@ LOGGER = get_logger('PyOFS', LOG_FILENAME, file_level=logging.INFO, console_leve
 
 
 def write_observation(
-        output_dir: PathLike, observation_date: Union[datetime, date], observation: str
+    output_dir: PathLike, observation_date: Union[datetime, date], observation: str
 ):
     """
     Writes daily average of observational data on given date.
@@ -134,7 +134,7 @@ def write_observation(
         elif observation == 'data_buoy':
             data_buoy_range = data_buoy.DataBuoyRange(data_buoy.WCOFS_NDBC_STATIONS_FILENAME)
             output_filename = (
-                    observation_dir / f'ndbc_data_buoys_{observation_date:%Y%m%d}.gpkg'
+                observation_dir / f'ndbc_data_buoys_{observation_date:%Y%m%d}.gpkg'
             )
             data_buoy_range.write_vector(output_filename, day_start_ndbc, day_end_ndbc)
             del data_buoy_range
@@ -145,12 +145,12 @@ def write_observation(
 
 
 def write_rtofs(
-        output_dir: PathLike,
-        model_run_date: Union[datetime, date],
-        day_deltas: range = MODEL_DAY_DELTAS['RTOFS'],
-        scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
-        vector_variables: Collection[str] = ('dir', 'mag'),
-        overwrite: bool = False,
+    output_dir: PathLike,
+    model_run_date: Union[datetime, date],
+    day_deltas: range = MODEL_DAY_DELTAS['RTOFS'],
+    scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
+    vector_variables: Collection[str] = ('dir', 'mag'),
+    overwrite: bool = False,
 ):
     """
     Writes daily average of RTOFS output on given date.
@@ -203,8 +203,8 @@ def write_rtofs(
                     ]
 
                     if rtofs_dataset is None and not all(
-                            any(variable in filename for filename in existing_files)
-                            for variable in list(scalar_variables) + list(vector_variables)
+                        any(variable in filename for filename in existing_files)
+                        for variable in list(scalar_variables) + list(vector_variables)
                     ):
                         rtofs_dataset = rtofs.RTOFSDataset(
                             model_run_date, source='2ds', time_interval='daily'
@@ -228,8 +228,8 @@ def write_rtofs(
                         LOGGER.debug(f'Skipping RTOFS day {day_delta} scalar variables')
 
                     if not all(
-                            any(vector_variable in filename for filename in existing_files)
-                            for vector_variable in vector_variables
+                        any(vector_variable in filename for filename in existing_files)
+                        for vector_variable in vector_variables
                     ):
                         rtofs_dataset.write_rasters(
                             daily_average_dir,
@@ -247,17 +247,17 @@ def write_rtofs(
 
 
 def write_wcofs(
-        output_dir: PathLike,
-        model_run_date: Union[datetime, date, int, float],
-        day_deltas: range = MODEL_DAY_DELTAS['WCOFS'],
-        scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
-        vector_variables: Collection[str] = ('dir', 'mag'),
-        data_assimilation: bool = True,
-        grid_size_km: int = 4,
-        source_url: str = None,
-        use_defaults: bool = True,
-        suffix: str = None,
-        overwrite: bool = False,
+    output_dir: PathLike,
+    model_run_date: Union[datetime, date, int, float],
+    day_deltas: range = MODEL_DAY_DELTAS['WCOFS'],
+    scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
+    vector_variables: Collection[str] = ('dir', 'mag'),
+    data_assimilation: bool = True,
+    grid_size_km: int = 4,
+    source_url: str = None,
+    use_defaults: bool = True,
+    suffix: str = None,
+    overwrite: bool = False,
 ):
     """
     Writes daily average of model output on given date.
@@ -378,8 +378,8 @@ def write_wcofs(
                             ]
 
                 if wcofs_dataset is None and not all(
-                        any(variable in filename for filename in existing_files)
-                        for variable in list(scalar_variables) + list(vector_variables)
+                    any(variable in filename for filename in existing_files)
+                    for variable in list(scalar_variables) + list(vector_variables)
                 ):
                     if grid_size_km == 4:
                         wcofs_dataset = wcofs.WCOFSDataset(
@@ -418,8 +418,8 @@ def write_wcofs(
                         LOGGER.debug(f'Skipping WCOFS day {day_delta} scalar variables')
 
                     if not all(
-                            any(vector_variable in filename for filename in existing_files)
-                            for vector_variable in vector_variables
+                        any(vector_variable in filename for filename in existing_files)
+                        for vector_variable in vector_variables
                     ):
                         wcofs_dataset.write_rasters(
                             daily_average_dir,
@@ -442,9 +442,9 @@ def write_wcofs(
 
 
 def write_observations(
-        output_dir: PathLike,
-        output_date: Union[datetime, date, int, float],
-        day_deltas: range = MODEL_DAY_DELTAS['WCOFS'],
+    output_dir: PathLike,
+    output_date: Union[datetime, date, int, float],
+    day_deltas: range = MODEL_DAY_DELTAS['WCOFS'],
 ):
     """
     Writes daily average of observational data on given date.
@@ -471,9 +471,9 @@ def write_observations(
 
 
 def write_models(
-        output_dir: PathLike,
-        output_date: Union[datetime, date, int, float],
-        day_deltas: range = MODEL_DAY_DELTAS['WCOFS'],
+    output_dir: PathLike,
+    output_date: Union[datetime, date, int, float],
+    day_deltas: range = MODEL_DAY_DELTAS['WCOFS'],
 ):
     """
     Writes daily average of model output on given date.

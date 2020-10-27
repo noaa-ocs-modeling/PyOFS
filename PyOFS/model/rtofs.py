@@ -22,8 +22,8 @@ from PyOFS import (
     DATA_DIRECTORY,
     LEAFLET_NODATA_VALUE,
     TIFF_CREATION_OPTIONS,
-    utilities,
     get_logger,
+    utilities,
 )
 
 LOGGER = get_logger('PyOFS.RTOFS')
@@ -82,11 +82,11 @@ class RTOFSDataset:
     """
 
     def __init__(
-            self,
-            model_date: datetime = None,
-            source: str = '2ds',
-            time_interval: str = 'daily',
-            study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME,
+        self,
+        model_date: datetime = None,
+        source: str = '2ds',
+        time_interval: str = 'daily',
+        study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME,
     ):
         """
         Creates new observation object from datetime and given model parameters.
@@ -243,15 +243,15 @@ class RTOFSDataset:
             )
 
     def write_rasters(
-            self,
-            output_dir: PathLike,
-            variables: list,
-            time: datetime,
-            filename_prefix: str = None,
-            filename_suffix: str = None,
-            fill_value=LEAFLET_NODATA_VALUE,
-            driver: str = 'GTiff',
-            crop: bool = True,
+        self,
+        output_dir: PathLike,
+        variables: list,
+        time: datetime,
+        filename_prefix: str = None,
+        filename_suffix: str = None,
+        fill_value=LEAFLET_NODATA_VALUE,
+        driver: str = 'GTiff',
+        crop: bool = True,
     ):
         """
         Write averaged raster data of given variables to given output directory.
@@ -312,7 +312,7 @@ class RTOFSDataset:
 
             if u_data is not None and v_data is not None:
                 variable_means['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (
-                        180 / numpy.pi
+                    180 / numpy.pi
                 )
                 variable_means['mag'] = numpy.sqrt(numpy.square(u_data) + numpy.square(v_data))
 
@@ -361,13 +361,13 @@ class RTOFSDataset:
                         output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def write_raster(
-            self,
-            output_filename: PathLike,
-            variable: str,
-            time: datetime,
-            fill_value=LEAFLET_NODATA_VALUE,
-            driver: str = 'GTiff',
-            crop: bool = True,
+        self,
+        output_filename: PathLike,
+        variable: str,
+        time: datetime,
+        fill_value=LEAFLET_NODATA_VALUE,
+        driver: str = 'GTiff',
+        crop: bool = True,
     ):
         """
         Writes interpolated raster of given variable to output path.
@@ -422,7 +422,7 @@ class RTOFSDataset:
                     output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def to_xarray(
-            self, variables: Collection[str] = None, mean: bool = True
+        self, variables: Collection[str] = None, mean: bool = True
     ) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
@@ -488,7 +488,7 @@ class RTOFSDataset:
         return output_dataset
 
     def to_netcdf(
-            self, output_file: str, variables: Collection[str] = None, mean: bool = True
+        self, output_file: str, variables: Collection[str] = None, mean: bool = True
     ):
         """
         Writes to NetCDF file.

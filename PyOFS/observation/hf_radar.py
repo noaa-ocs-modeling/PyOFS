@@ -37,7 +37,7 @@ class HFRadarRange:
     grid_transform = None
 
     def __init__(
-            self, start_time: datetime = None, end_time: datetime = None, resolution: int = 6
+        self, start_time: datetime = None, end_time: datetime = None, resolution: int = 6
     ):
         """
         Creates new observation object from source.
@@ -134,12 +134,12 @@ class HFRadarRange:
         return output_data.values
 
     def data_average(
-            self,
-            variable: str,
-            start_time: datetime = None,
-            end_time: datetime = None,
-            dop_threshold: float = None,
-            include_incomplete: bool = False,
+        self,
+        variable: str,
+        start_time: datetime = None,
+        end_time: datetime = None,
+        dop_threshold: float = None,
+        include_incomplete: bool = False,
     ) -> numpy.array:
         """
         Get data for the specified variable at a single time.
@@ -242,22 +242,22 @@ class HFRadarRange:
         }
 
         with fiona.open(
-                output_filename,
-                'w',
-                'GPKG',
-                layer=layer_name,
-                schema=schema,
-                crs=OUTPUT_CRS.to_dict(),
+            output_filename,
+            'w',
+            'GPKG',
+            layer=layer_name,
+            schema=schema,
+            crs=OUTPUT_CRS.to_dict(),
         ) as layer:
             layer.writerecords(layer_records)
 
     def write_vectors(
-            self,
-            output_filename: PathLike,
-            variables: Collection[str] = None,
-            start_time: datetime = None,
-            end_time: datetime = None,
-            dop_threshold: float = 0.5,
+        self,
+        output_filename: PathLike,
+        variables: Collection[str] = None,
+        start_time: datetime = None,
+        end_time: datetime = None,
+        dop_threshold: float = 0.5,
     ):
         """
         Write HFR data to a layer of the provided output file for every hour in the given time interval.
@@ -287,8 +287,8 @@ class HFRadarRange:
 
         if dop_threshold is not None:
             dop_mask = (
-                    (self.dataset['dopx'].sel(time=slice(start_time, end_time)) <= dop_threshold)
-                    & (self.dataset['dopy'].sel(time=slice(start_time, end_time)) <= dop_threshold)
+                (self.dataset['dopx'].sel(time=slice(start_time, end_time)) <= dop_threshold)
+                & (self.dataset['dopy'].sel(time=slice(start_time, end_time)) <= dop_threshold)
             ).values
             time_interval_selection[~dop_mask] = numpy.nan
 
@@ -350,22 +350,22 @@ class HFRadarRange:
 
         for layer_name, layer_records in layers.items():
             with fiona.open(
-                    output_filename,
-                    'w',
-                    'GPKG',
-                    layer=layer_name,
-                    schema=schema,
-                    crs=OUTPUT_CRS.to_dict(),
+                output_filename,
+                'w',
+                'GPKG',
+                layer=layer_name,
+                schema=schema,
+                crs=OUTPUT_CRS.to_dict(),
             ) as layer:
                 layer.writerecords(layer_records)
 
     def write_vector(
-            self,
-            output_filename: PathLike,
-            variables: Collection[str] = None,
-            start_time: datetime = None,
-            end_time: datetime = None,
-            dop_threshold: float = 0.5,
+        self,
+        output_filename: PathLike,
+        variables: Collection[str] = None,
+        start_time: datetime = None,
+        end_time: datetime = None,
+        dop_threshold: float = 0.5,
     ):
         """
         Write average of HFR data for all hours in the given time interval to a single layer of the provided output file.
@@ -425,26 +425,26 @@ class HFRadarRange:
         # write queued features to layer
         LOGGER.info(f'Writing {output_filename}')
         with fiona.open(
-                output_filename,
-                'w',
-                'GPKG',
-                layer=layer_name,
-                schema=schema,
-                crs=OUTPUT_CRS.to_dict(),
+            output_filename,
+            'w',
+            'GPKG',
+            layer=layer_name,
+            schema=schema,
+            crs=OUTPUT_CRS.to_dict(),
         ) as layer:
             layer.writerecords(layer_records)
 
     def write_rasters(
-            self,
-            output_dir: PathLike,
-            filename_prefix: str = 'hfr',
-            filename_suffix: str = '',
-            variables: Collection[str] = None,
-            start_time: datetime = None,
-            end_time: datetime = None,
-            fill_value: float = LEAFLET_NODATA_VALUE,
-            driver: str = 'GTiff',
-            dop_threshold: float = None,
+        self,
+        output_dir: PathLike,
+        filename_prefix: str = 'hfr',
+        filename_suffix: str = '',
+        variables: Collection[str] = None,
+        start_time: datetime = None,
+        end_time: datetime = None,
+        fill_value: float = LEAFLET_NODATA_VALUE,
+        driver: str = 'GTiff',
+        dop_threshold: float = None,
     ):
         """
         Write average of HFR data for all hours in the given time interval to rasters.
@@ -488,7 +488,7 @@ class HFRadarRange:
 
             # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
             variable_means['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (
-                    180 / numpy.pi
+                180 / numpy.pi
             )
             variable_means['mag'] = numpy.sqrt(numpy.square(u_data) + numpy.square(v_data))
 
@@ -547,7 +547,7 @@ class HFRadarRange:
                 raster_data[numpy.isnan(raster_data)] = fill_value
 
             output_filename = (
-                    output_dir / f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}'
+                output_dir / f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}'
             )
 
             LOGGER.info(f'Writing {output_filename}')
@@ -560,7 +560,7 @@ class HFRadarRange:
                     output_raster.update_tags(ns='rio_overview', resampling='average')
 
     def dop_mask(
-            self, threshold: float, start_time: datetime = None, end_time: datetime = None
+        self, threshold: float, start_time: datetime = None, end_time: datetime = None
     ):
         """
         Get mask of time series with a dilution of precision (DOP) below the given threshold.
@@ -582,12 +582,12 @@ class HFRadarRange:
         return ((dop_x <= threshold) & (dop_y <= threshold)).values
 
     def to_xarray(
-            self,
-            variables: Collection[str] = None,
-            start_time: datetime = None,
-            end_time: datetime = None,
-            mean: bool = True,
-            dop_threshold: float = 0.5,
+        self,
+        variables: Collection[str] = None,
+        start_time: datetime = None,
+        end_time: datetime = None,
+        mean: bool = True,
+        dop_threshold: float = 0.5,
     ) -> xarray.Dataset:
         """
         Converts to xarray Dataset.
@@ -643,12 +643,12 @@ class HFRadarRange:
         return output_dataset
 
     def to_netcdf(
-            self,
-            output_file: str,
-            variables: Collection[str] = None,
-            start_time: datetime = None,
-            end_time: datetime = None,
-            mean: bool = True,
+        self,
+        output_file: str,
+        variables: Collection[str] = None,
+        start_time: datetime = None,
+        end_time: datetime = None,
+        mean: bool = True,
     ):
         """
         Writes to NetCDF file.

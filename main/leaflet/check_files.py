@@ -2,8 +2,8 @@ from datetime import datetime, timedelta
 from os import PathLike
 from pathlib import Path
 
+from PyOFS import DATA_DIRECTORY, get_logger
 from main.leaflet import write_json
-from PyOFS import get_logger, DATA_DIRECTORY
 
 LOGGER = get_logger('PyOFS.check')
 

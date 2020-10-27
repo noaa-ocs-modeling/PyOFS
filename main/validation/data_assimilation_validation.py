@@ -58,9 +58,9 @@ def to_netcdf(start_time: datetime, end_time: datetime, output_dir: PathLike):
 
     # write WCOFS NetCDF files if they do not exist
     if (
-            not nc_filenames['wcofs_u_noDA'].exists()
-            or not nc_filenames['wcofs_v_noDA'].exists()
-            or not nc_filenames['wcofs_sst_noDA'].exists()
+        not nc_filenames['wcofs_u_noDA'].exists()
+        or not nc_filenames['wcofs_v_noDA'].exists()
+        or not nc_filenames['wcofs_sst_noDA'].exists()
     ):
         wcofs_range_noDA = wcofs.WCOFSRange(
             start_time,
@@ -77,9 +77,9 @@ def to_netcdf(start_time: datetime, end_time: datetime, output_dir: PathLike):
         wcofs_range_noDA.to_netcdf(nc_filenames['wcofs_v_noDA'], variables=['v'])
 
     if (
-            not nc_filenames['wcofs_sst_DA'].exists()
-            or not nc_filenames['wcofs_u_DA'].exists()
-            or not nc_filenames['wcofs_v_DA'].exists()
+        not nc_filenames['wcofs_sst_DA'].exists()
+        or not nc_filenames['wcofs_u_DA'].exists()
+        or not nc_filenames['wcofs_v_DA'].exists()
     ):
         wcofs_range = wcofs.WCOFSRange(start_time, end_time, source='avg')
 
@@ -142,7 +142,7 @@ def interpolate_grids(datasets: dict) -> dict:
         v_futures = {'noDA_model': {}, 'DA_model': {}}
 
         for time_delta_index, time_delta in enumerate(
-                sorted(datasets['wcofs_sst_noDA'][wcofs_dimensions['sst'][0]].values, reverse=True)
+            sorted(datasets['wcofs_sst_noDA'][wcofs_dimensions['sst'][0]].values, reverse=True)
         ):
             try:
 

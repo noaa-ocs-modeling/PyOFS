@@ -13,7 +13,7 @@ import scipy.interpolate
 import shapely.geometry
 import xarray
 
-from PyOFS import utilities, get_logger
+from PyOFS import get_logger, utilities
 
 LOGGER = get_logger('PyOFS.track')
 
@@ -121,11 +121,11 @@ class RankineVortex(VectorField):
     """
 
     def __init__(
-            self,
-            center: (float, float),
-            radius: float,
-            period: timedelta,
-            time_deltas: numpy.array,
+        self,
+        center: (float, float),
+        radius: float,
+        period: timedelta,
+        time_deltas: numpy.array,
     ):
         """
         Construct a 2-dimensional solid rotating disk surrounded by inverse falloff of tangential velocity.
@@ -198,14 +198,14 @@ class VectorDataset(VectorField):
     """
 
     def __init__(
-            self,
-            dataset: xarray.Dataset,
-            u_name: str = 'u',
-            v_name: str = 'v',
-            x_name: str = 'lon',
-            y_name: str = 'lat',
-            t_name: str = 'time',
-            coordinate_system: pyproj.Proj = None,
+        self,
+        dataset: xarray.Dataset,
+        u_name: str = 'u',
+        v_name: str = 'v',
+        x_name: str = 'lon',
+        y_name: str = 'lat',
+        t_name: str = 'time',
+        coordinate_system: pyproj.Proj = None,
     ):
         """
         Create new velocity field from given observation.
@@ -247,7 +247,7 @@ class VectorDataset(VectorField):
         super().__init__(numpy.diff(self.dataset['time'].values))
 
     def _interpolate(
-            self, variable: str, point: numpy.array, time: datetime
+        self, variable: str, point: numpy.array, time: datetime
     ) -> xarray.DataArray:
         transformed_point = pyproj.transform(
             utilities.WEB_MERCATOR, self.coordinate_system, point[0], point[1]
@@ -337,15 +337,15 @@ class ROMSGridVectorDataset(VectorField):
     """
 
     def __init__(
-            self,
-            u: numpy.array,
-            v: numpy.array,
-            u_x: numpy.array,
-            u_y: numpy.array,
-            v_x: numpy.array,
-            v_y: numpy.array,
-            times: numpy.array,
-            grid_angles: xarray.DataArray,
+        self,
+        u: numpy.array,
+        v: numpy.array,
+        u_x: numpy.array,
+        u_y: numpy.array,
+        v_x: numpy.array,
+        v_y: numpy.array,
+        times: numpy.array,
+        grid_angles: xarray.DataArray,
     ):
         """
         Create new velocity field from given observation.
@@ -548,12 +548,12 @@ class Particle:
     """
 
     def __init__(
-            self,
-            point: (float, float),
-            time: datetime,
-            field: VectorField,
-            vector: (float, float) = None,
-            projection: pyproj.Proj = None,
+        self,
+        point: (float, float),
+        time: datetime,
+        field: VectorField,
+        vector: (float, float) = None,
+        projection: pyproj.Proj = None,
     ):
         """
         Create new particle within in the given velocity field.
@@ -611,20 +611,20 @@ class Particle:
 
             if order >= 2:
                 k_2 = (
-                        delta_seconds
-                        * self.field[self.coordinates() + 0.5 * k_1, self.time + 0.5 * delta_t]
+                    delta_seconds
+                    * self.field[self.coordinates() + 0.5 * k_1, self.time + 0.5 * delta_t]
                 )
 
                 if order >= 3:
                     k_3 = (
-                            delta_seconds
-                            * self.field[self.coordinates() + 0.5 * k_2, self.time + 0.5 * delta_t]
+                        delta_seconds
+                        * self.field[self.coordinates() + 0.5 * k_2, self.time + 0.5 * delta_t]
                     )
 
                     if order >= 4:
                         k_4 = (
-                                delta_seconds
-                                * self.field[self.coordinates() + k_3, self.time + delta_t]
+                            delta_seconds
+                            * self.field[self.coordinates() + k_3, self.time + delta_t]
                         )
 
                         if order > 4:
@@ -670,7 +670,7 @@ class Particle:
         return shapely.geometry.Point(*self.coordinates())
 
     def plot(
-            self, locations: Union[int, slice] = -1, axis: pyplot.Axes = None, **kwargs
+        self, locations: Union[int, slice] = -1, axis: pyplot.Axes = None, **kwargs
     ) -> pyplot.Line2D:
         """
         Plot particle as point.
@@ -722,12 +722,12 @@ class ParticleContour:
     """
 
     def __init__(
-            self,
-            points: [(float, float)],
-            time: datetime,
-            field: VectorField,
-            interval: float = 500,
-            projection: pyproj.Proj = None,
+        self,
+        points: [(float, float)],
+        time: datetime,
+        field: VectorField,
+        interval: float = 500,
+        projection: pyproj.Proj = None,
     ):
         """
         Create contour given list of points.
@@ -776,20 +776,20 @@ class ParticleContour:
 
             if order >= 2:
                 k_2 = (
-                        delta_seconds
-                        * self.field[self.vertices + 0.5 * k_1, self.time + 0.5 * delta_t]
+                    delta_seconds
+                    * self.field[self.vertices + 0.5 * k_1, self.time + 0.5 * delta_t]
                 )
 
                 if order >= 3:
                     k_3 = (
-                            delta_seconds
-                            * self.field[self.vertices + 0.5 * k_2, self.time + 0.5 * delta_t]
+                        delta_seconds
+                        * self.field[self.vertices + 0.5 * k_2, self.time + 0.5 * delta_t]
                     )
 
                     if order >= 4:
                         k_4 = (
-                                delta_seconds
-                                * self.field[self.vertices + k_3, self.time + delta_t]
+                            delta_seconds
+                            * self.field[self.vertices + k_3, self.time + delta_t]
                         )
 
                         if order > 4:
@@ -852,12 +852,12 @@ class ParticleContour:
 
 class CircleContour(ParticleContour):
     def __init__(
-            self,
-            center: tuple,
-            radius: float,
-            time: datetime,
-            field: VectorField,
-            interval: float = 500,
+        self,
+        center: tuple,
+        radius: float,
+        time: datetime,
+        field: VectorField,
+        interval: float = 500,
     ):
         """
         Create circle contour with given interval between points.
@@ -894,14 +894,14 @@ class CircleContour(ParticleContour):
 
 class RectangleContour(ParticleContour):
     def __init__(
-            self,
-            west_lon: float,
-            east_lon: float,
-            south_lat: float,
-            north_lat: float,
-            time: datetime,
-            field: VectorField,
-            interval: float = 500,
+        self,
+        west_lon: float,
+        east_lon: float,
+        south_lat: float,
+        north_lat: float,
+        time: datetime,
+        field: VectorField,
+        interval: float = 500,
     ):
         """
         Create orthogonal square contour with given bounds.
@@ -967,11 +967,11 @@ class RectangleContour(ParticleContour):
 
 
 def create_contour(
-        contour_center: tuple,
-        contour_radius: float,
-        start_time: datetime,
-        velocity_field: VectorField,
-        contour_shape: str,
+    contour_center: tuple,
+    contour_radius: float,
+    start_time: datetime,
+    velocity_field: VectorField,
+    contour_shape: str,
 ) -> ParticleContour:
     if contour_shape == 'circle':
         return CircleContour(contour_center, contour_radius, start_time, velocity_field)
@@ -995,10 +995,10 @@ def create_contour(
 
 
 def track_contour(
-        contour: ParticleContour,
-        timestep: timedelta,
-        steps: int,
-        intermediate_timestep: timedelta = None,
+    contour: ParticleContour,
+    timestep: timedelta,
+    steps: int,
+    intermediate_timestep: timedelta = None,
 ) -> {datetime: shapely.geometry.Polygon}:
     """
     Create a history of the given contour over a period of time.
@@ -1029,7 +1029,7 @@ def track_contour(
 
 
 def interpolate_contour(
-        points: numpy.array, interval: float, method: str = 'linear'
+    points: numpy.array, interval: float, method: str = 'linear'
 ) -> numpy.array:
     """
     Calculate a set of points along an arbitrary polygon to enforce a regular interval between particles.
@@ -1086,7 +1086,7 @@ if __name__ == '__main__':
     LOGGER.info(f'[{datetime.now()}]: Started processing...')
 
     with fiona.open(
-            DATA_DIRECTORY / 'reference' / 'study_points.gpkg'
+        DATA_DIRECTORY / 'reference' / 'study_points.gpkg'
     ) as contour_centers_file:
         for point in contour_centers_file:
             contour_id = point['properties']['name']
@@ -1118,7 +1118,7 @@ if __name__ == '__main__':
         velocities = [velocity_field.velocity(point, start_time) for point in points]
     else:
         data_path = (
-                DATA_DIRECTORY / 'output' / 'test' / f'{source.lower()}_{start_time:%Y%m%d}.nc'
+            DATA_DIRECTORY / 'output' / 'test' / f'{source.lower()}_{start_time:%Y%m%d}.nc'
         )
 
         LOGGER.info(f'[{datetime.now()}]: Collecting data...')
@@ -1170,12 +1170,12 @@ if __name__ == '__main__':
 
                     if 'GEOSTROPHIC' in source.upper():
                         if (
-                                rho_lon is None
-                                or rho_lat is None
-                                or u_lon is None
-                                or u_lat is None
-                                or v_lon is None
-                                or v_lat is None
+                            rho_lon is None
+                            or rho_lat is None
+                            or u_lon is None
+                            or u_lat is None
+                            or v_lon is None
+                            or v_lat is None
                         ):
                             rho_lon = u_lon = v_lon = input_dataset['lon_rho'].values
                             rho_lat = u_lat = v_lat = input_dataset['lat_rho'].values
@@ -1188,7 +1188,7 @@ if __name__ == '__main__':
                         sea_level = input_dataset['zeta']
 
                         first_term = (
-                                utilities.GRAVITATIONAL_ACCELERATION / coriolis_frequencies
+                            utilities.GRAVITATIONAL_ACCELERATION / coriolis_frequencies
                         )
 
                         raw_ssu = numpy.repeat(
@@ -1220,12 +1220,12 @@ if __name__ == '__main__':
                         raw_ssv[numpy.isnan(raw_ssv)] = 0
                     else:
                         if (
-                                rho_lon is None
-                                or rho_lat is None
-                                or u_lon is None
-                                or u_lat is None
-                                or v_lon is None
-                                or v_lat is None
+                            rho_lon is None
+                            or rho_lat is None
+                            or u_lon is None
+                            or u_lat is None
+                            or v_lon is None
+                            or v_lat is None
                         ):
                             rho_lon = input_dataset['lon_rho'].values
                             rho_lat = input_dataset['lat_rho'].values
@@ -1297,7 +1297,7 @@ if __name__ == '__main__':
             vector_dataset = xarray.open_dataset(data_path)
 
         if time_delta != timedelta(
-                seconds=(numpy.diff(vector_dataset['time'][0:2]) * 1e-9).item()
+            seconds=(numpy.diff(vector_dataset['time'][0:2]) * 1e-9).item()
         ):
             if time_delta == timedelta(days=1):
                 vector_dataset = vector_dataset.resample(time='D').mean()
@@ -1390,7 +1390,7 @@ if __name__ == '__main__':
         del running_futures
 
     with fiona.open(
-            output_path, 'w', 'GPKG', schema, crs=fiona.crs.from_epsg(3857), layer=layer_name
+        output_path, 'w', 'GPKG', schema, crs=fiona.crs.from_epsg(3857), layer=layer_name
     ) as output_layer:
         output_layer.writerecords(records)
 

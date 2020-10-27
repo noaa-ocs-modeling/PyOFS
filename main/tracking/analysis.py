@@ -7,7 +7,7 @@ import numpy
 import pandas
 from shapely import geometry
 
-from PyOFS import get_logger, DATA_DIRECTORY
+from PyOFS import DATA_DIRECTORY, get_logger
 
 LOGGER = get_logger('PyOFS.track')
 
@@ -170,7 +170,7 @@ if __name__ == '__main__':
                 starting_value = 0
 
             for color_index, (contour_name, contour_values) in enumerate(
-                    contours_values.groupby('contour')
+                contours_values.groupby('contour')
             ):
                 color = colors[contour_name[1]]
                 y_values = (
