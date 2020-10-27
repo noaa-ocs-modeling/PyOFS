@@ -11,9 +11,10 @@ from datetime import date, datetime, timedelta
 import ftplib
 import logging
 import os
+from pathlib import Path
 import sys
 
-sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
+sys.path.append(Path(__file__).parent.parent.parent)
 
 from PyOFS import DATA_DIRECTORY, get_logger
 
@@ -21,8 +22,8 @@ TIDEPOOL_URL = '137.75.111.166'
 INPUT_DIRECTORY = '/pub/outgoing/CSDL'
 # WCOFS_EXPERIMENTAL_DIRECTORY = '/pub/outgoing/CSDL/testssh'
 
-OUTPUT_DIRECTORY = os.path.join(DATA_DIRECTORY, 'input')
-LOG_DIRECTORY = os.path.join(DATA_DIRECTORY, 'log')
+OUTPUT_DIRECTORY = DATA_DIRECTORY / 'input'
+LOG_DIRECTORY = DATA_DIRECTORY / 'log'
 
 
 def previous_months(to_months: int) -> [date]:
@@ -37,27 +38,27 @@ if __name__ == '__main__':
 
     num_downloads = 0
 
-    wcofs_dir = os.path.join(OUTPUT_DIRECTORY, 'wcofs')
-    rtofs_dir = os.path.join(OUTPUT_DIRECTORY, 'rtofs')
+    wcofs_dir = OUTPUT_DIRECTORY / 'wcofs'
+    rtofs_dir = OUTPUT_DIRECTORY / 'rtofs'
 
-    avg_dir = os.path.join(wcofs_dir, 'avg')
-    fwd_dir = os.path.join(wcofs_dir, 'fwd')
-    obs_dir = os.path.join(wcofs_dir, 'obs')
-    mod_dir = os.path.join(wcofs_dir, 'mod')
-    # experimental_dir = os.path.join(wcofs_dir, 'exp', f'{datetime.now():%Y%m}')
+    avg_dir = wcofs_dir / 'avg'
+    fwd_dir = wcofs_dir / 'fwd'
+    obs_dir = wcofs_dir / 'obs'
+    mod_dir = wcofs_dir / 'mod'
+    # experimental_dir = wcofs_dir / 'exp' / f'{datetime.now():%Y%m}'
 
-    month_directories = {month_string: os.path.join(avg_dir, month_string) for month_string in (f'{month:%Y%m}' for month in previous_months(6))}
+    month_directories = {month_string: avg_dir / month_string for month_string in (f'{month:%Y%m}' for month in previous_months(6))}
 
     # create folders if they do not exist
     for directory in [OUTPUT_DIRECTORY, LOG_DIRECTORY, wcofs_dir, rtofs_dir, avg_dir, fwd_dir, obs_dir, mod_dir] + list(month_directories.values()):  # experimental_dir]:
-        if not os.path.isdir(directory):
+        if not directory.exists():
             os.makedirs(directory, exist_ok=True)
 
     # define log filename
-    log_path = os.path.join(LOG_DIRECTORY, f'{datetime.now():%Y%m%d}_download.log')
+    log_path = LOG_DIRECTORY / f'{datetime.now():%Y%m%d}_download.log'
 
     # check whether logfile exists
-    log_exists = os.path.exists(log_path)
+    log_exists = log_path.exists()
 
     logger = get_logger('download', log_path, file_level=logging.INFO, console_level=logging.DEBUG)
 
@@ -73,26 +74,26 @@ if __name__ == '__main__':
             filename = os.path.basename(input_path)
 
             if 'rtofs' in filename:
-                output_path = os.path.join(rtofs_dir, filename)
+                output_path = rtofs_dir / filename
             elif 'wcofs' in filename:
                 if filename[-4:] == '.sur':
                     filename = filename[:-4]
 
                 if 'fwd' in filename:
-                    output_path = os.path.join(fwd_dir, filename)
+                    output_path = fwd_dir / filename
                 elif 'obs' in filename:
-                    output_path = os.path.join(obs_dir, filename)
+                    output_path = obs_dir / filename
                 elif 'mod' in filename:
-                    output_path = os.path.join(mod_dir, filename)
+                    output_path = mod_dir / filename
                 else:
                     for month_string, month_directory in month_directories.items():
                         if month_string in filename:
-                            output_path = os.path.join(month_directory, filename)
+                            output_path = month_directory / filename
                             break
                     else:
-                        output_path = os.path.join(avg_dir, filename)
+                        output_path = avg_dir / filename
             else:
-                output_path = os.path.join(OUTPUT_DIRECTORY, filename)
+                output_path = OUTPUT_DIRECTORY / filename
 
             path_map[input_path] = output_path
 
@@ -116,7 +117,7 @@ if __name__ == '__main__':
         #         if filename[-4:] == '.sur':
         #             filename = filename[:-4]
         #
-        #         output_path = os.path.join(experimental_dir, filename)
+        #         output_path = experimental_dir / filename
         #     else:
         #         logger.warning(f'no options set up for {input_path}')
         #
@@ -131,7 +132,7 @@ if __name__ == '__main__':
                 current_start_time = datetime.now()
 
                 # download file (copy via binary connection) to local destination if it does not already exist
-                if not (os.path.exists(output_path) and os.stat(output_path).st_size > 232000):
+                if not (output_path.exists() and os.stat(output_path).st_size > 232000):
                     with open(output_path, 'wb') as output_file:
                         try:
                             ftp_connection.retrbinary(f'RETR {input_path}', output_file.write)

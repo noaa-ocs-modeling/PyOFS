@@ -11,7 +11,6 @@ from concurrent import futures
 from datetime import datetime, timedelta
 import math
 import os
-import sys
 from typing import Union
 
 import cartopy.feature
@@ -22,8 +21,6 @@ import pyproj
 import scipy.interpolate
 import shapely.geometry
 import xarray
-
-sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
 from PyOFS import utilities, get_logger
 
@@ -803,12 +800,12 @@ if __name__ == '__main__':
     time_delta = timedelta(hours=1)
     maximum_timestep = timedelta(hours=4)
 
-    output_path = os.path.join(DATA_DIRECTORY, 'output', 'test', 'contours.gpkg')
+    output_path = DATA_DIRECTORY / 'output' / 'test' / 'contours.gpkg'
     layer_name = f'{source}_{start_time:%Y%m%dT%H%M%S}_{(start_time + period):%Y%m%dT%H%M%S}_{int(time_delta / timedelta(hours=1))}h'
 
     LOGGER.info(f'[{datetime.now()}]: Started processing...')
 
-    with fiona.open(os.path.join(DATA_DIRECTORY, 'reference', 'study_points.gpkg')) as contour_centers_file:
+    with fiona.open(DATA_DIRECTORY / 'reference' / 'study_points.gpkg') as contour_centers_file:
         for point in contour_centers_file:
             contour_id = point['properties']['name']
             contour_centers[contour_id] = point['geometry']['coordinates']
@@ -824,11 +821,11 @@ if __name__ == '__main__':
         points = [numpy.array(pyproj.transform(utilities.WGS84, utilities.WEB_MERCATOR, *vortex_center)) + numpy.array([radius, 0]) for radius in radii]
         velocities = [velocity_field.velocity(point, start_time) for point in points]
     else:
-        data_path = os.path.join(DATA_DIRECTORY, 'output', 'test', f'{source.lower()}_{start_time:%Y%m%d}.nc')
+        data_path = DATA_DIRECTORY / 'output' / 'test' / f'{source.lower()}_{start_time:%Y%m%d}.nc'
 
         LOGGER.info(f'[{datetime.now()}]: Collecting data...')
 
-        if not os.path.exists(data_path):
+        if not data_path.exists():
             if source.upper() == 'HFR':
                 vector_dataset = hf_radar.HFRadarRange(start_time, start_time + timedelta(days=1)).to_xarray(variables=('ssu', 'ssv'), mean=False)
                 vector_dataset.to_netcdf(data_path)
@@ -843,7 +840,7 @@ if __name__ == '__main__':
             if 'WCOFS_QCK' in source.upper():
                 rotated_pole = utilities.RotatedPoleCoordinateSystem(wcofs.ROTATED_POLE)
 
-                qck_path = os.path.join(DATA_DIRECTORY, 'input', 'wcofs', 'qck')
+                qck_path = DATA_DIRECTORY / 'input' / 'wcofs' / 'qck'
                 input_filenames = os.listdir(qck_path)
 
                 combined_time = []
@@ -859,7 +856,7 @@ if __name__ == '__main__':
                 v_lat = None
 
                 for input_filename in sorted(input_filenames):
-                    input_dataset = xarray.open_dataset(os.path.join(qck_path, input_filename))
+                    input_dataset = xarray.open_dataset(qck_path / input_filename)
 
                     if grid_angles is None:
                         grid_angles = input_dataset['angle'].values

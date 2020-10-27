@@ -1,26 +1,25 @@
 from concurrent import futures
 from datetime import datetime, timedelta
 import os
-import sys
+from os import PathLike
+from pathlib import Path
 
 import numpy
 import xarray
 
-sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
-
 from PyOFS import DATA_DIRECTORY, get_logger
-from PyOFS.observation import hf_radar, viirs
 from PyOFS.model import wcofs
+from PyOFS.observation import hf_radar, viirs
 
 LOGGER = get_logger('PyOFS.valid')
 
-WORKSPACE_DIR = os.path.join(DATA_DIRECTORY, 'validation')
+WORKSPACE_DIR = DATA_DIRECTORY / 'validation'
 
 # UTC offset of study area
 UTC_OFFSET = 8
 
 
-def to_netcdf(start_time: datetime, end_time: datetime, output_dir: str):
+def to_netcdf(start_time: datetime, end_time: datetime, output_dir: PathLike):
     """
     Writes HFR, VIIRS, and WCOFS data to NetCDF files at the given filenames.
 
@@ -29,25 +28,28 @@ def to_netcdf(start_time: datetime, end_time: datetime, output_dir: str):
     :param output_dir: Output directory.
     """
 
+    if not isinstance(output_dir, Path):
+        output_dir = Path(output_dir)
+
     # define filenames for NetCDF
     nc_filenames = {
-        'hfr': os.path.join(output_dir, 'hfr.nc'),
-        'viirs': os.path.join(output_dir, 'viirs.nc'),
-        'wcofs_sst_noDA': os.path.join(output_dir, 'wcofs_sst_noDA.nc'),
-        'wcofs_sst_DA': os.path.join(output_dir, 'wcofs_sst_DA.nc'),
-        'wcofs_u_noDA': os.path.join(output_dir, 'wcofs_u_noDA.nc'),
-        'wcofs_u_DA': os.path.join(output_dir, 'wcofs_u_DA.nc'),
-        'wcofs_v_noDA': os.path.join(output_dir, 'wcofs_v_noDA.nc'),
-        'wcofs_v_DA': os.path.join(output_dir, 'wcofs_v_DA.nc')
+        'hfr': output_dir / 'hfr.nc',
+        'viirs': output_dir / 'viirs.nc',
+        'wcofs_sst_noDA': output_dir / 'wcofs_sst_noDA.nc',
+        'wcofs_sst_DA': output_dir / 'wcofs_sst_DA.nc',
+        'wcofs_u_noDA': output_dir / 'wcofs_u_noDA.nc',
+        'wcofs_u_DA': output_dir / 'wcofs_u_DA.nc',
+        'wcofs_v_noDA': output_dir / 'wcofs_v_noDA.nc',
+        'wcofs_v_DA': output_dir / 'wcofs_v_DA.nc'
     }
 
     # write HFR NetCDF file if it does not exist
-    if not os.path.exists(nc_filenames['hfr']):
+    if not nc_filenames['hfr'].exists():
         hfr_range = hf_radar.HFRadarRange(start_time, end_time)
         hfr_range.to_netcdf(nc_filenames['hfr'])
 
     # write VIIRS NetCDF file if it does not exist
-    if not os.path.exists(nc_filenames['viirs']):
+    if not nc_filenames['viirs'].exists():
         utc_start_time = start_time + timedelta(hours=UTC_OFFSET)
         utc_end_time = end_time + timedelta(hours=UTC_OFFSET)
 
@@ -55,8 +57,8 @@ def to_netcdf(start_time: datetime, end_time: datetime, output_dir: str):
         viirs_range.to_netcdf(nc_filenames['viirs'], variables=['sst'])
 
     # write WCOFS NetCDF files if they do not exist
-    if not os.path.exists(nc_filenames['wcofs_u_noDA']) or not os.path.exists(nc_filenames['wcofs_v_noDA']) or not os.path.exists(nc_filenames['wcofs_sst_noDA']):
-        wcofs_range_noDA = wcofs.WCOFSRange(start_time, end_time, source='avg', grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME, source_url=os.path.join(DATA_DIRECTORY, 'input', 'wcofs', 'avg'),
+    if not nc_filenames['wcofs_u_noDA'].exists() or not nc_filenames['wcofs_v_noDA'].exists() or not nc_filenames['wcofs_sst_noDA'].exists():
+        wcofs_range_noDA = wcofs.WCOFSRange(start_time, end_time, source='avg', grid_filename=wcofs.WCOFS_4KM_GRID_FILENAME, source_url=DATA_DIRECTORY / 'input' / 'wcofs' / 'avg',
                                             wcofs_string='wcofs4')
 
         # TODO find a way to combine WCOFS variables without raising MemoryError
@@ -64,7 +66,7 @@ def to_netcdf(start_time: datetime, end_time: datetime, output_dir: str):
         wcofs_range_noDA.to_netcdf(nc_filenames['wcofs_u_noDA'], variables=['u'])
         wcofs_range_noDA.to_netcdf(nc_filenames['wcofs_v_noDA'], variables=['v'])
 
-    if not os.path.exists(nc_filenames['wcofs_sst_DA']) or not os.path.exists(nc_filenames['wcofs_u_DA']) or not os.path.exists(nc_filenames['wcofs_v_DA']):
+    if not nc_filenames['wcofs_sst_DA'].exists() or not nc_filenames['wcofs_u_DA'].exists() or not nc_filenames['wcofs_v_DA'].exists():
         wcofs_range = wcofs.WCOFSRange(start_time, end_time, source='avg')
 
         # TODO find a way to combine WCOFS variables without raising MemoryError
@@ -73,7 +75,7 @@ def to_netcdf(start_time: datetime, end_time: datetime, output_dir: str):
         wcofs_range.to_netcdf(nc_filenames['wcofs_v_DA'], variables=['v'])
 
 
-def from_netcdf(input_dir: str) -> dict:
+def from_netcdf(input_dir: PathLike) -> dict:
     """
     Read NetCDF files from directory.
     
@@ -81,16 +83,19 @@ def from_netcdf(input_dir: str) -> dict:
     :return: Dictionary of xarray Dataset objects.
     """
 
+    if not isinstance(input_dir, Path):
+        input_dir = Path(input_dir)
+
     # define filenames for NetCDF
     nc_filenames = {
-        'hfr': os.path.join(input_dir, 'hfr.nc'),
-        'viirs': os.path.join(input_dir, 'viirs.nc'),
-        'wcofs_sst_noDA': os.path.join(input_dir, 'wcofs_sst_noDA.nc'),
-        'wcofs_sst_DA': os.path.join(input_dir, 'wcofs_sst_DA.nc'),
-        'wcofs_u_noDA': os.path.join(input_dir, 'wcofs_u_noDA.nc'),
-        'wcofs_u_DA': os.path.join(input_dir, 'wcofs_u_DA.nc'),
-        'wcofs_v_noDA': os.path.join(input_dir, 'wcofs_v_noDA.nc'),
-        'wcofs_v_DA': os.path.join(input_dir, 'wcofs_v_DA.nc')
+        'hfr': input_dir / 'hfr.nc',
+        'viirs': input_dir / 'viirs.nc',
+        'wcofs_sst_noDA': input_dir / 'wcofs_sst_noDA.nc',
+        'wcofs_sst_DA': input_dir / 'wcofs_sst_DA.nc',
+        'wcofs_u_noDA': input_dir / 'wcofs_u_noDA.nc',
+        'wcofs_u_DA': input_dir / 'wcofs_u_DA.nc',
+        'wcofs_v_noDA': input_dir / 'wcofs_v_noDA.nc',
+        'wcofs_v_DA': input_dir / 'wcofs_v_DA.nc'
     }
 
     # load datasets from local NetCDF files
@@ -212,8 +217,8 @@ if __name__ == '__main__':
     start_time = datetime(2018, 11, 11)
     end_time = start_time + timedelta(days=1)
 
-    day_dir = os.path.join(WORKSPACE_DIR, f'{start_time:%Y%m%d}')
-    if not os.path.exists(day_dir):
+    day_dir = WORKSPACE_DIR / f'{start_time:%Y%m%d}'
+    if not day_dir.exists():
         os.makedirs(day_dir, exist_ok=True)
 
     to_netcdf(start_time, end_time, day_dir)

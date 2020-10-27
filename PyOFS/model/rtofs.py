@@ -9,7 +9,8 @@ Created on Jun 25, 2018
 
 from collections import OrderedDict
 from datetime import date, datetime, timedelta
-import os
+from os import PathLike
+from pathlib import Path
 import threading
 from typing import Collection
 
@@ -51,7 +52,7 @@ DATA_VARIABLES = {
 
 TIME_DELTAS = {'daily': range(-3, 8 + 1)}
 
-STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIRECTORY, r"reference\wcofs.gpkg:study_area")
+STUDY_AREA_POLYGON_FILENAME = DATA_DIRECTORY / r"reference\wcofs.gpkg:study_area"
 
 SOURCE_URL = 'https://nomads.ncep.noaa.gov:9090/dods/rtofs'
 
@@ -63,7 +64,7 @@ class RTOFSDataset:
     Real-Time Ocean Forecasting System (RTOFS) NetCDF observation.
     """
 
-    def __init__(self, model_date: datetime = None, source: str = '2ds', time_interval: str = 'daily', study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME):
+    def __init__(self, model_date: datetime = None, source: str = '2ds', time_interval: str = 'daily', study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME):
         """
         Creates new observation object from datetime and given model parameters.
 
@@ -72,6 +73,9 @@ class RTOFSDataset:
         :param time_interval: time interval of model output
         :param study_area_polygon_filename: filename of vector file containing study area boundary
         """
+
+        if not isinstance(study_area_polygon_filename, Path):
+            study_area_polygon_filename = Path(study_area_polygon_filename)
 
         if model_date is None:
             model_date = datetime.now()
@@ -180,7 +184,7 @@ class RTOFSDataset:
         else:
             raise ValueError(f'Direction must be one of {list(DATASET_STRUCTURE[self.source].keys())}.')
 
-    def write_rasters(self, output_dir: str, variables: list, time: datetime, filename_prefix: str = None, filename_suffix: str = None, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff',
+    def write_rasters(self, output_dir: PathLike, variables: list, time: datetime, filename_prefix: str = None, filename_suffix: str = None, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff',
                       crop: bool = True):
         """
         Write averaged raster data of given variables to given output directory.
@@ -194,6 +198,9 @@ class RTOFSDataset:
         :param driver: strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
         :param crop: whether to crop to study area extent
         """
+
+        if not isinstance(output_dir, Path):
+            output_dir = Path(output_dir)
 
         if variables is None:
             variables = DATA_VARIABLES[self.source]
@@ -254,7 +261,7 @@ class RTOFSDataset:
                 }
 
                 output_filename = f'{filename_prefix}_{variable}_{self.model_time:%Y%m%d}_{time_delta_string}{filename_suffix}'
-                output_filename = os.path.join(output_dir, output_filename)
+                output_filename = output_dir / output_filename
 
                 if driver == 'AAIGrid':
                     file_extension = 'asc'
@@ -265,7 +272,7 @@ class RTOFSDataset:
                     file_extension = 'tiff'
                     gdal_args.update(TIFF_CREATION_OPTIONS)
 
-                output_filename = f'{os.path.splitext(output_filename)[0]}.{file_extension}'
+                output_filename = f'{output_filename.stem}.{file_extension}'
 
                 LOGGER.info(f'Writing {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
@@ -274,7 +281,7 @@ class RTOFSDataset:
                         output_raster.build_overviews(PyOFS.overview_levels(variable_mean.shape), Resampling['average'])
                         output_raster.update_tags(ns='rio_overview', resampling='average')
 
-    def write_raster(self, output_filename: str, variable: str, time: datetime, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff', crop: bool = True):
+    def write_raster(self, output_filename: PathLike, variable: str, time: datetime, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff', crop: bool = True):
         """
         Writes interpolated raster of given variable to output path.
 
@@ -285,6 +292,9 @@ class RTOFSDataset:
         :param driver: strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
         :param crop: whether to crop to study area extent
         """
+
+        if not isinstance(output_filename, Path):
+            output_filename = Path(output_filename)
 
         output_data = self.data(variable, time, crop).values
 
@@ -313,7 +323,7 @@ class RTOFSDataset:
                 file_extension = 'tiff'
                 gdal_args.update(TIFF_CREATION_OPTIONS)
 
-            output_filename = f'{os.path.splitext(output_filename)[0]}.{file_extension}'
+            output_filename = f'{output_filename.stem}.{file_extension}'
 
             LOGGER.info(f'Writing {output_filename}')
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
@@ -393,9 +403,9 @@ class RTOFSDataset:
 
 
 if __name__ == '__main__':
-    output_dir = os.path.join(DATA_DIRECTORY, r'output\test')
+    output_dir = DATA_DIRECTORY / 'output' / 'test'
 
     rtofs_dataset = RTOFSDataset(datetime.now())
-    rtofs_dataset.write_raster(os.path.join(output_dir, 'rtofs_ssh.tiff'), 'ssh', datetime.now())
+    rtofs_dataset.write_raster(output_dir / 'rtofs_ssh.tiff', 'ssh', datetime.now())
 
     print('done')

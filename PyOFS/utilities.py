@@ -9,7 +9,8 @@ Created on Jun 13, 2018
 
 from datetime import datetime, timedelta
 from functools import partial
-import os
+from os import PathLike
+from pathlib import Path
 
 import fiona
 import fiona.crs
@@ -21,7 +22,7 @@ from shapely.geometry import shape
 from shapely.ops import transform
 import xarray
 
-from PyOFS import get_logger
+from PyOFS import get_logger, split_layer_filename
 
 WGS84 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
 WEB_MERCATOR = pyproj.Proj('+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs')
@@ -78,12 +79,6 @@ def round_to_day(datetime_object: datetime, direction: str = None) -> datetime:
     return datetime_object
 
 
-# return numpy.arange(start_time, end_time, dtype='datetime64[D]')
-
-
-# return numpy.arange(start_time, end_time, dtype='datetime64[h]')
-
-
 def get_masked_data(masked_constant: numpy.ma.core.MaskedConstant) -> object:
     """
     Wrapper to make sure we don't call .data on a regular constant, which will cause memory problems.
@@ -98,7 +93,7 @@ def get_masked_data(masked_constant: numpy.ma.core.MaskedConstant) -> object:
         return masked_constant
 
 
-def write_gpkg_subdataset(input_data: numpy.array, output_filename: str, layer_name: str, height: int, width: int, dtype: str, crs: rasterio.crs.CRS, transform: rasterio.Affine, nodata: float,
+def write_gpkg_subdataset(input_data: numpy.array, output_filename: PathLike, height: int, width: int, dtype: str, crs: rasterio.crs.CRS, transform: rasterio.Affine, nodata: float,
                           overwrite: bool = False, **kwargs):
     """
     Write input array to a raster layer in a geopackage.
@@ -106,7 +101,6 @@ def write_gpkg_subdataset(input_data: numpy.array, output_filename: str, layer_n
 
     :param input_data: array of data to write to raster
     :param output_filename: geopackage filename
-    :param layer_name: name of output layer
     :param height: numbers of rows of the raster observation
     :param width: number of columns of the raster observation
     :param dtype: data type for bands
@@ -116,6 +110,11 @@ def write_gpkg_subdataset(input_data: numpy.array, output_filename: str, layer_n
     :param overwrite: whether to erase entire geopackage, if replacing existing layer
     :raises Exception: raised GDAL error
     """
+
+    if not isinstance(output_filename, Path):
+        output_filename = Path(output_filename)
+
+    output_filename, layer_name = split_layer_filename(output_filename)
 
     with rasterio.Env(OGR_GPKG_FOREIGN_KEY_CHECK='NO'):
         try:
@@ -148,12 +147,13 @@ def datetime64_to_time(datetime64: numpy.datetime64) -> datetime:
     return datetime.fromtimestamp(datetime64.values.astype(datetime) * 1e-9)
 
 
-def get_first_record(vector_dataset_filename: str):
+def get_first_record(vector_dataset_filename: PathLike):
+    if not isinstance(vector_dataset_filename, Path):
+        vector_dataset_filename = Path(vector_dataset_filename)
+
     fiona_kwargs = {}
 
-    if ':' in os.path.split(vector_dataset_filename)[-1]:
-        vector_dataset_filename, layer_name = vector_dataset_filename.rsplit(':', 1)
-        fiona_kwargs['layer'] = layer_name
+    vector_dataset_filename, fiona_kwargs['layer'] = split_layer_filename(vector_dataset_filename)
 
     with fiona.open(vector_dataset_filename, **fiona_kwargs) as vector_layer:
         return next(iter(vector_layer))

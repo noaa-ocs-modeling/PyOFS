@@ -9,7 +9,8 @@ Created on Aug 1, 2018
 
 from concurrent import futures
 from datetime import datetime
-import os
+from os import PathLike
+from pathlib import Path
 import re
 
 import fiona
@@ -29,8 +30,8 @@ MEASUREMENT_VARIABLES = ['water_temperature', 'conductivity', 'salinity', 'o2_sa
 
 OUTPUT_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
-STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIRECTORY, r"reference\wcofs.gpkg:study_area")
-WCOFS_NDBC_STATIONS_FILENAME = os.path.join(DATA_DIRECTORY, r"reference\ndbc_stations.txt")
+STUDY_AREA_POLYGON_FILENAME = DATA_DIRECTORY / r"reference\wcofs.gpkg:study_area"
+WCOFS_NDBC_STATIONS_FILENAME = DATA_DIRECTORY / r"reference\ndbc_stations.txt"
 
 CATALOG_URL = 'https://dods.ndbc.noaa.gov/thredds/catalog/data/ocean/catalog.html'
 SOURCE_URL = 'https://dods.ndbc.noaa.gov/thredds/dodsC/data/ocean'
@@ -165,7 +166,7 @@ class DataBuoyRange:
 
         return output_data
 
-    def write_vector(self, output_filename: str, start_time: datetime, end_time: datetime, variables: [str] = None):
+    def write_vector(self, output_filename: PathLike, start_time: datetime, end_time: datetime, variables: [str] = None):
         """
         Write average of buoy data for all hours in the given time interval to a single layer of the provided output file.
 
@@ -175,10 +176,10 @@ class DataBuoyRange:
         :param variables: list of variable names
         """
 
-        layer_name = None
+        if not isinstance(output_filename, Path):
+            output_filename = Path(output_filename)
 
-        if ':' in os.path.split(output_filename)[-1]:
-            output_filename, layer_name = output_filename.rsplit(':', 1)
+        output_filename, layer_name = PyOFS.split_layer_filename(output_filename)
 
         if variables is None:
             variables = MEASUREMENT_VARIABLES
@@ -270,7 +271,7 @@ class DataBuoyRange:
         return f'{self.__class__.__name__}({", ".join(used_params)})'
 
 
-def check_station(dataset: xarray.Dataset, study_area_polygon_filename: str) -> bool:
+def check_station(dataset: xarray.Dataset, study_area_polygon_filename: PathLike) -> bool:
     """
     Check whether station exists within the given study area.
 
@@ -278,6 +279,9 @@ def check_station(dataset: xarray.Dataset, study_area_polygon_filename: str) -> 
     :param study_area_polygon_filename: vector file containing study area boundary
     :return: whether station is within study area
     """
+
+    if not isinstance(study_area_polygon_filename, Path):
+        study_area_polygon_filename = Path(study_area_polygon_filename)
 
     # construct polygon from the first record in the layer
     study_area_polygon = shapely.geometry.Polygon(utilities.get_first_record(study_area_polygon_filename)['geometry']['coordinates'][0])
@@ -291,7 +295,7 @@ def check_station(dataset: xarray.Dataset, study_area_polygon_filename: str) -> 
 
 
 if __name__ == '__main__':
-    output_dir = os.path.join(DATA_DIRECTORY, r'output\test')
+    output_dir = DATA_DIRECTORY / r'output\test'
     wcofs_stations = list(numpy.genfromtxt(WCOFS_NDBC_STATIONS_FILENAME, dtype='str'))
 
     start_time = datetime(2018, 7, 14)
@@ -299,6 +303,6 @@ if __name__ == '__main__':
     date_interval_string = f'{start_time:%m%d%H}_{end_time:%m%d%H}'
 
     ndbc_range = DataBuoyRange(wcofs_stations)
-    ndbc_range.write_vector(os.path.join(output_dir, f'ndbc.gpkg:NDBC_{date_interval_string}'), start_time=start_time, end_time=end_time)
+    ndbc_range.write_vector(output_dir / f'ndbc.gpkg:NDBC_{date_interval_string}', start_time=start_time, end_time=end_time)
 
     print('done')

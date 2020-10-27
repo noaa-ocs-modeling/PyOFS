@@ -8,7 +8,8 @@ Created on Jun 13, 2018
 """
 
 from datetime import datetime, timedelta
-import os
+from os import PathLike
+from pathlib import Path
 from typing import Collection
 
 import fiona
@@ -173,13 +174,17 @@ class HFRadarRange:
 
         return abs(self.mean_x_size), abs(self.mean_y_size)
 
-    def write_sites(self, output_filename: str, layer_name: str):
+    def write_sites(self, output_filename: PathLike):
         """
         Writes HFR radar facility locations to specified file and layer.
 
         :param output_filename: path to output file
-        :param layer_name: name of layer to write
         """
+
+        if not isinstance(output_filename, Path):
+            output_filename = Path(output_filename)
+
+        output_filename, layer_name = PyOFS.split_layer_filename(output_filename)
 
         layer_records = []
 
@@ -202,7 +207,7 @@ class HFRadarRange:
         with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=OUTPUT_CRS.to_dict()) as layer:
             layer.writerecords(layer_records)
 
-    def write_vectors(self, output_filename: str, variables: Collection[str] = None, start_time: datetime = None, end_time: datetime = None, dop_threshold: float = 0.5):
+    def write_vectors(self, output_filename: PathLike, variables: Collection[str] = None, start_time: datetime = None, end_time: datetime = None, dop_threshold: float = 0.5):
         """
         Write HFR data to a layer of the provided output file for every hour in the given time interval.
 
@@ -212,6 +217,11 @@ class HFRadarRange:
         :param end_time: end of time interval
         :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
         """
+
+        if not isinstance(output_filename, Path):
+            output_filename = Path(output_filename)
+
+        output_filename = PyOFS.split_layer_filename(output_filename)[0]
 
         if variables is None:
             variables = DATA_VARIABLES
@@ -268,17 +278,23 @@ class HFRadarRange:
             with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=OUTPUT_CRS.to_dict()) as layer:
                 layer.writerecords(layer_records)
 
-    def write_vector(self, output_filename: str, layer_name: str = 'ssuv', variables: Collection[str] = None, start_time: datetime = None, end_time: datetime = None, dop_threshold: float = 0.5):
+    def write_vector(self, output_filename: PathLike, variables: Collection[str] = None, start_time: datetime = None, end_time: datetime = None, dop_threshold: float = 0.5):
         """
         Write average of HFR data for all hours in the given time interval to a single layer of the provided output file.
 
         :param output_filename: path to output file
-        :param layer_name: name of layer to write
         :param variables: variable names to use
         :param start_time: beginning of time interval
         :param end_time: end of time interval
         :param dop_threshold: threshold for Dilution of Precision (DOP) above which data should be discarded
         """
+
+        if not isinstance(output_filename, Path):
+            output_filename = Path(output_filename)
+
+        output_filename, layer_name = PyOFS.split_layer_filename(output_filename)
+        if layer_name is None:
+            layer_name = 'ssuv'
 
         if variables is None:
             variables = DATA_VARIABLES
@@ -316,7 +332,7 @@ class HFRadarRange:
         with fiona.open(output_filename, 'w', 'GPKG', layer=layer_name, schema=schema, crs=OUTPUT_CRS.to_dict()) as layer:
             layer.writerecords(layer_records)
 
-    def write_rasters(self, output_dir: str, filename_prefix: str = 'hfr', filename_suffix: str = '', variables: Collection[str] = None, start_time: datetime = None,
+    def write_rasters(self, output_dir: PathLike, filename_prefix: str = 'hfr', filename_suffix: str = '', variables: Collection[str] = None, start_time: datetime = None,
                       end_time: datetime = None, fill_value: float = LEAFLET_NODATA_VALUE, driver: str = 'GTiff', dop_threshold: float = None):
         """
         Write average of HFR data for all hours in the given time interval to rasters.
@@ -331,6 +347,9 @@ class HFRadarRange:
         :param driver: string of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
         :param dop_threshold: threshold for dilution of precision above which data is not useable
         """
+
+        if not isinstance(output_dir, Path):
+            output_dir = Path(output_dir)
 
         if variables is None:
             variables = DATA_VARIABLES
@@ -397,7 +416,7 @@ class HFRadarRange:
             if fill_value is not None:
                 raster_data[numpy.isnan(raster_data)] = fill_value
 
-            output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}')
+            output_filename = output_dir / f'{filename_prefix}_{variable}{filename_suffix}.{file_extension}'
 
             LOGGER.info(f'Writing {output_filename}')
             with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
@@ -506,7 +525,7 @@ if __name__ == '__main__':
 
     register_matplotlib_converters()
 
-    output_dir = os.path.join(DATA_DIRECTORY, r'output\test')
+    output_dir = DATA_DIRECTORY / 'output' / 'test'
 
     start_time = datetime(2019, 2, 6)
     end_time = start_time + timedelta(days=1)
@@ -531,8 +550,8 @@ if __name__ == '__main__':
     # hfr_range.write_rasters(output_dir, filename_suffix='hfr_0.5_DOP', dop_threshold=0.5)
     # hfr_range.write_rasters(output_dir, filename_suffix='hfr_0.1_DOP', dop_threshold=0.1)
 
-    # hfr_range.write_vector(os.path.join(output_dir, 'hfr_no_DOP.gpkg'))
-    # hfr_range.write_vector(os.path.join(output_dir, 'hfr_0.5_DOP.gpkg'), dop_threshold=0.5)
-    # hfr_range.write_vector(os.path.join(output_dir, 'hfr_0.1_DOP.gpkg'), dop_threshold=0.1)
+    # hfr_range.write_vector(output_dir / 'hfr_no_DOP.gpkg')
+    # hfr_range.write_vector(output_dir / 'hfr_0.5_DOP.gpkg', dop_threshold=0.5)
+    # hfr_range.write_vector(output_dir / 'hfr_0.1_DOP.gpkg', dop_threshold=0.1)
 
     print('done')

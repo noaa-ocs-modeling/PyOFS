@@ -9,7 +9,8 @@ Created on Feb 6, 2019
 
 from collections import OrderedDict
 from datetime import datetime
-import os
+from os import PathLike
+from pathlib import Path
 from typing import Collection
 
 import fiona.crs
@@ -28,7 +29,7 @@ from PyOFS import CRS_EPSG, DATA_DIRECTORY, LEAFLET_NODATA_VALUE, TIFF_CREATION_
 
 LOGGER = get_logger('PyOFS.SMAP')
 
-STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIRECTORY, r"reference\wcofs.gpkg:study_area")
+STUDY_AREA_POLYGON_FILENAME = DATA_DIRECTORY / 'reference' / 'wcofs.gpkg:study_area'
 
 OUTPUT_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
@@ -45,13 +46,16 @@ class SMAPDataset:
     study_area_bounds = None
     study_area_coordinates = None
 
-    def __init__(self, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME):
+    def __init__(self, study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME):
         """
         Retrieve VIIRS NetCDF observation from NOAA with given datetime.
 
         :param study_area_polygon_filename: filename of vector file containing study area boundary
         :raises NoDataError: if observation does not exist
         """
+
+        if not isinstance(study_area_polygon_filename, Path):
+            study_area_polygon_filename = Path(study_area_polygon_filename)
 
         self.study_area_polygon_filename = study_area_polygon_filename
 
@@ -145,7 +149,7 @@ class SMAPDataset:
         else:
             raise PyOFS.NoDataError(f'No data exists for {data_time:%Y%m%dT%H%M%S}.')
 
-    def write_rasters(self, output_dir: str, data_time: datetime, variables: Collection[str] = tuple(['sss']), filename_prefix: str = 'smos', fill_value: float = LEAFLET_NODATA_VALUE,
+    def write_rasters(self, output_dir: PathLike, data_time: datetime, variables: Collection[str] = tuple(['sss']), filename_prefix: str = 'smos', fill_value: float = LEAFLET_NODATA_VALUE,
                       driver: str = 'GTiff'):
         """
         Write SMOS rasters to file using data from given variables.
@@ -157,6 +161,9 @@ class SMAPDataset:
         :param fill_value: desired fill value of output
         :param driver: strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
         """
+
+        if not isinstance(output_dir, Path):
+            output_dir = Path(output_dir)
 
         for variable in variables:
             input_data = self.data(data_time, variable)
@@ -184,7 +191,7 @@ class SMAPDataset:
                     file_extension = 'tiff'
                     gdal_args.update(TIFF_CREATION_OPTIONS)
 
-                output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
+                output_filename = output_dir / f'{filename_prefix}_{variable}.{file_extension}'
 
                 # use rasterio to write to raster with GDAL args
                 LOGGER.info(f'Writing to {output_filename}')
@@ -211,7 +218,7 @@ class SMAPDataset:
 
 
 if __name__ == '__main__':
-    output_dir = os.path.join(DATA_DIRECTORY, r'output\test')
+    output_dir = DATA_DIRECTORY / 'output' / 'test'
 
     smap_dataset = SMAPDataset()
     smap_dataset.write_rasters(output_dir, datetime(2018, 12, 1))

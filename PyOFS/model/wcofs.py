@@ -10,6 +10,8 @@ Created on Jun 25, 2018
 from concurrent import futures
 from datetime import date, datetime, timedelta
 import os
+from os import PathLike
+from pathlib import Path
 import threading
 from typing import Collection
 
@@ -51,14 +53,14 @@ DATA_VARIABLES = {
 WCOFS_MODEL_HOURS = {'n': -24, 'f': 72}
 WCOFS_MODEL_RUN_HOUR = 3
 
-STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIRECTORY, 'reference', 'wcofs.gpkg:study_area')
-WCOFS_4KM_GRID_FILENAME = os.path.join(DATA_DIRECTORY, 'reference', 'wcofs_4km_grid.nc')
-WCOFS_2KM_GRID_FILENAME = os.path.join(DATA_DIRECTORY, 'reference', 'wcofs_2km_grid.nc')
+STUDY_AREA_POLYGON_FILENAME = DATA_DIRECTORY / 'reference' / 'wcofs.gpkg:study_area'
+WCOFS_4KM_GRID_FILENAME = DATA_DIRECTORY / 'reference' / 'wcofs_4km_grid.nc'
+WCOFS_2KM_GRID_FILENAME = DATA_DIRECTORY / 'reference', 'wcofs_2km_grid.nc'
 VALID_SOURCE_STRINGS = ['stations', 'fields', 'avg', '2ds']
 
 GLOBAL_LOCK = threading.Lock()
 
-SOURCE_URLS = ['http://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS', os.path.join(DATA_DIRECTORY, 'input/wcofs/avg')]
+SOURCE_URLS = ['http://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS', DATA_DIRECTORY / 'input' / 'wcofs' / 'avg']
 
 
 class WCOFSDataset:
@@ -74,9 +76,8 @@ class WCOFSDataset:
     masks = None
     angle = None
 
-    def __init__(self, model_date: datetime = None, source: str = None, time_deltas: list = None, x_size: float = None, y_size: float = None, grid_filename: str = None,
-                 source_url: str = None,
-                 wcofs_string: str = 'wcofs', use_defaults: bool = True):
+    def __init__(self, model_date: datetime = None, source: str = None, time_deltas: list = None, x_size: float = None, y_size: float = None, grid_filename: PathLike = None,
+                 source_url: str = None, wcofs_string: str = 'wcofs', use_defaults: bool = True):
         """
         Creates new observation object from datetime and given model parameters.
 
@@ -95,6 +96,9 @@ class WCOFSDataset:
 
         if model_date is None:
             model_date = datetime.now()
+
+        if not isinstance(grid_filename, Path):
+            grid_filename = Path(grid_filename)
 
         # set start time to WCOFS model run time (0300 UTC)
         if type(model_date) is date:
@@ -358,8 +362,8 @@ class WCOFSDataset:
 
         return variable_data
 
-    def write_rasters(self, output_dir: str, variables: Collection[str] = None, filename_suffix: str = None, time_deltas: list = None, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
-                      x_size: float = 0.04, y_size: float = 0.04, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff'):
+    def write_rasters(self, output_dir: PathLike, variables: Collection[str] = None, filename_suffix: str = None, time_deltas: list = None,
+                      study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME, x_size: float = 0.04, y_size: float = 0.04, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff'):
         """
         Write averaged raster data of given variables to given output directory.
 
@@ -373,6 +377,12 @@ class WCOFSDataset:
         :param fill_value: desired fill value of output
         :param driver: strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
         """
+
+        if not isinstance(output_dir, Path):
+            output_dir = Path(output_dir)
+
+        if not isinstance(study_area_polygon_filename, Path):
+            study_area_polygon_filename = Path(study_area_polygon_filename)
 
         start_time = datetime.now()
 
@@ -556,9 +566,9 @@ class WCOFSDataset:
                 file_extension = 'tiff'
                 gdal_args.update(TIFF_CREATION_OPTIONS)
 
-            output_filename = os.path.join(output_dir, f'wcofs_{variable}_{self.model_time:%Y%m%d}{filename_suffix}.{file_extension}')
+            output_filename = output_dir / f'wcofs_{variable}_{self.model_time:%Y%m%d}{filename_suffix}.{file_extension}'
 
-            if os.path.isfile(output_filename):
+            if output_filename.exists():
                 os.remove(output_filename)
 
             LOGGER.info(f'Writing to {output_filename}')
@@ -568,7 +578,7 @@ class WCOFSDataset:
                     output_raster.build_overviews(PyOFS.overview_levels(masked_data.shape), Resampling['average'])
                     output_raster.update_tags(ns='rio_overview', resampling='average')
 
-    def write_vector(self, output_filename: str, layer_name: str = None, time_deltas: list = None):
+    def write_vector(self, output_filename: PathLike, layer_name: str = None, time_deltas: list = None):
         """
         Write average of surface velocity vector data for all hours in the given time interval to the provided output file.
 
@@ -576,6 +586,9 @@ class WCOFSDataset:
         :param layer_name: name of layer to write
         :param time_deltas: integers of hours to use in average
         """
+
+        if not isinstance(output_filename, Path):
+            output_filename = Path(output_filename)
 
         variables = list(DATA_VARIABLES.keys())
 
@@ -743,7 +756,7 @@ class WCOFSRange:
     Range of WCOFS datasets.
     """
 
-    def __init__(self, start_time: datetime, end_time: datetime, source: str = None, time_deltas: list = None, x_size: float = None, y_size: float = None, grid_filename: str = None,
+    def __init__(self, start_time: datetime, end_time: datetime, source: str = None, time_deltas: list = None, x_size: float = None, y_size: float = None, grid_filename: PathLike = None,
                  source_url: str = None, wcofs_string: str = 'wcofs'):
         """
         Create range of WCOFS datasets from the given time interval.
@@ -764,6 +777,9 @@ class WCOFSRange:
             source = 'avg'
         elif source not in VALID_SOURCE_STRINGS:
             raise ValueError(f'Location must be one of {VALID_SOURCE_STRINGS}')
+
+        if not isinstance(grid_filename, Path):
+            grid_filename = Path(grid_filename)
 
         self.source = source
         self.time_deltas = time_deltas
@@ -1012,8 +1028,8 @@ class WCOFSRange:
             del running_futures
         return output_data
 
-    def write_rasters(self, output_dir: str, variables: Collection[str] = None, filename_suffix: str = None, start_time: datetime = None, end_time: datetime = None,
-                      study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, x_size: float = 0.04, y_size: float = 0.04, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff'):
+    def write_rasters(self, output_dir: PathLike, variables: Collection[str] = None, filename_suffix: str = None, start_time: datetime = None, end_time: datetime = None,
+                      study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME, x_size: float = 0.04, y_size: float = 0.04, fill_value=LEAFLET_NODATA_VALUE, driver: str = 'GTiff'):
         """
         Write raster data of given variables to given output directory, averaged over given time interval.
 
@@ -1029,8 +1045,14 @@ class WCOFSRange:
         :param driver: string of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
         """
 
+        if not isinstance(output_dir, Path):
+            output_dir = Path(output_dir)
+
         if variables is None:
             variables = list(DATA_VARIABLES.keys())
+
+        if not isinstance(study_area_polygon_filename, Path):
+            study_area_polygon_filename = Path(study_area_polygon_filename)
 
         study_area_geojson = utilities.get_first_record(study_area_polygon_filename)['geometry']
 
@@ -1212,9 +1234,9 @@ class WCOFSRange:
                         file_extension = 'tiff'
                         gdal_args.update(TIFF_CREATION_OPTIONS)
 
-                    output_filename = os.path.join(output_dir, f'wcofs_{variable}_{model_string}{filename_suffix}.{file_extension}')
+                    output_filename = output_dir / f'wcofs_{variable}_{model_string}{filename_suffix}.{file_extension}'
 
-                    if os.path.isfile(output_filename):
+                    if output_filename.exists():
                         os.remove(output_filename)
 
                     LOGGER.info(f'Writing to {output_filename}')
@@ -1224,7 +1246,7 @@ class WCOFSRange:
                             output_raster.build_overviews(PyOFS.overview_levels(masked_data.shape), Resampling['average'])
                             output_raster.update_tags(ns='rio_overview', resampling='average')
 
-    def write_vector(self, output_filename: str, variables: Collection[str] = None, start_time: datetime = None, end_time: datetime = None):
+    def write_vector(self, output_filename: PathLike, variables: Collection[str] = None, start_time: datetime = None, end_time: datetime = None):
         """
         Write average of surface velocity vector data for all hours in the given time interval to a single layer of the provided output file.
 
@@ -1233,6 +1255,9 @@ class WCOFSRange:
         :param start_time: beginning of time interval
         :param end_time: end of time interval
         """
+
+        if not isinstance(output_filename, Path):
+            output_filename = Path(output_filename)
 
         if variables is None:
             variables = list(DATA_VARIABLES.keys())
@@ -1438,7 +1463,7 @@ def reset_dataset_grid():
     WCOFSDataset.angle = None
 
 
-def write_convex_hull(netcdf_dataset: xarray.Dataset, output_filename: str, grid_name: str = 'psi'):
+def write_convex_hull(netcdf_dataset: xarray.Dataset, output_filename: PathLike, grid_name: str = 'psi'):
     """
     Extract the convex hull from the coordinate values of the given WCOFS NetCDF observation, and write it to a file.
 
@@ -1447,10 +1472,10 @@ def write_convex_hull(netcdf_dataset: xarray.Dataset, output_filename: str, grid
     :param grid_name: name of grid. One of ('psi', 'rho', 'u', 'v')
     """
 
-    output_filename, layer_name = output_filename.rsplit(':', 1)
+    if not isinstance(output_filename, Path):
+        output_filename = Path(output_filename)
 
-    if layer_name == '':
-        layer_name = None
+    output_filename, layer_name = PyOFS.split_layer_filename(output_filename)
 
     points = []
 
@@ -1483,44 +1508,14 @@ def write_convex_hull(netcdf_dataset: xarray.Dataset, output_filename: str, grid
         vector_file.write({'properties': {'name': layer_name}, 'geometry': shapely.geometry.mapping(polygon)})
 
 
-def rotate_coordinates_to_wcofs(point: numpy.array, pole: numpy.array, regrid: bool = False) -> tuple:
-    """
-    Regular 2D arrays of "local" coordinates x and y of WCOFS, which is a spherical grid in rotated coordinates with the pole at phi0, theta0
-    x increases along the local latitude
-    y increases in the direction opposite to local longitude
-
-    :param point: input coordinates
-    :param pole: rotated pole location
-    :param regrid: regularize x and y using meshgrid to eliminate roundup errors and make x and y suitable to interp2
-    :return: index in WCOFS grid
-    """
-
-    phi, theta = utilities.rotate_coordinates(point, pole)
-
-    if regrid:
-        eta, xi = numpy.meshgrid(-phi[1, :], theta[:, 1])
-    else:
-        eta = -phi
-        xi = theta
-
-    return xi, eta
-
-
-def rotate_coordinates_from_wcofs(point: numpy.array, pole: numpy.array) -> tuple:
-    """
-    Get coordinates from WCOFS indices
-
-    :param point: rotated coordinates
-    :param pole: rotated pole location
-    :return: longitude / latitude coordinates
-    """
-
-    point = numpy.array((-point[0], point[1]))
-    return utilities.unrotate_coordinates(point, pole)
-
+"""
+Regular 2D arrays of "local" coordinates x and y of WCOFS, which is a spherical grid in rotated coordinates with the pole at phi0, theta0
+x increases along the local latitude
+y increases in the direction opposite to local longitude
+"""
 
 if __name__ == '__main__':
-    output_dir = os.path.join(DATA_DIRECTORY, r'output\test')
+    output_dir = DATA_DIRECTORY / 'output' / 'test'
 
     start_time = datetime(2018, 11, 8)
     end_time = start_time + timedelta(days=1)

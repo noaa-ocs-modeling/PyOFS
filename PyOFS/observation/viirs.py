@@ -13,6 +13,8 @@ from datetime import datetime, timedelta
 import ftplib
 import math
 import os
+from os import PathLike
+from pathlib import Path
 from typing import Collection
 
 import fiona.crs
@@ -34,8 +36,8 @@ LOGGER = get_logger('PyOFS.VIIRS')
 VIIRS_START_TIME = datetime.strptime('2012-03-01 00:10:00', '%Y-%m-%d %H:%M:%S')
 VIIRS_PERIOD = timedelta(days=16)
 
-PASS_TIMES_FILENAME = os.path.join(DATA_DIRECTORY, r"reference\viirs_pass_times.txt")
-STUDY_AREA_POLYGON_FILENAME = os.path.join(DATA_DIRECTORY, r"reference\wcofs.gpkg:study_area")
+PASS_TIMES_FILENAME = DATA_DIRECTORY / 'reference' / 'viirs_pass_times.txt'
+STUDY_AREA_POLYGON_FILENAME = DATA_DIRECTORY, 'reference' / 'wcofs.gpkg:study_area'
 
 OUTPUT_CRS = fiona.crs.from_epsg(CRS_EPSG)
 
@@ -61,7 +63,7 @@ class VIIRSDataset:
     study_area_bounds = None
     study_area_coordinates = None
 
-    def __init__(self, data_time: datetime = None, satellite: str = 'NPP', study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, algorithm: str = 'OSPO', version: str = None):
+    def __init__(self, data_time: datetime = None, satellite: str = 'NPP', study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME, algorithm: str = 'OSPO', version: str = None):
         """
         Retrieve VIIRS NetCDF observation from NOAA with given datetime.
 
@@ -72,6 +74,9 @@ class VIIRSDataset:
         :param version: ACSPO algorithm version
         :raises NoDataError: if observation does not exist
         """
+
+        if not isinstance(study_area_polygon_filename, Path):
+            study_area_polygon_filename = Path(study_area_polygon_filename)
 
         if data_time is None:
             data_time = datetime.now()
@@ -151,14 +156,14 @@ class VIIRSDataset:
                     with ftplib.FTP(host_url) as ftp_connection:
                         ftp_connection.login()
 
-                        output_dir = os.path.join(DATA_DIRECTORY, 'input', 'viirs')
+                        output_dir = DATA_DIRECTORY / 'input' / 'viirs'
 
-                        if not os.path.exists(output_dir):
+                        if not output_dir.exists():
                             os.makedirs(output_dir, exist_ok=True)
 
-                        output_filename = os.path.join(output_dir, f'viirs_{self.data_time:%Y%m%dT%H%M}.nc')
+                        output_filename = output_dir / f'viirs_{self.data_time:%Y%m%dT%H%M}.nc'
 
-                        if os.path.exists(output_filename):
+                        if output_filename.exists():
                             os.remove(output_filename)
 
                         try:
@@ -305,7 +310,7 @@ class VIIRSDataset:
 
         return sses_data
 
-    def write_rasters(self, output_dir: str, variables: Collection[str] = ('sst', 'sses'), filename_prefix: str = 'viirs', fill_value: float = LEAFLET_NODATA_VALUE, driver: str = 'GTiff',
+    def write_rasters(self, output_dir: PathLike, variables: Collection[str] = ('sst', 'sses'), filename_prefix: str = 'viirs', fill_value: float = LEAFLET_NODATA_VALUE, driver: str = 'GTiff',
                       correct_sses: bool = False):
         """
         Write VIIRS rasters to file using data from given variables.
@@ -317,6 +322,9 @@ class VIIRSDataset:
         :param driver: strings of valid GDAL driver (currently one of 'GTiff', 'GPKG', or 'AAIGrid')
         :param correct_sses: whether to subtract SSES bias from SST
         """
+
+        if not isinstance(output_dir, Path):
+            output_dir = Path(output_dir)
 
         for variable in variables:
             input_data = self.data(variable, correct_sses)
@@ -347,7 +355,7 @@ class VIIRSDataset:
                     file_extension = 'tiff'
                     gdal_args.update(TIFF_CREATION_OPTIONS)
 
-                output_filename = os.path.join(output_dir, f'{filename_prefix}_{variable}.{file_extension}')
+                output_filename = output_dir / f'{filename_prefix}_{variable}.{file_extension}'
 
                 # use rasterio to write to raster with GDAL args
                 LOGGER.info(f'Writing to {output_filename}')
@@ -381,8 +389,8 @@ class VIIRSRange:
     study_area_transform = None
     study_area_index_bounds = None
 
-    def __init__(self, start_time: datetime, end_time: datetime, satellites: list = ('NPP', 'N20'), study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME,
-                 pass_times_filename: str = PASS_TIMES_FILENAME, algorithm: str = 'OSPO', version: str = None):
+    def __init__(self, start_time: datetime, end_time: datetime, satellites: list = ('NPP', 'N20'), study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME,
+                 pass_times_filename: PathLike = PASS_TIMES_FILENAME, algorithm: str = 'OSPO', version: str = None):
         """
         Collect VIIRS datasets within time interval.
 
@@ -395,6 +403,12 @@ class VIIRSRange:
         :param version: ACSPO algorithm version
         :raises NoDataError: if data does not exist
         """
+
+        if not isinstance(study_area_polygon_filename, Path):
+            study_area_polygon_filename = Path(study_area_polygon_filename)
+
+        if not isinstance(pass_times_filename, Path):
+            pass_times_filename = Path(pass_times_filename)
 
         self.start_time = start_time
         if end_time > datetime.utcnow():
@@ -522,7 +536,8 @@ class VIIRSRange:
 
         return variables_data
 
-    def write_rasters(self, output_dir: str, variables: Collection[str] = ('sst', 'sses'), filename_prefix: str = 'viirs', fill_value: float = None, driver: str = 'GTiff', correct_sses: bool = False,
+    def write_rasters(self, output_dir: PathLike, variables: Collection[str] = ('sst', 'sses'), filename_prefix: str = 'viirs', fill_value: float = None, driver: str = 'GTiff',
+                      correct_sses: bool = False,
                       satellite: str = None):
         """
         Write individual VIIRS rasters to directory.
@@ -536,6 +551,9 @@ class VIIRSRange:
         :param satellite: VIIRS platform to retrieve; if not specified, will average from both satellites
         """
 
+        if not isinstance(output_dir, Path):
+            output_dir = Path(output_dir)
+
         # write a raster for each pass retrieved scene
         with futures.ThreadPoolExecutor() as concurrency_pool:
             for dataset_time, current_satellite in self.datasets.items():
@@ -545,7 +563,7 @@ class VIIRSRange:
                     concurrency_pool.submit(dataset.write_rasters, output_dir, variables=variables, filename_prefix=f'{filename_prefix}_{dataset_time:%Y%m%d%H%M%S}', fill_value=fill_value,
                                             drivers=driver, correct_sses=correct_sses)
 
-    def write_raster(self, output_dir: str, filename_prefix: str = None, filename_suffix: str = None, start_time: datetime = None, end_time: datetime = None, average: bool = False,
+    def write_raster(self, output_dir: PathLike, filename_prefix: str = None, filename_suffix: str = None, start_time: datetime = None, end_time: datetime = None, average: bool = False,
                      fill_value: float = LEAFLET_NODATA_VALUE, driver: str = 'GTiff', correct_sses: bool = False, variables: Collection[str] = tuple(['sst']), satellite: str = None):
 
         """
@@ -563,6 +581,9 @@ class VIIRSRange:
         :param variables: variables to write (either 'sst' or 'sses')
         :param satellite: VIIRS platform to retrieve; if not specified, will average from both satellites
         """
+
+        if not isinstance(output_dir, Path):
+            output_dir = Path(output_dir)
 
         if start_time is None:
             start_time = self.start_time
@@ -618,7 +639,7 @@ class VIIRSRange:
                 else:
                     current_filename_suffix = filename_suffix
 
-                output_filename = os.path.join(output_dir, f'{current_filename_prefix}_{current_filename_suffix}.{file_extension}')
+                output_filename = output_dir / f'{current_filename_prefix}_{current_filename_suffix}.{file_extension}'
 
                 LOGGER.info(f'Writing {output_filename}')
                 with rasterio.open(output_filename, 'w', driver, **gdal_args) as output_raster:
@@ -691,7 +712,7 @@ class VIIRSRange:
         return f'{self.__class__.__name__}({", ".join(used_params)})'
 
 
-def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = STUDY_AREA_POLYGON_FILENAME, start_time: datetime = VIIRS_START_TIME, output_filename: str = PASS_TIMES_FILENAME,
+def store_viirs_pass_times(satellite: str, study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME, start_time: datetime = VIIRS_START_TIME, output_filename: str = PASS_TIMES_FILENAME,
                            num_periods: int = 1, algorithm: str = 'STAR', version: str = '2.40'):
     """
     Compute VIIRS pass times from the given start date along the number of periods specified.
@@ -704,6 +725,9 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
     :param algorithm: either 'STAR' or 'OSPO'
     :param version: ACSPO Version number (2.40 - 2.41)
     """
+
+    if not isinstance(study_area_polygon_filename, Path):
+        study_area_polygon_filename = Path(study_area_polygon_filename)
 
     start_time = PyOFS.round_to_ten_minutes(start_time)
     end_time = PyOFS.round_to_ten_minutes(start_time + (VIIRS_PERIOD * num_periods))
@@ -756,7 +780,7 @@ def store_viirs_pass_times(satellite: str, study_area_polygon_filename: str = ST
         LOGGER.info('Wrote data to file')
 
 
-def get_pass_times(start_time: datetime, end_time: datetime, pass_times_filename: str = PASS_TIMES_FILENAME):
+def get_pass_times(start_time: datetime, end_time: datetime, pass_times_filename: PathLike = PASS_TIMES_FILENAME):
     """
     Retreive array of datetimes of VIIRS passes within the given time interval, given initial period durations.
 
@@ -765,6 +789,9 @@ def get_pass_times(start_time: datetime, end_time: datetime, pass_times_filename
     :param pass_times_filename: filename of text file with durations of first VIIRS period
     :return:
     """
+
+    if not isinstance(pass_times_filename, Path):
+        pass_times_filename = Path(pass_times_filename)
 
     # get datetime of first pass in given file
     first_pass_row = numpy.genfromtxt(pass_times_filename, dtype=str, delimiter=',')[0, :]
@@ -801,7 +828,7 @@ def get_pass_times(start_time: datetime, end_time: datetime, pass_times_filename
 
 
 if __name__ == '__main__':
-    output_dir = os.path.join(DATA_DIRECTORY, r'output\test')
+    output_dir = DATA_DIRECTORY / 'output' / 'test'
 
     start_time = datetime.utcnow() - timedelta(days=1)
     end_time = start_time + timedelta(days=1)

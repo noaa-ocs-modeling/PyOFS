@@ -8,16 +8,13 @@ Created on Feb 27, 2019
 """
 
 from datetime import datetime, timedelta
-import os
-import sys
+from pathlib import Path
 
 import fiona
 from matplotlib import pyplot
 import numpy
 import pandas
 from shapely import geometry
-
-sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir))
 
 from PyOFS import get_logger, DATA_DIRECTORY
 
@@ -42,7 +39,7 @@ if __name__ == '__main__':
 
     register_matplotlib_converters()
 
-    plot_dir = r"R:\documents\plots"
+    plot_dir = Path(r"R:\documents\plots")
     contour_starting_radius = 50000
 
     # velocity_products = ['hourly_modeled', 'hourly_geostrophic', 'daily_modeled']
@@ -62,7 +59,7 @@ if __name__ == '__main__':
         time_delta = timedelta(hours=1) if 'hourly' in velocity_product else timedelta(days=1)
         source = 'wcofs_qck' if 'modeled' in velocity_product else 'wcofs_qck_geostrophic'
 
-        input_path = os.path.join(DATA_DIRECTORY, 'output', 'test', 'contours.gpkg')
+        input_path = DATA_DIRECTORY / 'output' / 'test' / 'contours.gpkg'
         layer_name = f'{source}_{start_time:%Y%m%dT%H%M%S}_{(start_time + period):"%Y%m%dT%H%M%S"}_{int(time_delta / timedelta(hours=1))}h'
 
         LOGGER.info(f'[{datetime.now()}]: Reading {input_path}...')
@@ -120,7 +117,7 @@ if __name__ == '__main__':
     #         pyplot.xticks(rotation=-45, ha='left', rotation_mode='anchor')
     #         pyplot.tight_layout()
     #
-    #         figure.savefig(os.path.join(plot_dir, plotting_value,#                                     f'{plotting_value}_{contour_name}.pdf'),#                        orientation='landscape', papertype='A4')
+    #         figure.savefig(plot_dir / plotting_value / f'{plotting_value}_{contour_name}.pdf', orientation='landscape', papertype='A4')
     #
     #         # pyplot.show()
     #         pyplot.clf()
@@ -158,7 +155,7 @@ if __name__ == '__main__':
 
             axis.axhline(y=1 if plot_percentages else starting_value, linestyle=':', color='k', zorder=0)
 
-            figure.savefig(os.path.join(plot_dir, f'{velocity_product}_{plotting_value}.pdf'), orientation='landscape', papertype='A4')
+            figure.savefig(plot_dir / f'{velocity_product}_{plotting_value}.pdf', orientation='landscape', papertype='A4')
 
     pyplot.show()
     print('done')
