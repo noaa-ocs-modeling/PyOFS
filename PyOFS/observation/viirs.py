@@ -101,7 +101,7 @@ class VIIRSDataset:
 
         self.url = None
 
-        month_dir = f'{self.data_time.year}/{self.data_time.timetuple().tm_yday:03}'
+        day_dir = f'{self.data_time.year}/{self.data_time.timetuple().tm_yday:03}'
         filename = f'{self.data_time:%Y%m%d%H%M%S}-{self.algorithm}-L3U_GHRSST-SSTsubskin-VIIRS_{self.satellite.upper()}-ACSPO_V{self.version}-v02.0-fv01.0.nc'
 
         # TODO N20 does not yet have a reanalysis archive on NESDIS (as of March 8th, 2019)
@@ -113,14 +113,14 @@ class VIIRSDataset:
 
             if self.near_real_time:
                 if source == 'NESDIS':
-                    url = f'{source_url}/grid{self.satellite.upper()}VIIRSNRTL3UWW00/{month_dir}/{filename}'
+                    url = f'{source_url}/grid{self.satellite.upper()}VIIRSNRTL3UWW00/{day_dir}/{filename}'
                 elif source == 'JPL':
-                    url = f'{source_url}/VIIRS_{self.satellite.upper()}/{algorithm}/v{self.version}/{month_dir}/{filename}'
+                    url = f'{source_url}/VIIRS_{self.satellite.upper()}/{algorithm}/v{self.version}/{day_dir}/{filename}'
                 elif source in 'NODC':
-                    url = f'{source_url}/VIIRS_{self.satellite.upper()}/{algorithm}/{month_dir}/{filename}'
+                    url = f'{source_url}/VIIRS_{self.satellite.upper()}/{algorithm}/{day_dir}/{filename}'
             else:
                 if source == 'NESDIS':
-                    url = f'{source_url}/grid{"" if self.near_real_time else "S"}{self.satellite.upper()}VIIRSSCIENCEL3UWW00/{month_dir}/{filename}'
+                    url = f'{source_url}/grid{"" if self.near_real_time else "S"}{self.satellite.upper()}VIIRSSCIENCEL3UWW00/{day_dir}/{filename}'
                 else:
                     LOGGER.warning(f'{source} does not contain a reanalysis archive')
 
@@ -141,9 +141,9 @@ class VIIRSDataset:
 
                 if source == 'NESDIS':
                     if self.near_real_time:
-                        ftp_path = f'/{ftp_input_dir}/nrt/viirs/{self.satellite.lower()}/l3u/{month_dir}/{filename}'
+                        ftp_path = f'/{ftp_input_dir}/nrt/viirs/{self.satellite.lower()}/l3u/{day_dir}/{filename}'
                     else:
-                        ftp_path = f'/{ftp_input_dir}/ran/viirs/{"S" if self.satellite.upper() == "NPP" else ""}{self.satellite.lower()}/l3u/{month_dir}/{filename}'
+                        ftp_path = f'/{ftp_input_dir}/ran/viirs/{"S" if self.satellite.upper() == "NPP" else ""}{self.satellite.lower()}/l3u/{day_dir}/{filename}'
 
                     url = f'{host_url}/{ftp_path.lstrip("/")}'
 

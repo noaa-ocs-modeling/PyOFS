@@ -16,7 +16,7 @@ else:
 LEAFLET_NODATA_VALUE = -9999.0
 
 # # for development branch
-# DATA_DIRECTORY = os.path.join(DATA_DIRECTORY, 'develop')
+DATA_DIRECTORY = os.path.join(DATA_DIRECTORY, 'develop')
 
 # using relative values with the PREDICTOR option will break rendering in Leaflet.CanvasLayer.Field
 TIFF_CREATION_OPTIONS = {
