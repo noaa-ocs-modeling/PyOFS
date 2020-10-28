@@ -546,13 +546,13 @@ if __name__ == '__main__':
 
     upload_to_azure(
         files_json_filename,
-        f'{azure_blob_url}/reference/files.json',
+        f'{azure_blob_url}/data/reference/files.json',
         credentials,
         overwrite=True,
         azcopy_path=azcopy_path,
     )
     sync_with_azure(
-        OUTPUT_DIRECTORY, f'{azure_blob_url}/output', credentials, azcopy_path=azcopy_path
+        OUTPUT_DIRECTORY, f'{azure_blob_url}/data/output', credentials, azcopy_path=azcopy_path
     )
 
     LOGGER.info(

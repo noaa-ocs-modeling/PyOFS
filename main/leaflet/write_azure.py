@@ -73,14 +73,14 @@ if __name__ == '__main__':
 
     upload_to_azure(
         local_data_path / 'reference' / 'files.json',
-        f'{azure_blob_url}/reference/files.json',
+        f'{azure_blob_url}/data/reference/files.json',
         credentials,
         overwrite=True,
         azcopy_path=azcopy_path,
     )
     sync_with_azure(
         local_data_path / 'output',
-        f'{azure_blob_url}/output',
+        f'{azure_blob_url}/data/output',
         credentials,
         azcopy_path=azcopy_path,
     )
