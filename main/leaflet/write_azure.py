@@ -62,7 +62,7 @@ def sync_with_azure(
 
 
 if __name__ == '__main__':
-    local_data_path = Path(r'D:\data')
+    local_data_path = Path(r'D:\data\OFS')
     azcopy_path = Path(r'C:\Working\azcopy.exe')
     azure_credentials_filename = Path(r'D:\data\azure_credentials.txt')
 
