@@ -1,4 +1,6 @@
 import os
+from os import PathLike
+from pathlib import Path
 
 from PyOFS import get_logger
 
@@ -6,18 +8,22 @@ LOGGER = get_logger('PyOFS.azure')
 
 
 def upload_to_azure(
-    local_path: str,
-    remote_path: str,
+    local_path: PathLike,
+    remote_path: PathLike,
     credentials: str,
     overwrite: bool = False,
-    azcopy_path: str = None,
+    azcopy_path: PathLike = None,
     **kwargs,
 ):
+    if not isinstance(azcopy_path, Path):
+        azcopy_path = Path(azcopy_path)
+
     LOGGER.info(f'Uploading {local_path} to {remote_path}')
 
     os.environ['AZCOPY_CRED_TYPE'] = 'Anonymous'
     if azcopy_path is not None:
-        azcopy_dir, azcopy_filename = os.path.split(azcopy_path)
+        azcopy_dir = azcopy_path.parent
+        azcopy_filename = azcopy_path.name
         os.chdir(azcopy_dir)
     else:
         azcopy_filename = 'azcopy.exe'
@@ -30,13 +36,21 @@ def upload_to_azure(
 
 
 def sync_with_azure(
-    local_path: str, remote_path: str, credentials: str, azcopy_path: str = None, **kwargs
+    local_path: PathLike,
+    remote_path: PathLike,
+    credentials: str,
+    azcopy_path: PathLike = None,
+    **kwargs,
 ):
+    if not isinstance(azcopy_path, Path):
+        azcopy_path = Path(azcopy_path)
+
     LOGGER.info(f'Synchronizing {local_path} with {remote_path}')
 
     os.environ['AZCOPY_CRED_TYPE'] = 'Anonymous'
     if azcopy_path is not None:
-        azcopy_dir, azcopy_filename = os.path.split(azcopy_path)
+        azcopy_dir = azcopy_path.parent
+        azcopy_filename = azcopy_path.name
         os.chdir(azcopy_dir)
     else:
         azcopy_filename = 'azcopy.exe'
@@ -48,10 +62,11 @@ def sync_with_azure(
 
 
 if __name__ == '__main__':
-    local_data_path = r'D:\data'
-    azcopy_path = r'C:\Working\azcopy.exe'
+    local_data_path = Path(r'D:\data')
+    azcopy_path = Path(r'C:\Working\azcopy.exe')
+    azure_credentials_filename = Path(r'D:\data\azure_credentials.txt')
 
-    with open(r'D:\data\azure_credentials.txt') as credentials_file:
+    with open(azure_credentials_filename) as credentials_file:
         azure_blob_url, credentials = (
             line.strip('\n') for line in credentials_file.readlines()
         )
