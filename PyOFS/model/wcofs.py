@@ -121,7 +121,7 @@ class WCOFSDataset:
         if model_date is None:
             model_date = datetime.now()
 
-        if not isinstance(grid_filename, Path):
+        if grid_filename is not None and not isinstance(grid_filename, Path):
             grid_filename = Path(grid_filename)
 
         # set start time to WCOFS model run time (0300 UTC)
