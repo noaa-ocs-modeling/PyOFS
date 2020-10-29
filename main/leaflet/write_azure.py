@@ -80,7 +80,7 @@ if __name__ == '__main__':
     )
     sync_with_azure(
         local_data_path / 'output',
-        f'{azure_blob_url}/data/output',
+        f'{azure_blob_url}/data/output/*',
         credentials,
         azcopy_path=azcopy_path,
     )
