@@ -553,7 +553,7 @@ if __name__ == '__main__':
     )
     sync_with_azure(
         OUTPUT_DIRECTORY,
-        f'{azure_blob_url}/data/output/*',
+        f'{azure_blob_url}/data/output',
         credentials,
         azcopy_path=azcopy_path,
     )
