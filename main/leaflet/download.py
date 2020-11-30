@@ -7,7 +7,7 @@ import sys
 
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from PyOFS import DATA_DIRECTORY, get_logger
+from PyOFS import DATA_DIRECTORY, get_logger, range_daily
 
 TIDEPOOL_URL = '137.75.111.166'
 INPUT_DIRECTORY = '/pub/outgoing/CSDL'
@@ -38,9 +38,9 @@ if __name__ == '__main__':
     mod_dir = wcofs_dir / 'mod'
     # experimental_dir = wcofs_dir / 'exp' / f'{datetime.now():%Y%m}'
 
-    month_directories = {
-        month_string: avg_dir / month_string
-        for month_string in (f'{month:%Y%m}' for month in previous_months(6))
+    day_directories = {
+        day: avg_dir / f'{day:%Y/%m/%d}'
+        for day in range_daily(datetime.now(), datetime.now() - timedelta(days=30))
     }
 
     # create folders if they do not exist
@@ -54,7 +54,7 @@ if __name__ == '__main__':
                          obs_dir,
                          mod_dir,
                      ] + list(
-        month_directories.values()
+        day_directories.values()
     ):  # experimental_dir]:
         if not directory.exists():
             os.makedirs(directory, exist_ok=True)
@@ -93,9 +93,9 @@ if __name__ == '__main__':
                 elif 'mod' in filename:
                     output_path = mod_dir / filename
                 else:
-                    for month_string, month_directory in month_directories.items():
-                        if month_string in filename:
-                            output_path = month_directory / filename
+                    for day, day_directory in day_directories.items():
+                        if f'{day:%Y%m%d}' in filename:
+                            output_path = day_directory / filename
                             break
                     else:
                         output_path = avg_dir / filename

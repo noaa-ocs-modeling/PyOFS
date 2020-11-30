@@ -517,7 +517,7 @@ if __name__ == '__main__':
 
     # from PyOFS import range_daily
     #
-    # model_run_dates = range_daily(datetime.today(), datetime(2020, 6, 19))
+    # model_run_dates = range_daily(datetime(2020,11,27), datetime(2020, 11, 17))
     # for model_run_date in model_run_dates:
     #     LOGGER.info(f'Starting file conversion for {model_run_date:%Y%m%d}')
     #     write_observations(OUTPUT_DIRECTORY, model_run_date, day_deltas)

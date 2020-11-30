@@ -72,7 +72,8 @@ VALID_SOURCE_STRINGS = ['stations', 'fields', 'avg', '2ds']
 GLOBAL_LOCK = threading.Lock()
 
 SOURCE_URLS = [
-    'http://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS',
+    'https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS',
+    'https://opendap.co-ops.nos.noaa.gov/threddsdev/dodsC/NOAA/WCOFS/MODELS',
     DATA_DIRECTORY / 'input' / 'wcofs' / 'avg',
 ]
 
@@ -160,7 +161,9 @@ class WCOFSDataset:
         self.grid_filename = grid_filename
         self.wcofs_string = wcofs_string
 
-        month_string = f'{self.model_time:%Y%m}'
+        year_string = f'{self.model_time:%Y}'
+        month_string = f'{self.model_time:%m}'
+        day_string = f'{self.model_time:%d}'
         date_string = f'{self.model_time:%Y%m%d}'
 
         self.datasets = {}
@@ -182,7 +185,7 @@ class WCOFSDataset:
                         continue
 
                     model_type = 'nowcast' if day < 0 else 'forecast'
-                    url = f'{source_url}/{month_string}/nos.{self.wcofs_string}.avg.{model_type}.{date_string}.t{WCOFS_MODEL_RUN_HOUR:02}z.nc'
+                    url = f'{source_url}/{year_string}/{month_string}/{day_string}/nos.{self.wcofs_string}.avg.{model_type}.{date_string}.t{WCOFS_MODEL_RUN_HOUR:02}z.nc'
 
                     try:
                         self.datasets[-1 if day < 0 else 1] = xarray.open_dataset(
@@ -195,7 +198,7 @@ class WCOFSDataset:
             else:
                 for hour in self.time_deltas:
                     model_type = 'n' if hour <= 0 else 'f'
-                    url = f'{source_url}/{month_string}/nos.{self.wcofs_string}.{self.source}.{model_type}{abs(hour):03}.{date_string}.t{WCOFS_MODEL_RUN_HOUR:02}z.nc'
+                    url = f'{source_url}/{year_string}/{month_string}/{day_string}/nos.{self.wcofs_string}.{self.source}.{model_type}{abs(hour):03}.{date_string}.t{WCOFS_MODEL_RUN_HOUR:02}z.nc'
 
                     try:
                         self.datasets[hour] = xarray.open_dataset(url, decode_times=False)
