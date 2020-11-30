@@ -78,7 +78,7 @@ if __name__ == '__main__':
         overwrite=True,
         azcopy_path=azcopy_path,
     )
-    upload_to_azure(
+    sync_with_azure(
         local_data_path / 'output',
         f'{azure_blob_url}/data/output',
         credentials,
