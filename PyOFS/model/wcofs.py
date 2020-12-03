@@ -538,7 +538,11 @@ class WCOFSDataset:
 
             for completed_future in futures.as_completed(running_futures):
                 variable = running_futures[completed_future]
-                result = completed_future.result()
+                try:
+                    result = completed_future.result()
+                except Exception as error:
+                    LOGGER.exception(error)
+                    result = None
 
                 if result is not None:
                     variable_means[variable] = result
