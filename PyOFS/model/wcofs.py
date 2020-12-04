@@ -360,13 +360,16 @@ class WCOFSDataset:
                     with self.dataset_locks[dataset_index]:
                         # get surface layer; the last layer (of 40) at dimension 1
                         if not native_grid and variable in ['ssu', 'ssv']:
+                            raw_u_variable = self.datasets[dataset_index][DATA_VARIABLES['ssu'][self.source]]
+                            raw_v_variable = self.datasets[dataset_index][DATA_VARIABLES['ssv'][self.source]]
+
+                            # retrieve and cache data values by explicitly calling `.values`; otherwise will raise `NetCDF: Access failure`
+                            raw_u_variable.values
+                            raw_v_variable.values
+
                             # correct for angles
-                            raw_u = self.datasets[dataset_index][
-                                        DATA_VARIABLES['ssu'][self.source]
-                                    ][day_index, -1, :-1, :].values
-                            raw_v = self.datasets[dataset_index][
-                                        DATA_VARIABLES['ssv'][self.source]
-                                    ][day_index, -1, :, :-1].values
+                            raw_u = raw_u_variable[day_index, -1, :-1, :].values
+                            raw_v = raw_v_variable[day_index, -1, :, :-1].values
                             theta = WCOFSDataset.angle[:-1, :-1]
 
                             if variable == 'ssu':
@@ -392,9 +395,11 @@ class WCOFSDataset:
                                     (output_data, extra_column), axis=1
                                 )
                         else:
-                            data_variable = self.datasets[dataset_index][
-                                DATA_VARIABLES[variable][self.source]
-                            ]
+                            data_variable = self.datasets[dataset_index][DATA_VARIABLES[variable][self.source]]
+
+                            # retrieve and cache data values by explicitly calling `.values`; otherwise will raise `NetCDF: Access failure`
+                            data_variable.values
+
                             if len(data_variable.shape) == 3:
                                 output_data = data_variable[day_index, :, :].values
                             if len(data_variable.shape) == 4:
