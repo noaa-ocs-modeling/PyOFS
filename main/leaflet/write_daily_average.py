@@ -312,7 +312,7 @@ def write_wcofs(
         if data_assimilation:
             wcofs_string = 'wcofs'
         else:
-            wcofs_string = 'wcofs-free'
+            wcofs_string = 'wcofs_free'
     else:
         grid_filename = wcofs.WCOFS_2KM_GRID_FILENAME
         wcofs_string = 'wcofs2'
