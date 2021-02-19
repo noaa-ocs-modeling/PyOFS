@@ -78,7 +78,8 @@ if __name__ == '__main__':
 
         path_map = {}
         for input_path in ftp_connection.nlst(INPUT_DIRECTORY):
-            filename = os.path.basename(input_path)
+            input_path = Path(input_path)
+            filename = input_path.name
 
             if 'rtofs' in filename:
                 output_path = rtofs_dir / filename
@@ -107,7 +108,7 @@ if __name__ == '__main__':
         sizes = {}
         for input_path in path_map:
             try:
-                size = ftp_connection.size(input_path)
+                size = ftp_connection.size(f'{input_path}')
                 sizes[size] = (input_path, path_map[input_path])
             except ftplib.error_perm:
                 pass
@@ -138,7 +139,7 @@ if __name__ == '__main__':
 
         logger.info(f'found {len(path_map)} files at FTP remote')
         for input_path, output_path in path_map.items():
-            filename = os.path.basename(input_path)
+            filename = input_path.name
 
             # filter for NetCDF and TAR archives
             if '.nc' in filename or '.tar' in filename:
