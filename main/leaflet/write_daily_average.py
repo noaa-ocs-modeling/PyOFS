@@ -67,7 +67,7 @@ def write_observation(
     day_noon = day_start + timedelta(hours=12)
     day_end = day_start + timedelta(days=1)
 
-    if observation is 'smap':
+    if observation == 'smap':
         monthly_dir = output_dir / 'monthly_averages'
 
         if not monthly_dir.exists():
