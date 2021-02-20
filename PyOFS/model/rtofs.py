@@ -358,7 +358,7 @@ class RTOFSDataset:
 
         # write interpolated grids to raster files
         for variable, variable_mean in variable_means.items():
-            if variable_mean is not None and len(variable_mean) > 0:
+            if variable_mean is not None and variable_mean.size > 0:
                 if crop:
                     transform = self.study_area_transform
                 else:
