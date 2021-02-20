@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 import sys
 
+from PyOFS.model.rtofs import extract_rtofs_tar
+
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from PyOFS import DATA_DIRECTORY, get_logger, range_daily
@@ -154,6 +156,8 @@ if __name__ == '__main__':
                                 f'Copied "{input_path}" to "{output_path}" ({(datetime.now() - current_start_time) / timedelta(seconds=1):.2f}s, {os.stat(output_path).st_size / 1000} KB)'
                             )
                             num_downloads += 1
+                            if 'rtofs' in output_path:
+                                extract_rtofs_tar(output_path, rtofs_dir / f'rtofs_global{output_path.stem.split(".")[1]}')
                         except Exception as error:
                             logger.exception(
                                 f'input path: {input_path}, {output_path}: {output_path}'
