@@ -70,19 +70,19 @@ def write_observation(
     if observation is 'smap':
         monthly_dir = output_dir / 'monthly_averages'
 
-        if not os.path.isdir(monthly_dir):
+        if not monthly_dir.exists():
             os.makedirs(monthly_dir, exist_ok=True)
 
         observation_dir = monthly_dir / f'{observation_date:%Y%m}'
     else:
         daily_dir = output_dir / 'daily_averages'
 
-        if not os.path.isdir(daily_dir):
+        if not daily_dir.exists():
             os.makedirs(daily_dir, exist_ok=True)
 
         observation_dir = daily_dir / f'{observation_date:%Y%m%d}'
 
-    if not os.path.isdir(observation_dir):
+    if not observation_dir.exists():
         os.makedirs(observation_dir, exist_ok=True)
 
     day_start_ndbc = day_start + timedelta(hours=2)
@@ -186,7 +186,7 @@ def write_rtofs(
 
     for day_delta, daily_average_dir in output_dirs.items():
         # ensure output directory exists
-        if not os.path.isdir(daily_average_dir):
+        if not daily_average_dir.exists():
             os.makedirs(daily_average_dir, exist_ok=True)
 
     try:
@@ -298,7 +298,7 @@ def write_wcofs(
 
     for day_delta, daily_average_dir in output_dirs.items():
         # ensure output directory exists
-        if not os.path.isdir(daily_average_dir):
+        if not daily_average_dir.exists():
             os.makedirs(daily_average_dir, exist_ok=True)
 
     if scalar_variables is None:

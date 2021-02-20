@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 import sys
 
+from PyOFS.model.rtofs import extract_rtofs_tar
+
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from PyOFS import DATA_DIRECTORY, get_logger, range_daily
@@ -78,7 +80,8 @@ if __name__ == '__main__':
 
         path_map = {}
         for input_path in ftp_connection.nlst(INPUT_DIRECTORY):
-            filename = os.path.basename(input_path)
+            input_path = Path(input_path)
+            filename = input_path.name
 
             if 'rtofs' in filename:
                 output_path = rtofs_dir / filename
@@ -107,7 +110,7 @@ if __name__ == '__main__':
         sizes = {}
         for input_path in path_map:
             try:
-                size = ftp_connection.size(input_path)
+                size = ftp_connection.size(f'{input_path}')
                 sizes[size] = (input_path, path_map[input_path])
             except ftplib.error_perm:
                 pass
@@ -138,7 +141,7 @@ if __name__ == '__main__':
 
         logger.info(f'found {len(path_map)} files at FTP remote')
         for input_path, output_path in path_map.items():
-            filename = os.path.basename(input_path)
+            filename = input_path.name
 
             # filter for NetCDF and TAR archives
             if '.nc' in filename or '.tar' in filename:
@@ -153,6 +156,8 @@ if __name__ == '__main__':
                                 f'Copied "{input_path}" to "{output_path}" ({(datetime.now() - current_start_time) / timedelta(seconds=1):.2f}s, {os.stat(output_path).st_size / 1000} KB)'
                             )
                             num_downloads += 1
+                            if 'rtofs' in output_path:
+                                extract_rtofs_tar(output_path, rtofs_dir / f'rtofs_global{output_path.stem.split(".")[1]}')
                         except Exception as error:
                             logger.exception(
                                 f'input path: {input_path}, {output_path}: {output_path}'
