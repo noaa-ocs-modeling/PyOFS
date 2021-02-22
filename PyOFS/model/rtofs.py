@@ -555,60 +555,62 @@ class RTOFSDataset:
         return f'{self.__class__.__name__}({str(", ".join(used_params))})'
 
 
-def extract_rtofs_tar(tar_filename: PathLike, output_directory: PathLike):
+def extract_rtofs_tar(tar_filename: PathLike, output_directory: PathLike, overwrite: bool = False):
     if not isinstance(tar_filename, Path):
         tar_filename = Path(tar_filename)
     if not isinstance(output_directory, Path):
         output_directory = Path(output_directory)
     temporary_directory = output_directory / 'extracted'
-    with tarfile.open(tar_filename) as tar_file:
-        try:
-            tar_file.extractall(temporary_directory)
-        except Exception as error:
-            LOGGER.warning(f'{error.__class__.__name__} - {error}')
-        extracted_directory = temporary_directory / tar_filename.stem
-        for filename in extracted_directory.iterdir():
-            new_filename = temporary_directory / filename.name
-            if not new_filename.exists():
-                filename.rename(temporary_directory / filename.name)
-        shutil.rmtree(extracted_directory)
-
-    datasets_6hr = {
-        int(filename.stem.split('_')[3][1:]): xarray.open_dataset(filename)
-        for filename in temporary_directory.iterdir()
-    }
-
-    first_dataset = list(datasets_6hr.values())[0]
-
-    # date_string, day_percentage = str(first_dataset['Date'].values[0]).split('.')
-    # start_time = datetime.strptime(date_string, '%Y%m%d') + (float(day_percentage) / 100) * timedelta(days=1)
-
-    coordinates = OrderedDict(
-        {
-            'time': numpy.array([dataset['MT'].values[0] for dataset in datasets_6hr.values()]),
-            'lat': first_dataset['Latitude'][:, 0].values,
-            'lon': first_dataset['Longitude'][0, :].values,
-        }
-    )
-
-    data_arrays = {}
-    data_variable_names = {'temperature': 'sst', 'u': 'u_velocity', 'v': 'v_velocity', 'salinity': 'sss', 'ssh': 'ssh'}
-    for input_name, output_name in data_variable_names.items():
-        if input_name in first_dataset:
-            variable_data = numpy.stack([dataset[input_name][0, 0, :, :] for dataset in datasets_6hr.values()], 0)
-            data_arrays[output_name] = xarray.DataArray(variable_data, coords=coordinates, dims=coordinates.keys(),
-                                                        name=output_name)
-    for dataset in datasets_6hr.values():
-        dataset.close()
-
-    output_dataset = xarray.Dataset()
-    for variable_name, data_array in data_arrays.items():
-        output_dataset.update({variable_name: data_array})
-
     output_filename = output_directory / f'rtofs_glo_2ds_forecast_daily_prog.nc'
-    output_dataset.to_netcdf(output_filename)
 
-    shutil.rmtree(temporary_directory)
+    if not output_filename.exists() or overwrite:
+        with tarfile.open(tar_filename) as tar_file:
+            try:
+                tar_file.extractall(temporary_directory)
+            except Exception as error:
+                LOGGER.warning(f'{error.__class__.__name__} - {error}')
+            extracted_directory = temporary_directory / tar_filename.stem
+            for filename in extracted_directory.iterdir():
+                new_filename = temporary_directory / filename.name
+                if not new_filename.exists():
+                    filename.rename(temporary_directory / filename.name)
+            shutil.rmtree(extracted_directory)
+
+        datasets_6hr = {
+            int(filename.stem.split('_')[3][1:]): xarray.open_dataset(filename)
+            for filename in temporary_directory.iterdir()
+        }
+
+        first_dataset = list(datasets_6hr.values())[0]
+
+        # date_string, day_percentage = str(first_dataset['Date'].values[0]).split('.')
+        # start_time = datetime.strptime(date_string, '%Y%m%d') + (float(day_percentage) / 100) * timedelta(days=1)
+
+        coordinates = OrderedDict(
+            {
+                'time': numpy.array([dataset['MT'].values[0] for dataset in datasets_6hr.values()]),
+                'lat': first_dataset['Latitude'][:, 0].values,
+                'lon': first_dataset['Longitude'][0, :].values,
+            }
+        )
+
+        data_arrays = {}
+        data_variable_names = {'temperature': 'sst', 'u': 'u_velocity', 'v': 'v_velocity', 'salinity': 'sss', 'ssh': 'ssh'}
+        for input_name, output_name in data_variable_names.items():
+            if input_name in first_dataset:
+                variable_data = numpy.stack([dataset[input_name][0, 0, :, :] for dataset in datasets_6hr.values()], 0)
+                data_arrays[output_name] = xarray.DataArray(variable_data, coords=coordinates, dims=coordinates.keys(),
+                                                            name=output_name)
+        for dataset in datasets_6hr.values():
+            dataset.close()
+
+        output_dataset = xarray.Dataset()
+        for variable_name, data_array in data_arrays.items():
+            output_dataset.update({variable_name: data_array})
+
+        output_dataset.to_netcdf(output_filename)
+
+        shutil.rmtree(temporary_directory)
 
 
 if __name__ == '__main__':
@@ -616,6 +618,9 @@ if __name__ == '__main__':
 
     tar_filenames = [tar_filename for tar_filename in input_dir.iterdir() if tar_filename.suffix == '.tar']
     for tar_filename in tar_filenames:
-        extract_rtofs_tar(tar_filename, input_dir / f'rtofs_global{tar_filename.stem.split(".")[1]}')
+        try:
+            extract_rtofs_tar(tar_filename, input_dir / f'rtofs_global{tar_filename.stem.split(".")[1]}')
+        except Exception as error:
+            LOGGER.error(f'{error.__class__.__name__} - {error}')
 
     print('done')
