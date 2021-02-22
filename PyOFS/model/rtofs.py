@@ -562,15 +562,21 @@ def extract_rtofs_tar(tar_filename: PathLike, output_directory: PathLike):
         output_directory = Path(output_directory)
     temporary_directory = output_directory / 'extracted'
     with tarfile.open(tar_filename) as tar_file:
-        tar_file.extractall(temporary_directory)
+        try:
+            tar_file.extractall(temporary_directory)
+        except Exception as error:
+            LOGGER.warning(f'{error.__class__.__name__} - {error}')
         extracted_directory = temporary_directory / tar_filename.stem
         for filename in extracted_directory.iterdir():
             new_filename = temporary_directory / filename.name
             if not new_filename.exists():
                 filename.rename(temporary_directory / filename.name)
         shutil.rmtree(extracted_directory)
-    datasets_6hr = {int(filename.stem.split('_')[3][1:]): xarray.open_dataset(filename) for filename in
-                    temporary_directory.iterdir()}
+
+    datasets_6hr = {
+        int(filename.stem.split('_')[3][1:]): xarray.open_dataset(filename)
+        for filename in temporary_directory.iterdir()
+    }
 
     first_dataset = list(datasets_6hr.values())[0]
 
@@ -586,11 +592,12 @@ def extract_rtofs_tar(tar_filename: PathLike, output_directory: PathLike):
     )
 
     data_arrays = {}
-    data_variable_names = {'temperature': 'sst', 'u': 'u_velocity', 'v': 'v_velocity'}
+    data_variable_names = {'temperature': 'sst', 'u': 'u_velocity', 'v': 'v_velocity', 'salinity': 'sss', 'ssh': 'ssh'}
     for input_name, output_name in data_variable_names.items():
-        variable_data = numpy.stack([dataset[input_name][0, 0, :, :] for dataset in datasets_6hr.values()], 0)
-        data_arrays[output_name] = xarray.DataArray(variable_data, coords=coordinates, dims=coordinates.keys(),
-                                                    name=output_name)
+        if input_name in first_dataset:
+            variable_data = numpy.stack([dataset[input_name][0, 0, :, :] for dataset in datasets_6hr.values()], 0)
+            data_arrays[output_name] = xarray.DataArray(variable_data, coords=coordinates, dims=coordinates.keys(),
+                                                        name=output_name)
     for dataset in datasets_6hr.values():
         dataset.close()
 
@@ -607,6 +614,8 @@ def extract_rtofs_tar(tar_filename: PathLike, output_directory: PathLike):
 if __name__ == '__main__':
     input_dir = DATA_DIRECTORY / 'input' / 'rtofs'
 
-    extract_rtofs_tar(input_dir / 'rtofs.20210219.tar', input_dir / 'rtofs_global20210219')
+    tar_filenames = [tar_filename for tar_filename in input_dir.iterdir() if tar_filename.suffix == '.tar']
+    for tar_filename in tar_filenames:
+        extract_rtofs_tar(tar_filename, input_dir / f'rtofs_global{tar_filename.stem.split(".")[1]}')
 
     print('done')
