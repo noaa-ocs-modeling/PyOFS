@@ -1,13 +1,14 @@
 from datetime import datetime, timedelta
+from os import PathLike
+from pathlib import Path
+from typing import Collection
+
 import fiona
 import fiona.crs
 import numpy
-from os import PathLike
-from pathlib import Path
 import rasterio
 from rasterio.enums import Resampling
 import scipy.interpolate
-from typing import Collection
 import xarray
 
 import PyOFS
@@ -23,8 +24,8 @@ NRT_DELAY = timedelta(hours=1)
 
 # either UCSD (University of California San Diego) or NDBC (National Data Buoy Center); NDBC has larger extent but only for the past 4 days
 SOURCE_URLS = {
-    'UCSD': 'http://hfrnet-tds.ucsd.edu/thredds/dodsC/HFR/USWC',
     'NDBC': 'https://dods.ndbc.noaa.gov/thredds/dodsC',
+    'UCSD': 'http://hfrnet-tds.ucsd.edu/thredds/dodsC/HFR/USWC',
 }
 
 
