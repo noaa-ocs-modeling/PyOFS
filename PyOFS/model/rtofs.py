@@ -2,8 +2,6 @@ from collections import OrderedDict
 from datetime import date, datetime, timedelta
 from os import PathLike
 from pathlib import Path
-import shutil
-import tarfile
 import threading
 from typing import Collection
 
@@ -73,10 +71,7 @@ TIME_DELTAS = {'daily': range(-3, 8 + 1)}
 
 STUDY_AREA_POLYGON_FILENAME = DATA_DIRECTORY / r'reference\wcofs.gpkg:study_area'
 
-SOURCE_URLS = {
-    'NCEP': 'https://nomads.ncep.noaa.gov:9090/dods/rtofs',
-    'local': DATA_DIRECTORY / 'input' / 'rtofs',
-}
+SOURCE_URL = 'https://nomads.ncep.noaa.gov:9090/dods/rtofs'
 
 GLOBAL_LOCK = threading.Lock()
 
@@ -92,8 +87,6 @@ class RTOFSDataset:
         source: str = '2ds',
         time_interval: str = 'daily',
         study_area_polygon_filename: PathLike = STUDY_AREA_POLYGON_FILENAME,
-        source_url: str = None,
-        use_defaults: bool = True,
     ):
         """
         Creates new observation object from datetime and given model parameters.
@@ -102,8 +95,6 @@ class RTOFSDataset:
         :param source: rither '2ds' or '3dz'
         :param time_interval: time interval of model output
         :param study_area_polygon_filename: filename of vector file containing study area boundary
-        :param source_url: directory containing NetCDF files
-        :param use_defaults: whether to fall back to default source URLs if the provided one does not exist
         """
 
         if not isinstance(study_area_polygon_filename, Path):
@@ -129,41 +120,24 @@ class RTOFSDataset:
         self.dataset_locks = {}
 
         date_string = f'{self.model_time:%Y%m%d}'
-        date_dir = f'rtofs_global{date_string}'
 
-        source_urls = SOURCE_URLS.copy()
-
-        if source_url is not None:
-            source_url = {'priority': source_url}
-            if use_defaults:
-                source_urls = {**source_url, **{source_urls}}
-
-        self.source_names = []
         if self.time_interval == 'daily':
-            for source_name, source_url in source_urls.items():
-                for forecast_direction, datasets in DATASET_STRUCTURE[self.source].items():
-                    if (forecast_direction == 'nowcast' and 'nowcast' in self.datasets and len(
-                        self.datasets['nowcast']) > 0) or (
-                        forecast_direction == 'forecast' and 'forecast' in self.datasets and len(self.datasets['forecast']) > 0
-                    ):
-                        continue
+            for forecast_direction, datasets in DATASET_STRUCTURE[self.source].items():
+                self.datasets[forecast_direction] = {}
+                self.dataset_locks[forecast_direction] = {}
 
-                    self.datasets[forecast_direction] = {}
-                    self.dataset_locks[forecast_direction] = {}
+                date_dir = f'rtofs_global{date_string}'
 
-                    for dataset_name in datasets:
-                        filename = f'rtofs_glo_{self.source}_{forecast_direction}_{self.time_interval}_{dataset_name}'
-                        url = f'{source_url}/{date_dir}/{filename}'
-                        if source_name == 'local':
-                            url = f'{url}.nc'
+                for dataset_name in datasets:
+                    filename = f'rtofs_glo_{self.source}_{forecast_direction}_{self.time_interval}_{dataset_name}'
+                    url = f'{SOURCE_URL}/{date_dir}/{filename}'
 
-                        try:
-                            dataset = xarray.open_dataset(url)
-                            self.datasets[forecast_direction][dataset_name] = dataset
-                            self.dataset_locks[forecast_direction][dataset_name] = threading.Lock()
-                            self.source_names.append(source_name)
-                        except OSError as error:
-                            LOGGER.warning(f'{error.__class__.__name__}: {error}')
+                    try:
+                        dataset = xarray.open_dataset(url)
+                        self.datasets[forecast_direction][dataset_name] = dataset
+                        self.dataset_locks[forecast_direction][dataset_name] = threading.Lock()
+                    except OSError as error:
+                        LOGGER.warning(f'{error.__class__.__name__}: {error}')
 
         if (len(self.datasets['nowcast']) + len(self.datasets['forecast'])) > 0:
             if len(self.datasets['nowcast']) > 0:
@@ -171,20 +145,16 @@ class RTOFSDataset:
             else:
                 sample_dataset = next(iter(self.datasets['forecast'].values()))
 
+            # for some reason RTOFS has longitude values shifted by 360
+            self.raw_lon = sample_dataset['lon'].values
+            self.lon = self.raw_lon - 180 - numpy.min(self.raw_lon)
             self.lat = sample_dataset['lat'].values
-            if not any(source_name == 'NCEP' for source_name in self.source_names):
-                self.lon = sample_dataset['lon']
-                self.raw_lon = self.lon
-            else:
-                # for some reason RTOFS from NCEP has longitude values shifted by 360
-                self.raw_lon = sample_dataset['lon'].values
-                self.lon = self.raw_lon - 180 - numpy.min(self.raw_lon)
 
-            lat_pixel_size = numpy.mean(numpy.diff(sample_dataset['lat']))
-            lon_pixel_size = numpy.mean(numpy.diff(sample_dataset['lon']))
+            lon_pixel_size = sample_dataset['lon'].resolution
+            lat_pixel_size = sample_dataset['lat'].resolution
 
-            self.global_north = numpy.max(self.lat)
             self.global_west = numpy.min(self.lon)
+            self.global_north = numpy.max(self.lat)
 
             self.global_grid_transform = rasterio.transform.from_origin(
                 self.global_west, self.global_north, lon_pixel_size, lat_pixel_size
@@ -258,19 +228,14 @@ class RTOFSDataset:
                             )
 
                         selection = numpy.flip(selection.squeeze(), axis=0)
-
-                        if selection.size > 0:
-                            return selection
-                        else:
-                            raise PyOFS.NoDataError(
-                                f'no RTOFS data for {time} within the cropped area ({self.study_area_west:.2f}, {self.study_area_south:.2f}), ({self.study_area_east:.2f}, {self.study_area_north:.2f})')
+                        return selection
                 else:
                     raise ValueError(
-                        f'Variable must be one of {list(DATA_VARIABLES)}.'
+                        f'Variable must be not one of {list(DATA_VARIABLES.keys())}.'
                     )
             else:
                 LOGGER.warning(
-                    f'{direction} does not exist in RTOFS for {self.model_time:%Y%m%d}.'
+                    f'{direction} does not exist in RTOFS observation for {self.model_time:%Y%m%d}.'
                 )
         else:
             raise ValueError(
@@ -318,16 +283,11 @@ class RTOFSDataset:
         direction = 'forecast' if time_delta >= 0 else 'nowcast'
         time_delta_string = f'{direction[0]}{abs(time_delta) + 1 if direction == "forecast" else abs(time_delta):03}'
 
-        variable_means = {}
-        for variable in variables:
-            if variable not in ['dir', 'mag']:
-                try:
-                    variable_means[variable] = self.data(variable, time, crop)
-                except KeyError:
-                    LOGGER.warning(f'variable "{variable}" not found in RTOFS dataset')
-                except Exception as error:
-                    LOGGER.warning(error)
-
+        variable_means = {
+            variable: self.data(variable, time, crop)
+            for variable in variables
+            if variable not in ['dir', 'mag']
+        }
         variable_means = {
             variable: variable_mean.values
             for variable, variable_mean in variable_means.items()
@@ -358,7 +318,7 @@ class RTOFSDataset:
 
         # write interpolated grids to raster files
         for variable, variable_mean in variable_means.items():
-            if variable_mean is not None and variable_mean.size > 0:
+            if variable_mean is not None:
                 if crop:
                     transform = self.study_area_transform
                 else:
@@ -522,6 +482,7 @@ class RTOFSDataset:
                         variable_data, coords=coordinates, dims=tuple(coordinates.keys())
                     )
                 },
+                inplace=True,
             )
 
         return output_dataset
@@ -555,72 +516,10 @@ class RTOFSDataset:
         return f'{self.__class__.__name__}({str(", ".join(used_params))})'
 
 
-def extract_rtofs_tar(tar_filename: PathLike, output_directory: PathLike, overwrite: bool = False):
-    if not isinstance(tar_filename, Path):
-        tar_filename = Path(tar_filename)
-    if not isinstance(output_directory, Path):
-        output_directory = Path(output_directory)
-    temporary_directory = output_directory / 'extracted'
-    output_filename = output_directory / f'rtofs_glo_2ds_forecast_daily_prog.nc'
-
-    if not output_filename.exists() or overwrite:
-        with tarfile.open(tar_filename) as tar_file:
-            try:
-                tar_file.extractall(temporary_directory)
-            except Exception as error:
-                LOGGER.warning(f'{error.__class__.__name__} - {error}')
-            extracted_directory = temporary_directory / tar_filename.stem
-            for filename in extracted_directory.iterdir():
-                new_filename = temporary_directory / filename.name
-                if not new_filename.exists():
-                    filename.rename(temporary_directory / filename.name)
-            shutil.rmtree(extracted_directory)
-
-        datasets_6hr = {
-            int(filename.stem.split('_')[3][1:]): xarray.open_dataset(filename)
-            for filename in temporary_directory.iterdir()
-        }
-
-        first_dataset = list(datasets_6hr.values())[0]
-
-        # date_string, day_percentage = str(first_dataset['Date'].values[0]).split('.')
-        # start_time = datetime.strptime(date_string, '%Y%m%d') + (float(day_percentage) / 100) * timedelta(days=1)
-
-        coordinates = OrderedDict(
-            {
-                'time': numpy.array([dataset['MT'].values[0] for dataset in datasets_6hr.values()]),
-                'lat': first_dataset['Latitude'][:, 0].values,
-                'lon': first_dataset['Longitude'][0, :].values,
-            }
-        )
-
-        data_arrays = {}
-        data_variable_names = {'temperature': 'sst', 'u': 'u_velocity', 'v': 'v_velocity', 'salinity': 'sss', 'ssh': 'ssh'}
-        for input_name, output_name in data_variable_names.items():
-            if input_name in first_dataset:
-                variable_data = numpy.stack([dataset[input_name][0, 0, :, :] for dataset in datasets_6hr.values()], 0)
-                data_arrays[output_name] = xarray.DataArray(variable_data, coords=coordinates, dims=coordinates.keys(),
-                                                            name=output_name)
-        for dataset in datasets_6hr.values():
-            dataset.close()
-
-        output_dataset = xarray.Dataset()
-        for variable_name, data_array in data_arrays.items():
-            output_dataset.update({variable_name: data_array})
-
-        output_dataset.to_netcdf(output_filename)
-
-        shutil.rmtree(temporary_directory)
-
-
 if __name__ == '__main__':
-    input_dir = DATA_DIRECTORY / 'input' / 'rtofs'
+    output_dir = DATA_DIRECTORY / 'output' / 'test'
 
-    tar_filenames = [tar_filename for tar_filename in input_dir.iterdir() if tar_filename.suffix == '.tar']
-    for tar_filename in tar_filenames:
-        try:
-            extract_rtofs_tar(tar_filename, input_dir / f'rtofs_global{tar_filename.stem.split(".")[1]}')
-        except Exception as error:
-            LOGGER.error(f'{error.__class__.__name__} - {error}')
+    rtofs_dataset = RTOFSDataset(datetime.now())
+    rtofs_dataset.write_raster(output_dir / 'rtofs_ssh.tiff', 'ssh', datetime.now())
 
     print('done')
