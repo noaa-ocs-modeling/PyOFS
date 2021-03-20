@@ -71,11 +71,11 @@ VALID_SOURCE_STRINGS = ['stations', 'fields', 'avg', '2ds']
 
 GLOBAL_LOCK = threading.Lock()
 
-SOURCE_URLS = {
-    'CO-OPS': 'https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS',
-    'CO-OPS DEV': 'https://opendap.co-ops.nos.noaa.gov/threddsdev/dodsC/NOAA/WCOFS/MODELS',
-    'FTP': DATA_DIRECTORY / 'input' / 'wcofs' / 'avg',
-}
+SOURCE_URLS = [
+    'https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS',
+    'https://opendap.co-ops.nos.noaa.gov/threddsdev/dodsC/NOAA/WCOFS/MODELS',
+    DATA_DIRECTORY / 'input' / 'wcofs' / 'avg',
+]
 
 
 class WCOFSDataset:
@@ -171,11 +171,12 @@ class WCOFSDataset:
         source_urls = SOURCE_URLS.copy()
 
         if source_url is not None:
-            source_url = {'priority': source_url}
             if use_defaults:
-                source_urls = {**source_url, **{source_urls}}
+                source_urls.insert(0, source_url)
+            else:
+                source_urls = [source_url]
 
-        for source_name, source_url in source_urls.items():
+        for source_url in source_urls:
             if self.source == 'avg':
                 for day in self.time_deltas:
                     if (day < 0 and -1 in self.datasets.keys()) or (
@@ -905,7 +906,7 @@ class WCOFSDataset:
                 )
 
             data_array.attrs['grid'] = grid
-            output_dataset = output_dataset.update({variable: data_array})
+            output_dataset = output_dataset.update({variable: data_array}, inplace=True)
 
         return output_dataset
 
@@ -1894,7 +1895,7 @@ y increases in the direction opposite to local longitude
 if __name__ == '__main__':
     output_dir = DATA_DIRECTORY / 'output' / 'test'
 
-    start_time = datetime(2018, 11, 8)
+    start_time = datetime(2021, 2, 28)
     end_time = start_time + timedelta(days=1)
 
     wcofs_range = WCOFSRange(start_time, end_time, source='avg')

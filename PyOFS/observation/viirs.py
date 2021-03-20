@@ -511,9 +511,14 @@ class VIIRSRange:
         self.algorithm = algorithm
         self.version = version
 
-        self.pass_times = get_pass_times(
+        if 'N20' in self.satellites:
+            self.pass_times = get_pass_times(
             self.start_time, self.end_time, self.viirs_pass_times_filename
-        )
+            )-timedelta(minutes=50)
+        else:
+            self.pass_times = get_pass_times(
+                self.start_time, self.end_time, self.viirs_pass_times_filename
+            )
 
         if len(self.pass_times) > 0:
             LOGGER.info(
@@ -526,7 +531,6 @@ class VIIRSRange:
             with futures.ThreadPoolExecutor() as concurrency_pool:
                 for satellite in self.satellites:
                     running_futures = {}
-
                     for pass_time in self.pass_times:
                         running_future = concurrency_pool.submit(
                             VIIRSDataset,
@@ -625,6 +629,7 @@ class VIIRSRange:
                     if satellite is not None and satellite in self.datasets[pass_time]:
                         dataset = self.datasets[pass_time][satellite]
                         scene_data = dataset.data(variable, correct_sses)
+
                     else:
                         scene_data = numpy.nanmean(
                             numpy.stack(
@@ -780,7 +785,7 @@ class VIIRSRange:
                     gdal_args.update(TIFF_CREATION_OPTIONS)
 
                 if filename_prefix is None:
-                    current_filename_prefix = f'viirs_{variable}'
+                    current_filename_prefix = f'{satellite}_viirs_{variable}'
                 else:
                     current_filename_prefix = filename_prefix
 
@@ -798,7 +803,7 @@ class VIIRSRange:
 
                 output_filename = (
                     output_dir
-                    / f'{current_filename_prefix}_{current_filename_suffix}.{file_extension}'
+                    / f'{current_filename_prefix}.{file_extension}'
                 )
 
                 LOGGER.info(f'Writing {output_filename}')
@@ -1035,6 +1040,7 @@ def get_pass_times(
         days=numpy.floor((start_time - viirs_start_time).days / 16) * 16
     )
 
+
     # get array of seconds since the start of the first 16-day VIIRS period
     pass_durations = numpy.genfromtxt(pass_times_filename, dtype=str, delimiter=',')[
                      :, 1
@@ -1076,5 +1082,6 @@ if __name__ == '__main__':
 
     viirs_range = VIIRSRange(start_time, end_time)
     viirs_range.write_raster(output_dir)
+
 
     print('done')

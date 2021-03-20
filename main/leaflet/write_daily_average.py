@@ -70,19 +70,19 @@ def write_observation(
     if observation == 'smap':
         monthly_dir = output_dir / 'monthly_averages'
 
-        if not monthly_dir.exists():
+        if not os.path.isdir(monthly_dir):
             os.makedirs(monthly_dir, exist_ok=True)
 
         observation_dir = monthly_dir / f'{observation_date:%Y%m}'
     else:
         daily_dir = output_dir / 'daily_averages'
 
-        if not daily_dir.exists():
+        if not os.path.isdir(daily_dir):
             os.makedirs(daily_dir, exist_ok=True)
 
         observation_dir = daily_dir / f'{observation_date:%Y%m%d}'
 
-    if not observation_dir.exists():
+    if not os.path.isdir(observation_dir):
         os.makedirs(observation_dir, exist_ok=True)
 
     day_start_ndbc = day_start + timedelta(hours=2)
@@ -105,28 +105,35 @@ def write_observation(
             )
             del hfr_range
         elif observation == 'viirs':
-            viirs_range = viirs.VIIRSRange(day_start, day_end_utc)
-            viirs_range.write_raster(
+            viirs_range_N20 = viirs.VIIRSRange(start_time=day_start, end_time=day_end_utc, satellites=['N20'])
+            viirs_range_N20.write_raster(
                 observation_dir,
-                filename_suffix=f'{day_start:%Y%m%d%H%M}_{day_noon:%Y%m%d%H%M}',
+                filename_suffix=f'{day_start:%Y%m%d%H%M}_{day_end:%Y%m%d%H%M}',
                 start_time=day_start_utc,
-                end_time=day_noon_utc,
-                fill_value=LEAFLET_NODATA_VALUE,
-                driver='GTiff',
-                correct_sses=False,
-                variables=['sst'],
-            )
-            viirs_range.write_raster(
-                observation_dir,
-                filename_suffix=f'{day_noon:%Y%m%d%H%M}_{day_end:%Y%m%d%H%M}',
-                start_time=day_noon_utc,
                 end_time=day_end_utc,
                 fill_value=LEAFLET_NODATA_VALUE,
                 driver='GTiff',
                 correct_sses=False,
                 variables=['sst'],
+                satellite='N20',
+
             )
-            del viirs_range
+            del viirs_range_N20
+
+            viirs_range_NPP = viirs.VIIRSRange(start_time=day_start, end_time=day_end_utc, satellites=['NPP'])
+            viirs_range_NPP.write_raster(
+                observation_dir,
+                filename_suffix=f'{day_start:%Y%m%d%H%M}_{day_end:%Y%m%d%H%M}',
+                start_time=day_start_utc,
+                end_time=day_end_utc,
+                fill_value=LEAFLET_NODATA_VALUE,
+                driver='GTiff',
+                correct_sses=False,
+                variables=['sst'],
+                satellite='NPP',
+            )
+            del viirs_range_NPP
+
         elif observation == 'smap':
             smap_dataset = smap.SMAPDataset()
             smap_dataset.write_rasters(
@@ -157,6 +164,7 @@ def write_rtofs(
     scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
     vector_variables: Collection[str] = ('dir', 'mag'),
     overwrite: bool = False,
+    time_interval: str = None,
 ):
     """
     Writes daily average of RTOFS output on given date.
@@ -168,6 +176,7 @@ def write_rtofs(
     :param vector_variables: list of vector variables to use
     :param overwrite: whether to overwrite existing files
     :raise _utilities.NoDataError: if no data found
+    :param time_interval: time interval of model output
     """
 
     if not isinstance(output_dir, Path):
@@ -186,7 +195,7 @@ def write_rtofs(
 
     for day_delta, daily_average_dir in output_dirs.items():
         # ensure output directory exists
-        if not daily_average_dir.exists():
+        if not os.path.isdir(daily_average_dir):
             os.makedirs(daily_average_dir, exist_ok=True)
 
     try:
@@ -215,6 +224,7 @@ def write_rtofs(
                         rtofs_dataset = rtofs.RTOFSDataset(
                             model_run_date, source='2ds', time_interval='daily'
                         )
+
 
                 scalar_variables_to_write = [
                     variable
@@ -298,7 +308,7 @@ def write_wcofs(
 
     for day_delta, daily_average_dir in output_dirs.items():
         # ensure output directory exists
-        if not daily_average_dir.exists():
+        if not os.path.isdir(daily_average_dir):
             os.makedirs(daily_average_dir, exist_ok=True)
 
     if scalar_variables is None:
