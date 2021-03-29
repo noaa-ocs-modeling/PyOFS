@@ -133,6 +133,22 @@ def write_observation(
                 satellite='NPP',
             )
             del viirs_range_NPP
+            
+        elif observation == 'abi':
+            abi_G17 = abi.ABIRange(start_time=day_start, end_time=day_end_utc, satellites=['G17'])
+            abi_G17.write_raster(
+                observation_dir,
+                filename_suffix=f'{day_start:%Y%m%d}',
+                start_time=day_start_utc,
+                end_time=day_end_utc,
+                fill_value=LEAFLET_NODATA_VALUE,
+                driver='GTiff',
+                correct_sses=False,
+                variables=['sst'],
+                satellite='G17',
+
+            )
+            del abi_G17       
 
         elif observation == 'smap':
             smap_dataset = smap.SMAPDataset()
@@ -479,6 +495,8 @@ def write_observations(
     write_observation(output_dir, output_date, 'hf_radar')
     LOGGER.info('Processing VIIRS SST...')
     write_observation(output_dir, output_date, 'viirs')
+    LOGGER.info('Processing ABI SST...')
+    write_observation(output_dir, output_date, 'abi')
     LOGGER.info('Processing SMAP SSS...')
     write_observation(output_dir, output_date, 'smap')
     # LOGGER.info('Processing NDBC data...')
