@@ -1,0 +1,12 @@
+name: PyOFS
+dependencies:
+  - python=3
+  - numpy
+  - scipy
+  - shapely
+  - pyproj
+  - fiona
+  - rasterio
+  - netCDF4
+  - xarray
+  - requests
