@@ -491,17 +491,17 @@ def write_observations(
 
     LOGGER.info(f'Starting file conversion for {output_date}')
 
-    # LOGGER.info('Processing HFR SSUV...')
-    # write_observation(output_dir, output_date, 'hf_radar')
-    # LOGGER.info('Processing VIIRS SST...')
-    # write_observation(output_dir, output_date, 'viirs')
+    LOGGER.info('Processing HFR SSUV...')
+    write_observation(output_dir, output_date, 'hf_radar')
+    LOGGER.info('Processing VIIRS SST...')
+    write_observation(output_dir, output_date, 'viirs')
     LOGGER.info('Processing ABI SST...')
     write_observation(output_dir, output_date, 'abi')
-    # LOGGER.info('Processing SMAP SSS...')
-    # write_observation(output_dir, output_date, 'smap')
-    # # LOGGER.info('Processing NDBC data...')
-    # # write_observation(output_dir, output_date, 'data_buoy')
-    # LOGGER.info(f'Wrote observations to {output_dir}')
+    LOGGER.info('Processing SMAP SSS...')
+    write_observation(output_dir, output_date, 'smap')
+    LOGGER.info('Processing NDBC data...')
+    write_observation(output_dir, output_date, 'data_buoy')
+    LOGGER.info(f'Wrote observations to {output_dir}')
 
 
 def write_models(
@@ -554,7 +554,7 @@ if __name__ == '__main__':
     model_run_date = date.today()
     LOGGER.info(f'Starting file conversion for {model_run_date:%Y%m%d}')
     write_observations(OUTPUT_DIRECTORY, model_run_date, day_deltas)
-    # write_models(OUTPUT_DIRECTORY, model_run_date, day_deltas)
+    write_models(OUTPUT_DIRECTORY, model_run_date, day_deltas)
 
     LOGGER.info(
         f'Finished writing files. Total time: {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds'
