@@ -499,8 +499,8 @@ def write_observations(
     write_observation(output_dir, output_date, 'abi')
     LOGGER.info('Processing SMAP SSS...')
     write_observation(output_dir, output_date, 'smap')
-    LOGGER.info('Processing NDBC data...')
-    write_observation(output_dir, output_date, 'data_buoy')
+    # LOGGER.info('Processing NDBC data...')
+    # write_observation(output_dir, output_date, 'data_buoy')
     LOGGER.info(f'Wrote observations to {output_dir}')
 
 
