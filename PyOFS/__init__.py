@@ -6,12 +6,14 @@ from pathlib import Path
 import sys
 from typing import Union
 
+
 import numpy
 
 CRS_EPSG = 4326
 
-# DATA_DIRECTORY = Path(os.getenv('OFS_DATA', r'C:\data\OFS'))
-DATA_DIRECTORY = Path(os.getenv('OFS_DATA', r'Z:\OFS'))
+DATA_DIRECTORY = Path(os.getenv('OFS_DATA', r'C:\data\OFS'))
+
+
 # AZURE_CREDENTIALS_FILENAME = Path(os.getenv('AZURE_CRED', r'C:\data\azure_credentials.txt'))
 AZURE_CREDENTIALS_FILENAME = Path(os.getenv('AZURE_CRED', r'Z:\azure_credentials.txt'))
 

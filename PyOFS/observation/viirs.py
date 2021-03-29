@@ -804,6 +804,7 @@ class VIIRSRange:
                 output_filename = (
                     output_dir
                     / f'{current_filename_prefix}_{current_filename_suffix}.{file_extension}'
+
                 )
 
                 LOGGER.info(f'Writing {output_filename}')

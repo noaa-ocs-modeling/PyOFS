@@ -19,7 +19,9 @@ from PyOFS import (
     NoDataError,
     get_logger,
 )
+
 from PyOFS.observation import hf_radar, viirs, smap, data_buoy, abi
+
 from PyOFS.model import wcofs, rtofs
 
 # disable complaints from Fiona environment within conda
@@ -108,6 +110,7 @@ def write_observation(
             viirs_range_N20 = viirs.VIIRSRange(start_time=day_start, end_time=day_end_utc, satellites=['N20'])
             viirs_range_N20.write_raster(
                 observation_dir,
+
                 filename_suffix=f'{day_start:%Y%m%d}',
                 start_time=day_start_utc,
                 end_time=day_end_utc,
@@ -133,6 +136,7 @@ def write_observation(
                 satellite='NPP',
             )
             del viirs_range_NPP
+
 
         elif observation == 'abi':
             abi_G17 = abi.ABIRange(start_time=day_start, end_time=day_end_utc, satellites=['G17'])
