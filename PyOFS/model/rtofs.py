@@ -232,7 +232,7 @@ class RTOFSDataset:
                         data_variable = self.datasets[direction][dataset_name][
                             DATA_VARIABLES[variable][self.source][dataset_name]
                         ]
-
+                        print(data_variable)
                         # TODO study areas that cross over longitude +74.16 may have problems here
                         if crop:
                             selection = data_variable.sel(
@@ -254,8 +254,14 @@ class RTOFSDataset:
                                 (western_selection, eastern_selection), axis=1
                             )
 
+                        # to resample the 3 hr for forcast and 1hr for nowcast nc file to a daily
                         selections=selection.resample(time='D').mean()
                         selections = selections.sel(time=time, method='nearest')
+
+                        # correction for the
+                        if variable == 'ssh':
+                            selections=selections + 0.25
+
                         selections = numpy.flip(selections.squeeze(), axis=0)
 
                         if selections.size > 0:
