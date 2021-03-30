@@ -232,7 +232,7 @@ class RTOFSDataset:
                         data_variable = self.datasets[direction][dataset_name][
                             DATA_VARIABLES[variable][self.source][dataset_name]
                         ]
-                        print(data_variable)
+
                         # TODO study areas that cross over longitude +74.16 may have problems here
                         if crop:
                             selection = data_variable.sel(
