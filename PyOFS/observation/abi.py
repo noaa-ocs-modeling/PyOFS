@@ -236,8 +236,7 @@ class ABIDataset:
                         ),
                     ]
                 )
-        else:
-            LOGGER.warning(f'{self.data_time} UTC: Dataset has no stored bounds...')
+
 
         lon_pixel_size = self.dataset.geospatial_lon_resolution
         lat_pixel_size = self.dataset.geospatial_lat_resolution
@@ -503,7 +502,7 @@ class ABIRange:
         self.version = version
 
         day_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        self.pass_times = [day_start + timedelta(hours=hour) for hour in [0, 1, 2, 3, 4, 5, 6, 7, 8, 20, 21, 22, 23] if
+        self.pass_times = [day_start + timedelta(hours=hour) for hour in [-4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8] if
                            day_start + timedelta(hours=hour) < self.end_time]
 
         if len(self.pass_times) > 0:

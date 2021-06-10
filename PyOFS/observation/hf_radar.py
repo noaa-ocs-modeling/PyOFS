@@ -466,7 +466,7 @@ class HFRadarRange:
         if variables is None:
             variables = DATA_VARIABLES
 
-        if filename_suffix is not '':
+        if filename_suffix != '':
             filename_suffix = f'_{filename_suffix}'
 
         variable_means = {
@@ -486,11 +486,16 @@ class HFRadarRange:
             else:
                 v_data = self.data_average('ssv', start_time, end_time, dop_threshold)
 
-            # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
-            variable_means['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (
-                180 / numpy.pi
-            )
-            variable_means['mag'] = numpy.sqrt(numpy.square(u_data) + numpy.square(v_data))
+            if 'anim' in filename_suffix:
+                variable_means['dir'] = u_data
+                variable_means['mag'] = v_data
+
+            else:
+                # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
+                variable_means['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (
+                    180 / numpy.pi
+                )
+                variable_means['mag'] = numpy.sqrt(u_data ** 2 + v_data ** 2)
 
         for variable, variable_data in variable_means.items():
             raster_data = variable_data.astype(rasterio.float32)

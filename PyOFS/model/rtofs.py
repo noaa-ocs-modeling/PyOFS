@@ -155,17 +155,22 @@ class RTOFSDataset:
 
                         for dataset_name in datasets:
                             filename = f'rtofs_glo_{self.source}_{forecast_direction}_{self.time_interval}_{dataset_name}'
-                            url = f'{source_url}/{date_dir}/{filename}'
-                            if source_name == 'local':
-                                url = f'{url}.nc'
+                            if filename not in ['rtofs_glo_2ds_nowcast_3hrly_prog','rtofs_glo_2ds_nowcast_3hrly_diag','rtofs_glo_2ds_forecast_hrly_prog','rtofs_glo_2ds_forecast_hrly_diag']:
 
-                            try:
-                                dataset = xarray.open_dataset(url)
-                                self.datasets[forecast_direction][dataset_name] = dataset
-                                self.dataset_locks[forecast_direction][dataset_name] = threading.Lock()
-                                self.source_names.append(source_name)
-                            except OSError as error:
-                                LOGGER.warning(f'{error.__class__.__name__}: {error}')
+                                url = f'{source_url}/{date_dir}/{filename}'
+                                if source_name == 'local':
+                                    url = f'{url}.nc'
+
+                                try:
+                                    dataset = xarray.open_dataset(url)
+                                    self.datasets[forecast_direction][dataset_name] = dataset
+                                    self.dataset_locks[forecast_direction][dataset_name] = threading.Lock()
+                                    self.source_names.append(source_name)
+                                except OSError as error:
+                                    LOGGER.warning(f'{error.__class__.__name__}: {error}')
+
+
+
 
         if (len(self.datasets['nowcast']) + len(self.datasets['forecast'])) > 0:
             if len(self.datasets['nowcast']) > 0:
@@ -354,11 +359,17 @@ class RTOFSDataset:
             else:
                 v_data = variable_means[v_name]
 
-            if u_data is not None and v_data is not None:
+            if 'anim' in filename_suffix:
+                variable_means['dir'] = u_data
+                variable_means['mag'] = v_data
+
+            else:
+                # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
                 variable_means['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (
                     180 / numpy.pi
                 )
-                variable_means['mag'] = numpy.sqrt(numpy.square(u_data) + numpy.square(v_data))
+                variable_means['mag'] = numpy.sqrt(u_data ** 2 + v_data ** 2)
+
 
         # write interpolated grids to raster files
         for variable, variable_mean in variable_means.items():

@@ -621,11 +621,16 @@ class WCOFSDataset:
                     u_data = interpolated_data[u_name]
                     v_data = interpolated_data[v_name]
 
-                    # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
-                    interpolated_data['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (
-                        180 / numpy.pi
-                    )
-                    interpolated_data['mag'] = numpy.sqrt(u_data ** 2 + v_data ** 2)
+                    if 'anim' in filename_suffix:
+                       interpolated_data['dir'] = u_data
+                       interpolated_data['mag'] = v_data
+
+                    else:
+                        # calculate direction and magnitude of vector in degrees (0-360) and in metres per second
+                        interpolated_data['dir'] = (numpy.arctan2(u_data, v_data) + numpy.pi) * (
+                            180 / numpy.pi
+                        )
+                        interpolated_data['mag'] = numpy.sqrt(u_data ** 2 + v_data ** 2)
 
                     if u_name not in variables:
                         del interpolated_data[u_name]
@@ -846,7 +851,7 @@ class WCOFSDataset:
             variables = list(DATA_VARIABLES.keys())
 
         for variable in variables:
-            if self.source is 'avg':
+            if self.source == 'avg':
                 times = [
                     self.model_time + timedelta(days=time_delta)
                     for time_delta in self.time_deltas

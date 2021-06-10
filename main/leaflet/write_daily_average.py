@@ -37,7 +37,6 @@ STUDY_AREA_TIMEZONE = 'US/Pacific'
 STUDY_AREA_TO_UTC = timedelta(
     hours=-datetime.now(pytz.timezone(STUDY_AREA_TIMEZONE)).utcoffset() / timedelta(hours=1)
 )
-
 # range of day deltas that models reach
 MODEL_DAY_DELTAS = {'WCOFS': range(-1, 3), 'RTOFS': range(-3, 9)}
 
@@ -94,6 +93,22 @@ def write_observation(
     day_noon_utc = day_noon + STUDY_AREA_TO_UTC
     day_end_utc = day_end + STUDY_AREA_TO_UTC
 
+    range_start = day_start - timedelta(hours=12)
+    range_end = day_start + timedelta(hours=36)
+
+    NPP_afternoon_start = day_start + timedelta(hours=16)
+    NPP_afternoon_end = day_start + timedelta(hours=28)
+    NPP_night_start = day_start + timedelta(hours=4)
+    NPP_night_end = day_start + timedelta(hours=16)
+
+    N20_afternoon_start = day_start + timedelta(hours=16)
+    N20_afternoon_end = day_start + timedelta(hours=28)
+    N20_night_start = day_start + timedelta(hours=4)
+    N20_night_end = day_start + timedelta(hours=16)
+
+    G17_afternoon_start = day_start - timedelta(hours=4)
+    G17_afternoon_end = day_start + timedelta(hours=8)
+
     try:
         if observation == 'hf_radar':
             hfr_range = hf_radar.HFRadarRange(day_start_ndbc, day_end_ndbc)
@@ -105,30 +120,62 @@ def write_observation(
                 fill_value=LEAFLET_NODATA_VALUE,
                 dop_threshold=0.5,
             )
+            hfr_range.write_rasters(
+                observation_dir,
+                filename_suffix=f'{observation_date:%Y%m%d}_anim',
+                variables=['dir', 'mag'],
+                driver='AAIGrid',
+                fill_value=LEAFLET_NODATA_VALUE,
+                dop_threshold=0.5,
+            )
             del hfr_range
         elif observation == 'viirs':
-            viirs_range_N20 = viirs.VIIRSRange(start_time=day_start, end_time=day_end_utc, satellites=['N20'])
+            viirs_range_N20 = viirs.VIIRSRange(start_time=range_start, end_time=range_end, satellites=['N20'])
             viirs_range_N20.write_raster(
                 observation_dir,
-
-                filename_suffix=f'{day_start:%Y%m%d}',
-                start_time=day_start_utc,
-                end_time=day_end_utc,
+                filename_suffix=f'{observation_date:%Y%m%d}_night',
+                start_time=N20_night_start,
+                end_time=N20_night_end,
                 fill_value=LEAFLET_NODATA_VALUE,
                 driver='GTiff',
                 correct_sses=False,
                 variables=['sst'],
                 satellite='N20',
-
             )
             del viirs_range_N20
 
-            viirs_range_NPP = viirs.VIIRSRange(start_time=day_start, end_time=day_end_utc, satellites=['NPP'])
+            viirs_range_N20 = viirs.VIIRSRange(start_time=range_start, end_time=range_end, satellites=['N20'])
+            viirs_range_N20.write_raster(
+                observation_dir,
+                filename_suffix=f'{observation_date:%Y%m%d}_afternoon',
+                start_time=N20_afternoon_start,
+                end_time=N20_afternoon_end,
+                fill_value=LEAFLET_NODATA_VALUE,
+                driver='GTiff',
+                correct_sses=False,
+                variables=['sst'],
+                satellite='N20',
+            )
+            del viirs_range_N20
+
+            viirs_range_NPP = viirs.VIIRSRange(start_time=range_start, end_time=range_end, satellites=['NPP'])
+
             viirs_range_NPP.write_raster(
                 observation_dir,
-                filename_suffix=f'{day_start:%Y%m%d}',
-                start_time=day_start_utc,
-                end_time=day_end_utc,
+                filename_suffix=f'{observation_date:%Y%m%d}_night',
+                start_time=NPP_night_start,
+                end_time=NPP_night_end,
+                fill_value=LEAFLET_NODATA_VALUE,
+                driver='GTiff',
+                correct_sses=False,
+                variables=['sst'],
+                satellite='NPP',
+            )
+            viirs_range_NPP.write_raster(
+                observation_dir,
+                filename_suffix=f'{observation_date:%Y%m%d}_afternoon',
+                start_time=NPP_afternoon_start,
+                end_time=NPP_afternoon_end,
                 fill_value=LEAFLET_NODATA_VALUE,
                 driver='GTiff',
                 correct_sses=False,
@@ -139,12 +186,13 @@ def write_observation(
 
 
         elif observation == 'abi':
-            abi_G17 = abi.ABIRange(start_time=day_start, end_time=day_end_utc, satellites=['G17'])
+
+            abi_G17 = abi.ABIRange(start_time=range_start, end_time=range_end, satellites=['G17'])
             abi_G17.write_raster(
                 observation_dir,
-                filename_suffix=f'{day_start:%Y%m%d}',
-                start_time=day_start_utc,
-                end_time=day_end_utc,
+                filename_suffix=f'{observation_date:%Y%m%d}_afternoon',
+                start_time=G17_afternoon_start,
+                end_time=G17_afternoon_end,
                 fill_value=LEAFLET_NODATA_VALUE,
                 driver='GTiff',
                 correct_sses=False,
@@ -183,6 +231,7 @@ def write_rtofs(
     day_deltas: range = MODEL_DAY_DELTAS['RTOFS'],
     scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
     vector_variables: Collection[str] = ('dir', 'mag'),
+    vector_anim_variables: Collection[str] = ('anim'),
     overwrite: bool = False,
     time_interval: str = None,
 ):
@@ -218,6 +267,15 @@ def write_rtofs(
         if not os.path.isdir(daily_average_dir):
             os.makedirs(daily_average_dir, exist_ok=True)
 
+    if scalar_variables is None:
+        scalar_variables = []
+
+    if vector_variables is None:
+        vector_variables = []
+
+    if vector_anim_variables is None:
+        vector_anim_variables = []
+
     try:
         rtofs_dataset = None
 
@@ -239,12 +297,11 @@ def write_rtofs(
 
                     if rtofs_dataset is None and not all(
                         any(variable in filename for filename in existing_files)
-                        for variable in list(scalar_variables) + list(vector_variables)
+                        for variable in list(scalar_variables) + list(vector_variables) + list(vector_anim_variables)
                     ):
                         rtofs_dataset = rtofs.RTOFSDataset(
                             model_run_date, source='2ds', time_interval='daily'
                         )
-
 
                 scalar_variables_to_write = [
                     variable
@@ -275,6 +332,20 @@ def write_rtofs(
                         )
                     else:
                         LOGGER.debug(f'Skipping RTOFS day {day_delta} uv')
+
+                    if not all(
+                        any(vector_variable in filename for filename in existing_files)
+                        for vector_variable in vector_anim_variables
+                    ):
+                        rtofs_dataset.write_rasters(
+                            daily_average_dir,
+                            variables=vector_variables,
+                            filename_suffix="anim_",
+                            time=day_of_forecast,
+                            driver='AAIGrid',
+                        )
+                    else:
+                        LOGGER.debug(f'Skipping RTOFS day {day_delta} uv')
         del rtofs_dataset
     except NoDataError as error:
         LOGGER.warning(f'{error.__class__.__name__}: {error}')
@@ -288,6 +359,7 @@ def write_wcofs(
     day_deltas: range = MODEL_DAY_DELTAS['WCOFS'],
     scalar_variables: Collection[str] = ('sst', 'sss', 'ssh'),
     vector_variables: Collection[str] = ('dir', 'mag'),
+    vector_anim_variables: Collection[str] = ('anim'),
     data_assimilation: bool = True,
     grid_size_km: int = 4,
     source_url: str = None,
@@ -336,6 +408,9 @@ def write_wcofs(
 
     if vector_variables is None:
         vector_variables = []
+
+    if vector_anim_variables is None:
+        vector_anim_variables = []
 
     if grid_size_km == 4:
         grid_filename = wcofs.WCOFS_4KM_GRID_FILENAME
@@ -415,7 +490,7 @@ def write_wcofs(
 
                 if wcofs_dataset is None and not all(
                     any(variable in filename for filename in existing_files)
-                    for variable in list(scalar_variables) + list(vector_variables)
+                    for variable in list(scalar_variables) + list(vector_variables) + list(vector_anim_variables)
                 ):
                     if grid_size_km == 4:
                         wcofs_dataset = wcofs.WCOFSDataset(
@@ -465,6 +540,23 @@ def write_wcofs(
                             fill_value=LEAFLET_NODATA_VALUE,
                             driver='AAIGrid',
                         )
+
+                    else:
+                        LOGGER.debug(f'Skipping WCOFS day {day_delta} uv')
+
+                    if not all(
+                        any(vector_variable in filename for filename in existing_files)
+                        for vector_variable in vector_anim_variables
+                    ):
+                        wcofs_dataset.write_rasters(
+                            daily_average_dir,
+                            vector_variables,
+                            filename_suffix="anim_" + wcofs_filename_suffix,
+                            time_deltas=[day_delta],
+                            fill_value=LEAFLET_NODATA_VALUE,
+                            driver='AAIGrid',
+                        )
+
                     else:
                         LOGGER.debug(f'Skipping WCOFS day {day_delta} uv')
         del wcofs_dataset
@@ -568,30 +660,30 @@ if __name__ == '__main__':
 
     files_json_filename = REFERENCE_DIRECTORY / 'files.json'
     write_json.dir_structure_to_json(OUTPUT_DIRECTORY, files_json_filename)
-
-    with open(AZURE_CREDENTIALS_FILENAME) as credentials_file:
-        azure_blob_url, credentials = (
-            line.strip('\n') for line in credentials_file.readlines()
-        )
-
-    azcopy_path = r'C:\Working\azcopy.exe'
-
-    upload_to_azure(
-        files_json_filename,
-        f'{azure_blob_url}/data/reference/files.json',
-        credentials,
-        overwrite=True,
-        azcopy_path=azcopy_path,
-    )
-    sync_with_azure(
-        OUTPUT_DIRECTORY,
-        f'{azure_blob_url}/data/output',
-        credentials,
-        azcopy_path=azcopy_path,
-    )
-
-    LOGGER.info(
-        f'Finished uploading files. Total time: {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds'
-    )
-
-    print('done')
+    #
+    # with open(AZURE_CREDENTIALS_FILENAME) as credentials_file:
+    #     azure_blob_url, credentials = (
+    #         line.strip('\n') for line in credentials_file.readlines()
+    #     )
+    #
+    # azcopy_path = r'C:\Working\azcopy.exe'
+    #
+    # upload_to_azure(
+    #     files_json_filename,
+    #     f'{azure_blob_url}/data/reference/files.json',
+    #     credentials,
+    #     overwrite=True,
+    #     azcopy_path=azcopy_path,
+    # )
+    # sync_with_azure(
+    #     OUTPUT_DIRECTORY,
+    #     f'{azure_blob_url}/data/output',
+    #     credentials,
+    #     azcopy_path=azcopy_path,
+    # )
+    #
+    # LOGGER.info(
+    #     f'Finished uploading files. Total time: {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds'
+    # )
+    #
+    # print('done')
