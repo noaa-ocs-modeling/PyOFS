@@ -10,18 +10,17 @@ import pytz
 
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
-from main.leaflet.write_azure import upload_to_azure, sync_with_azure
+from main.leaflet.write_azure import upload_to_azure, sync_with_azure, upload_to_aws, sync_with_aws
 from main.leaflet import write_json
 from PyOFS import (
+    AWS_CREDENTIALS_FILENAME,
     AZURE_CREDENTIALS_FILENAME,
     DATA_DIRECTORY,
     LEAFLET_NODATA_VALUE,
     NoDataError,
     get_logger,
 )
-
 from PyOFS.observation import hf_radar, viirs, smap, data_buoy, abi
-
 from PyOFS.model import wcofs, rtofs
 
 # disable complaints from Fiona environment within conda
@@ -37,6 +36,7 @@ STUDY_AREA_TIMEZONE = 'US/Pacific'
 STUDY_AREA_TO_UTC = timedelta(
     hours=-datetime.now(pytz.timezone(STUDY_AREA_TIMEZONE)).utcoffset() / timedelta(hours=1)
 )
+
 # range of day deltas that models reach
 MODEL_DAY_DELTAS = {'WCOFS': range(-1, 3), 'RTOFS': range(-3, 9)}
 
@@ -593,8 +593,8 @@ def write_observations(
     write_observation(output_dir, output_date, 'viirs')
     LOGGER.info('Processing ABI SST...')
     write_observation(output_dir, output_date, 'abi')
-    LOGGER.info('Processing SMAP SSS...')
-    write_observation(output_dir, output_date, 'smap')
+    # LOGGER.info('Processing SMAP SSS...')
+    # write_observation(output_dir, output_date, 'smap')
     # LOGGER.info('Processing NDBC data...')
     # write_observation(output_dir, output_date, 'data_buoy')
     LOGGER.info(f'Wrote observations to {output_dir}')
@@ -660,30 +660,55 @@ if __name__ == '__main__':
 
     files_json_filename = REFERENCE_DIRECTORY / 'files.json'
     write_json.dir_structure_to_json(OUTPUT_DIRECTORY, files_json_filename)
-    #
-    # with open(AZURE_CREDENTIALS_FILENAME) as credentials_file:
-    #     azure_blob_url, credentials = (
-    #         line.strip('\n') for line in credentials_file.readlines()
-    #     )
-    #
-    # azcopy_path = r'C:\Working\azcopy.exe'
-    #
-    # upload_to_azure(
-    #     files_json_filename,
-    #     f'{azure_blob_url}/data/reference/files.json',
-    #     credentials,
-    #     overwrite=True,
-    #     azcopy_path=azcopy_path,
-    # )
-    # sync_with_azure(
-    #     OUTPUT_DIRECTORY,
-    #     f'{azure_blob_url}/data/output',
-    #     credentials,
-    #     azcopy_path=azcopy_path,
-    # )
-    #
-    # LOGGER.info(
-    #     f'Finished uploading files. Total time: {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds'
-    # )
-    #
-    # print('done')
+
+    with open(AZURE_CREDENTIALS_FILENAME) as credentials_file:
+        azure_blob_url, credentials = (
+            line.strip('\n') for line in credentials_file.readlines()
+        )
+
+    azcopy_path = r'C:\Working\azcopy.exe'
+
+    upload_to_azure(
+        files_json_filename,
+        f'{azure_blob_url}/data/reference/files.json',
+        credentials,
+        overwrite=True,
+        azcopy_path=azcopy_path,
+    )
+    sync_with_azure(
+        OUTPUT_DIRECTORY,
+        f'{azure_blob_url}/data/output',
+        credentials,
+        azcopy_path=azcopy_path,
+    )
+
+    LOGGER.info(
+        f'Finished uploading files to azure. Total time: {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds'
+    )
+
+    print('done uploading to azure')
+    print('starting to upload to aws')
+    with open(AWS_CREDENTIALS_FILENAME) as aws_credentials_file:
+        bucket_name, ACCESS_KEY, SECRET_KEY = (
+            line.strip('\n') for line in aws_credentials_file.readlines()
+        )
+
+    upload_to_aws(
+        str(files_json_filename),
+        bucket_name,
+        'WCOFS/viewer/data/reference/files.json',
+        ACCESS_KEY,
+        SECRET_KEY,
+    )
+    sync_with_aws(
+        str(OUTPUT_DIRECTORY) + "/daily_averages",
+        bucket_name,
+        ACCESS_KEY,
+        SECRET_KEY,
+    )
+
+    LOGGER.info(
+        f'Finished uploading files to aws. Total time: {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds'
+    )
+
+    print('done uploading to aws')

@@ -6,16 +6,13 @@ from pathlib import Path
 import sys
 from typing import Union
 
-
 import numpy
 
 CRS_EPSG = 4326
 
-DATA_DIRECTORY = Path(os.getenv('OFS_DATA', r'Z:\OFS'))
-
-
-# AZURE_CREDENTIALS_FILENAME = Path(os.getenv('AZURE_CRED', r'C:\data\azure_credentials.txt'))
-AZURE_CREDENTIALS_FILENAME = Path(os.getenv('AZURE_CRED', r'Z:\azure_credentials.txt'))
+DATA_DIRECTORY = Path(os.getenv('OFS_DATA', r'C:\data\OFS'))
+AZURE_CREDENTIALS_FILENAME = Path(os.getenv('AZURE_CRED', r'D:\data\azure_credentials.txt'))
+AWS_CREDENTIALS_FILENAME = Path(os.getenv('AWS_CRED', r'D:\data\aws_credentials.txt'))
 
 # default nodata value used by leaflet-geotiff renderer
 LEAFLET_NODATA_VALUE = -9999.0
