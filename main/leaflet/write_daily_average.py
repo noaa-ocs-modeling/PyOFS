@@ -13,7 +13,8 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 from main.leaflet.write_azure import upload_to_azure, sync_with_azure, upload_to_aws, sync_with_aws
 from main.leaflet import write_json
 from PyOFS import (
-    AWS_CREDENTIALS_FILENAME,
+    AWS_CREDENTIALS_FILENAME_DEV,
+    AWS_CREDENTIALS_FILENAME_PROD,
     AZURE_CREDENTIALS_FILENAME,
     DATA_DIRECTORY,
     LEAFLET_NODATA_VALUE,
@@ -688,7 +689,7 @@ if __name__ == '__main__':
 
     print('done uploading to azure')
     print('starting to upload to aws')
-    with open(AWS_CREDENTIALS_FILENAME) as aws_credentials_file:
+    with open(AWS_CREDENTIALS_FILENAME_DEV) as aws_credentials_file:
         bucket_name, ACCESS_KEY, SECRET_KEY = (
             line.strip('\n') for line in aws_credentials_file.readlines()
         )
@@ -709,6 +710,31 @@ if __name__ == '__main__':
 
     LOGGER.info(
         f'Finished uploading files to aws. Total time: {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds'
+    )
+
+    LOGGER.info(
+        f'Finished uploading files to development env. Total time: {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds'
+    )
+    with open(AWS_CREDENTIALS_FILENAME_PROD) as aws_credentials_file:
+        bucket_name, ACCESS_KEY, SECRET_KEY = (
+            line.strip('\n') for line in aws_credentials_file.readlines()
+        )
+
+    upload_to_aws(
+        str(files_json_filename),
+        bucket_name,
+        'WCOFS/viewer/data/reference/files.json',
+        ACCESS_KEY,
+        SECRET_KEY,
+    )
+    sync_with_aws(
+        str(OUTPUT_DIRECTORY) + "/daily_averages",
+        bucket_name,
+        ACCESS_KEY,
+        SECRET_KEY,
+    )
+    LOGGER.info(
+        f'Finished uploading files to production env. Total time: {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds'
     )
 
     print('done uploading to aws')

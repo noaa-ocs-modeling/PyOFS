@@ -10,9 +10,11 @@ import numpy
 
 CRS_EPSG = 4326
 
+
 DATA_DIRECTORY = Path(os.getenv('OFS_DATA', r'C:\data\OFS'))
 AZURE_CREDENTIALS_FILENAME = Path(os.getenv('AZURE_CRED', r'D:\data\azure_credentials.txt'))
-AWS_CREDENTIALS_FILENAME = Path(os.getenv('AWS_CRED', r'D:\data\aws_credentials.txt'))
+AWS_CREDENTIALS_FILENAME_DEV = Path(os.getenv('AWS_CRED_dev', r'D:\data\aws_credentials_dev.txt'))
+AWS_CREDENTIALS_FILENAME_PROD = Path(os.getenv('AWS_CRED_prod', r'D:\data\aws_credentials_prod.txt'))
 
 # default nodata value used by leaflet-geotiff renderer
 LEAFLET_NODATA_VALUE = -9999.0
