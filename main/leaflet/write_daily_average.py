@@ -662,32 +662,6 @@ if __name__ == '__main__':
     files_json_filename = REFERENCE_DIRECTORY / 'files.json'
     write_json.dir_structure_to_json(OUTPUT_DIRECTORY, files_json_filename)
 
-    with open(AZURE_CREDENTIALS_FILENAME) as credentials_file:
-        azure_blob_url, credentials = (
-            line.strip('\n') for line in credentials_file.readlines()
-        )
-
-    azcopy_path = r'C:\Working\azcopy.exe'
-
-    upload_to_azure(
-        files_json_filename,
-        f'{azure_blob_url}/data/reference/files.json',
-        credentials,
-        overwrite=True,
-        azcopy_path=azcopy_path,
-    )
-    sync_with_azure(
-        OUTPUT_DIRECTORY,
-        f'{azure_blob_url}/data/output',
-        credentials,
-        azcopy_path=azcopy_path,
-    )
-
-    LOGGER.info(
-        f'Finished uploading files to azure. Total time: {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds'
-    )
-
-    print('done uploading to azure')
     print('starting to upload to aws')
     with open(AWS_CREDENTIALS_FILENAME_DEV) as aws_credentials_file:
         bucket_name, ACCESS_KEY, SECRET_KEY = (
@@ -707,11 +681,6 @@ if __name__ == '__main__':
         ACCESS_KEY,
         SECRET_KEY,
     )
-
-    LOGGER.info(
-        f'Finished uploading files to aws. Total time: {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds'
-    )
-
     LOGGER.info(
         f'Finished uploading files to development env. Total time: {(datetime.now() - start_time) / timedelta(seconds=1):.2f} seconds'
     )
